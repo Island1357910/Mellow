@@ -3,130 +3,369 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>半糖 Mellow · MiniMax 语音接入</title>
+  <title>MiniMax 语音接入教程 · 半糖 Mellow</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #fff7f4;
-      --card: rgba(255, 255, 255, 0.92);
-      --text: #4a3540;
+      --bg: #faf7f5;
+      --card: #ffffff;
+      --text: #3d2f36;
       --muted: #8a7280;
+      --line: rgba(120, 80, 100, 0.1);
       --pink: #f3a8ba;
       --mint: #9ed9c4;
       --sky: #a9cde8;
+      --butter: #f0c56a;
+      --accent: #c45b74;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-      background: linear-gradient(160deg, #fff7f4, #efe6ff 45%, #e8f6f0);
+      background: var(--bg);
       color: var(--text);
-      line-height: 1.65;
+      line-height: 1.75;
+      font-size: 15px;
     }
     main {
-      max-width: 40rem;
+      max-width: 42rem;
       margin: 0 auto;
-      padding: 2.5rem 1rem 4rem;
+      padding: 2rem 1rem 4rem;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 2rem;
     }
     h1 {
-      margin: 0 0 0.35rem;
-      font-size: 1.55rem;
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 700;
       letter-spacing: 0.02em;
     }
-    .lead {
-      margin: 0 0 1.25rem;
+    .subtitle {
+      margin: 0;
       color: var(--muted);
-      font-size: 0.92rem;
+      font-size: 0.95rem;
     }
-    section {
-      margin-top: 0.85rem;
-      padding: 1rem 1.05rem;
-      border-radius: 1.25rem;
+    .step {
+      margin-top: 1.5rem;
+      padding: 1.35rem 1.25rem;
+      border-radius: 1rem;
       background: var(--card);
-      box-shadow: 0 10px 24px rgba(120, 80, 100, 0.08);
+      border: 1px solid var(--line);
+      box-shadow: 0 4px 16px rgba(120, 80, 100, 0.06);
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink), #f8d0dc);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
     }
     h2 {
-      margin: 0 0 0.55rem;
-      font-size: 0.98rem;
-    }
-    p, li { font-size: 0.9rem; word-break: break-word; overflow-wrap: anywhere; }
-    ol { margin: 0; padding-left: 1.2rem; }
-    li + li { margin-top: 0.45rem; }
-    code, .mono {
-      display: inline-block;
-      max-width: 100%;
-      padding: 0.1rem 0.45rem;
-      border-radius: 0.55rem;
-      background: #fff;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.82rem;
-      word-break: break-all;
-    }
-    .pill {
-      display: inline-block;
-      margin-right: 0.35rem;
-      margin-bottom: 0.35rem;
-      padding: 0.15rem 0.55rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
+      margin: 0;
+      font-size: 1.1rem;
       font-weight: 600;
     }
-    .pill-pink { background: #f8d0dc; }
-    .pill-mint { background: #d5f0e4; }
-    .pill-sky { background: #d7e7f8; }
-    .note {
-      margin-top: 0.75rem;
-      padding: 0.65rem 0.75rem;
-      border-radius: 0.9rem;
-      background: #f8e6c0;
-      font-size: 0.82rem;
+    h3 {
+      margin: 1.25rem 0 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
     }
-    a { color: #c45b74; }
+    p, li {
+      font-size: 0.92rem;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    ol, ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.35rem;
+    }
+    li + li { margin-top: 0.5rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      padding: 0.12rem 0.4rem;
+      border-radius: 0.4rem;
+      background: #f5f0f2;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.84rem;
+      word-break: break-all;
+    }
+    .tip {
+      margin: 1rem 0 0;
+      padding: 0.75rem 0.9rem;
+      border-radius: 0.65rem;
+      background: #fff8ec;
+      border-left: 3px solid var(--butter);
+      font-size: 0.86rem;
+      color: #6b5a40;
+    }
+    .tip strong { color: var(--text); }
+    .important {
+      margin: 1rem 0 0;
+      padding: 0.75rem 0.9rem;
+      border-radius: 0.65rem;
+      background: #eef6ff;
+      border-left: 3px solid var(--sky);
+      font-size: 0.86rem;
+      color: #4a6070;
+    }
+    .save-box {
+      margin: 1rem 0 0;
+      padding: 0.85rem 1rem;
+      border-radius: 0.65rem;
+      background: #f0faf5;
+      border: 1px dashed #9ed9c4;
+    }
+    .save-box p {
+      margin: 0 0 0.35rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .save-box ul {
+      margin: 0;
+      padding-left: 1.1rem;
+    }
+    .faq {
+      margin-top: 2rem;
+    }
+    .faq h2 {
+      font-size: 1.15rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .faq-item {
+      margin-top: 0.75rem;
+      padding: 1rem 1.1rem;
+      border-radius: 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+    }
+    .faq-item h3 {
+      margin: 0 0 0.35rem;
+      font-size: 0.92rem;
+    }
+    .faq-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .review {
+      margin-top: 2rem;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      background: linear-gradient(135deg, #fff7f4, #efe6ff);
+      text-align: center;
+    }
+    .review h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.05rem;
+    }
+    .review ol {
+      display: inline-block;
+      text-align: left;
+      margin: 0;
+    }
+    .review .foot {
+      margin: 1rem 0 0;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>MiniMax 语音接入</h1>
-    <p class="lead">在半糖 Mellow 里让角色语音条开口说话。按下面步骤配置后，通常能拉到三百多个系统音色。</p>
+    <div class="hero">
+      <h1>MiniMax 语音接入教程</h1>
+      <p class="subtitle">三步搞定，轻松拥有专属 AI 音色</p>
+    </div>
 
-    <section>
-      <h2>1. 准备密钥</h2>
+    <section class="step">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <h2>第一步：获取国内账号信息</h2>
+      </div>
+      <div class="tip">
+        <strong>建议用电脑操作</strong>，或者用手机浏览器（如 QQ 浏览器）切换到「桌面模式」，手机页面可能显示不完整。
+      </div>
+
+      <h3>1. 注册并登录账号</h3>
+      <p>访问国内平台：<a href="https://platform.minimaxi.com" target="_blank" rel="noreferrer">https://platform.minimaxi.com</a></p>
+      <p>使用手机号 + 验证码登录即可。</p>
+
+      <h3>2. 获取 API Key（接口密钥）</h3>
       <ol>
-        <li>打开 <a href="https://platform.minimax.cn/user-center/basic-information/interface-key" target="_blank" rel="noreferrer">MiniMax 开放平台 · 接口密钥</a>，登录后创建或复制 API Key。</li>
-        <li>在同一页的账户信息里找到 <strong>GroupId</strong>（一串数字）。半糖会把它附在语音合成请求上。</li>
-        <li>密钥是一长串 JWT，以 <code>eyJ</code> 开头。只填在本地设置里，不会上传。</li>
+        <li>登录后，点击页面右上角的头像 → 选择「账户管理」→ 找到「接口密钥」</li>
+        <li>点击创建新密钥，然后复制并保存好你的 API Key，这是调用语音功能的重要凭证</li>
       </ol>
+      <p class="tip">如图所示：创建并复制 API Key</p>
+
+      <h3>3. 获取 Group ID（团队 ID）</h3>
+      <ol>
+        <li>在「账户管理」的「基本信息」里，找到「团队 ID」（Group ID）</li>
+        <li>复制并保存 Group ID，注意不是用户 ID</li>
+      </ol>
+      <p class="tip">如图所示：复制团队 ID（Group ID）</p>
+
+      <h3>4. 完成实名认证（强烈推荐）</h3>
+      <p>实名认证后通常会赠送 15 元代金券，可以使用很久。</p>
+
+      <div class="save-box">
+        <p>需要保存的信息：</p>
+        <ul>
+          <li>API Key（接口密钥）</li>
+          <li>Group ID（团队 ID）</li>
+        </ul>
+      </div>
+      <p style="margin-top:0.75rem;font-size:0.86rem;color:var(--muted)">这两个信息稍后会用到，请妥善保存。</p>
     </section>
 
-    <section>
-      <h2>2. 在半糖里填写</h2>
-      <p><span class="pill pill-sky">设置</span><span class="pill pill-pink">连接</span><span class="pill pill-mint">MiniMax 语音</span></p>
+    <section class="step">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <h2>第二步：制作专属音色</h2>
+      </div>
+      <div class="important">
+        <strong>重要说明：</strong>国外平台克隆音色第一次调用不会扣费 9.99 美元，所以我们要去国外平台制作音色 ID，然后配合国内的 API 使用。
+      </div>
+
+      <h3>1. 打开国外平台并登录</h3>
+      <p>访问：<a href="https://www.minimax.io" target="_blank" rel="noreferrer">https://www.minimax.io</a> 或 <a href="https://www.hailuo.ai/audio" target="_blank" rel="noreferrer">https://www.hailuo.ai/audio</a></p>
+      <p>使用同一个账号登录（和国内平台账号通用）。</p>
+
+      <h3>2. 进入音色克隆页面</h3>
+      <p>点击左上角的三条杠菜单 → 选择「Voice Clone」（音色克隆）。</p>
+
+      <h3>3. 上传音频样本</h3>
+      <p>准备一段清晰的音频文件：</p>
+      <ul>
+        <li><strong>时长：</strong>10～300 秒（建议 15～30 秒）</li>
+        <li><strong>格式：</strong>MP3</li>
+        <li><strong>大小：</strong>尽量控制在 KB 级别，太大的话可以先用小程序压缩</li>
+        <li><strong>质量：</strong>越清晰越好，背景噪音越少越好</li>
+      </ul>
+      <p>点击上传并等待处理。</p>
+
+      <h3>4. 设置音色信息</h3>
+      <ul>
+        <li>选择音频的主要语言（中文 / 英文 / 日语等）</li>
+        <li>勾选同意协议</li>
+        <li>点击「Convert」或「复刻」按钮开始训练</li>
+      </ul>
+      <p class="tip">重新生成不消耗机会，只有确定后才会消耗配额。</p>
+
+      <h3>5. 获取 Voice ID（音色 ID）</h3>
       <ol>
-        <li><strong>语音接口</strong>填 <code>https://api.minimax.cn</code></li>
-        <li><strong>GroupId</strong> 填你的数字 GroupId</li>
-        <li><strong>语音密钥</strong> 粘贴 API Key</li>
-        <li>语音模型选 <code>speech-02-hd</code> 或更新的 <code>speech-2.8-hd</code></li>
+        <li>音色克隆成功后，给它取一个名字（方便自己记忆）</li>
+        <li>复制显示的 Voice ID（格式通常是 <code>male-xxxx</code> 或 <code>female-xxxx</code>）</li>
       </ol>
+
+      <div class="important">
+        <strong>隐私提醒：</strong>你生成的音色 ID 可以被其他人通过搜索名字找到并使用。如果介意的话，请给音色取一个随机复杂的名字，并自己记好。如果忘记了 Voice ID，可以在音色列表中搜索你取的名字找回。
+      </div>
+
+      <p><strong>音色命名规则：</strong></p>
+      <ul>
+        <li>必须以英文字母开头</li>
+        <li>不能包含特殊符号</li>
+        <li>不能与他人重复（如果重复，可以在后面加数字）</li>
+      </ul>
     </section>
 
-    <section>
-      <h2>3. 拉取与试听</h2>
+    <section class="step">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <h2>第三步：在半糖 Mellow 中配置</h2>
+      </div>
+
+      <h3>1. 打开半糖 Mellow</h3>
+      <p>进入 <strong>设置 → 连接 → MiniMax 语音</strong>。</p>
+
+      <h3>2. 填入 API 信息</h3>
+      <p>将第一步保存的两个信息填入对应位置：</p>
+      <ul>
+        <li><strong>语音接口：</strong><code>https://api.minimax.cn</code></li>
+        <li><strong>GroupId：</strong>你的团队 ID</li>
+        <li><strong>语音密钥：</strong>你的 API Key（以 <code>eyJ</code> 开头）</li>
+      </ul>
+
+      <h3>3. 填入音色 ID</h3>
+      <p>将第二步复制的 Voice ID（如 <code>male-xxxx</code>）填入「默认角色音色」；若下拉里没有，可先点「拉取音色」刷新列表，或在聊天设置里为单个角色指定音色。</p>
+      <p>「我的音色」用于你自己发出的语音条，可按需填写。</p>
+
+      <h3>4. 选择语音模型（可选）</h3>
+      <p>推荐 <code>speech-02-hd</code> 或更新的 <code>speech-2.8-hd</code>，按平台可用情况选择即可。</p>
+
+      <h3>5. 拉取、试听并保存</h3>
       <ol>
-        <li>点 <strong>拉取音色</strong>。成功后会显示「拉到 300+ 个音色」一类提示。</li>
-        <li>在「默认角色音色 / 我的音色」下拉里选一个，可用上方搜索框过滤。</li>
-        <li>点 <strong>试听默认音色</strong>，确认能听到声音。</li>
-        <li>最后点 <strong>保存语音</strong>。短信里点语音条才会调用 MiniMax。</li>
+        <li>点「拉取音色」，确认连接正常</li>
+        <li>点「试听默认音色」，确认能听到声音</li>
+        <li>点「保存语音」，回到短信即可使用语音条</li>
       </ol>
-      <div class="note">若拉取失败：检查密钥是否过期、GroupId 是否填对、网络能否访问 api.minimax.cn。拉音色只需要密钥，不需要 GroupId。</div>
+      <p class="tip">如图所示：在半糖 Mellow 中填入配置信息</p>
     </section>
 
-    <section>
-      <h2>4. 常见问题</h2>
+    <section class="faq">
+      <h2>常见问题</h2>
+
+      <div class="faq-item">
+        <h3>为什么要在国外平台制作音色？</h3>
+        <p>因为国外平台克隆的音色 ID 第一次调用不会扣除 9.99 美元，可以节省费用。克隆好音色 ID 后，配合国内的 API 使用即可。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>音色 ID 会过期吗？</h3>
+        <p>不会过期。一旦创建成功，就可以一直使用。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>可以创建多个音色吗？</h3>
+        <p>可以。你可以创建多个不同的音色 ID，分别用于不同的场景或角色。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>如果音色效果不好怎么办？</h3>
+        <p>建议重新上传更清晰、时长更合适的音频样本。音频质量越高，克隆效果越好。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>API Key 和 Group ID 可以共享吗？</h3>
+        <p>不建议共享。这些是你的账号凭证，关系到费用扣除和使用记录，请妥善保管。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>15 元代金券可以用多久？</h3>
+        <p>根据实际使用量而定。MiniMax 的语音合成按字数计费，正常使用的话 15 元可以用挺久。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>为什么我的配置无法连接？</h3>
+        <p>请检查：API Key 和 Group ID 是否填写正确（注意不要有多余空格）；是否完成了实名认证；账户余额是否充足；Voice ID 格式是否正确。</p>
+      </div>
+    </section>
+
+    <section class="review">
+      <h2>快速回顾</h2>
+      <p style="margin:0 0 0.5rem;font-size:0.92rem">三步搞定：</p>
       <ol>
-        <li><strong>只有 30 个音色？</strong> 说明还没拉取成功，仍在用内置旧名单。请重新点「拉取音色」。</li>
-        <li><strong>试听没声音？</strong> 先保存语音，并确认浏览器没有静音；合成接口需要 GroupId。</li>
-        <li><strong>角色语音条没反应？</strong> 会话里也要开启 MiniMax，且该条消息是角色发的文字。</li>
+        <li>在国内平台获取 API Key 和 Group ID</li>
+        <li>在国外平台制作音色并获取 Voice ID</li>
+        <li>在半糖 Mellow 中填入这三个信息</li>
       </ol>
+      <p class="foot">完成配置后，你就可以在半糖 Mellow 中使用你的专属 AI 音色啦。如果遇到问题，可以重新检查每一步的配置是否正确。</p>
     </section>
   </main>
 </body>
