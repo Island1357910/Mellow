@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { candyStyle } from '../../lib/candy.ts'
+import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
@@ -31,7 +32,7 @@ export function DiaryApp(props: { onBack: () => void }) {
   if (!phone) return null
   const save = () => {
     if (!text.trim()) return
-    const next = [{ id: crypto.randomUUID(), text: text.trim(), at: Date.now() }, ...entries]
+    const next = [{ id: uid(), text: text.trim(), at: Date.now() }, ...entries]
     setEntries(next)
     setText('')
     void storage.setBag(phone.namespace, 'diary', next)

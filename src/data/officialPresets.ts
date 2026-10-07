@@ -1,3 +1,4 @@
+import { uid } from '../lib/id.ts'
 import type { Preset, PresetData, PromptBlock } from '../types/index.ts'
 
 function preset(
@@ -334,7 +335,7 @@ export function presetFromUnknown(raw: unknown): Preset | null {
     return typeof value === 'number' ? value : fallback
   }
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : '导入的预设'
-  const id = typeof raw.id === 'string' && raw.id.startsWith('preset_') ? `user_${crypto.randomUUID()}` : typeof raw.id === 'string' && raw.id.trim() ? raw.id : `user_${crypto.randomUUID()}`
+  const id = typeof raw.id === 'string' && raw.id.startsWith('preset_') ? uid('user') : typeof raw.id === 'string' && raw.id.trim() ? raw.id : uid('user')
   const typeValue = raw.type
   const type = typeValue === 'character' || typeValue === 'world' || typeValue === 'theme' || typeValue === 'system' ? typeValue : 'system'
   return {

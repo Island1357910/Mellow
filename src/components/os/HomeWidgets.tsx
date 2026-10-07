@@ -1,5 +1,6 @@
 import { Check, ImagePlus, Plus, Smile, X } from 'lucide-react'
 import { useState } from 'react'
+import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 
 const MOODS = [
@@ -148,7 +149,7 @@ export function TodoWidget(props: { namespace: string; className?: string }) {
   const add = () => {
     const text = draft.trim()
     if (!text || items.length >= 3) return
-    setItems([...items, { id: crypto.randomUUID(), text, done: false }])
+    setItems([...items, { id: uid(), text, done: false }])
     setDraft('')
   }
   return (

@@ -10,6 +10,7 @@ import { storage } from '../../storage/StorageService.ts'
 import type { Character, Chat, ContactFolder } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
 import { chatTitle } from '../../lib/chats.ts'
+import { uid } from '../../lib/id.ts'
 
 export interface Profile {
   nickname: string
@@ -144,7 +145,7 @@ export function MomentsPage(props: {
     const body = text.trim()
     if (!body) return
     await props.onPost({
-      id: crypto.randomUUID(),
+      id: uid(),
       author: props.profile.nickname || '我',
       text: body,
       at: Date.now(),
@@ -387,7 +388,7 @@ export function PeopleTab(props: {
             <input value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="分组名" className="min-w-0 flex-1 rounded-full bg-white px-3 py-1.5 text-sm" />
             <button type="button" className="chip chip-pink" onClick={() => {
               if (!folderName.trim()) return
-              void props.onChange([...props.folders, { id: crypto.randomUUID(), name: folderName.trim(), charIds: picked }])
+              void props.onChange([...props.folders, { id: uid(), name: folderName.trim(), charIds: picked }])
               setFolderName('')
             }}>建立</button>
           </div>

@@ -1,3 +1,4 @@
+import { uid } from '../lib/id.ts'
 import type { Theme, ThemeColors } from '../types/index.ts'
 
 const radius = { sm: '12px', md: '18px', lg: '26px', xl: '36px' }
@@ -81,7 +82,7 @@ export function themeFromUnknown(raw: unknown): Theme | null {
     colors[key] = value
   }
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : '导入的主题'
-  const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `theme_${crypto.randomUUID()}`
+  const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : uid('theme')
   return {
     ...theme(id, name, colors),
     ...(isRecord(raw.radius) ? { radius: { ...radius, ...stringFields(raw.radius, radius) } } : {}),

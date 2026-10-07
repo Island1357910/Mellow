@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 
 export type PlayerStyle = 'vinyl' | 'cd' | 'minimal'
@@ -80,7 +81,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     void storage.setBag(get().namespace, 'player', config)
   },
   addTrack: async (track, audio) => {
-    const id = crypto.randomUUID()
+    const id = uid()
     const namespace = get().namespace
     let src = track.src
     if (audio) {

@@ -1,4 +1,5 @@
 import { AIAdapter } from '../engine/AIAdapter.ts'
+import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 
 export interface SocialMoment {
@@ -53,7 +54,7 @@ export async function generateMomentsFeed(namespace: string, names: string): Pro
     if (!author || !body) return []
     const minutes = Number(item.minutesAgo)
     const at = Date.now() - (Number.isFinite(minutes) ? minutes : 40) * 60_000
-    return [{ id: crypto.randomUUID(), author, text: body, at, mine: false }]
+    return [{ id: uid(), author, text: body, at, mine: false }]
   })
   if (posts.length === 0) throw new Error('朋友圈是空的')
   await storage.setBag(namespace, 'circle-feed', { at: Date.now(), posts })
