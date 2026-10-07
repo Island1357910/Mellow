@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:pages": "powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1"
   },
   "dependencies": {
     "dexie": "^4.2.1",

@@ -15,8 +15,10 @@ npm run dev
 
 推送到 GitHub 的 `main` 分支后，Actions 会自动构建并发布网页。
 
-1. 在仓库 **Settings → Pages** 里，Source 选 **GitHub Actions**（首次需要手动选一次）。
-2. 等 workflow 跑完后，访问 `https://<你的用户名>.github.io/<仓库名>/`。
+1. 代码推送到 GitHub 后，在本机运行 `npm run deploy:pages` 会把 `dist` 发布到 `gh-pages` 分支。
+2. 访问 `https://<你的用户名>.github.io/<仓库名>/`（本仓库为 `https://island1357910.github.io/Mellow/`）。
+
+若要用 GitHub Actions 自动部署，需给 `gh` 授权 `workflow` 权限后，再把 `.github/workflows/deploy.yml` 推上去，并在 **Settings → Pages** 里选 **GitHub Actions**。
 
 本地预览生产构建：
 
