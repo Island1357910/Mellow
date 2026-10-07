@@ -1,0 +1,18 @@
+{
+  "name": "半糖 · Mellow",
+  "short_name": "半糖",
+  "description": "一台住着 AI 角色的小手机",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDFBF7",
+  "theme_color": "#FFB5C5",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

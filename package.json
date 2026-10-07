@@ -1,0 +1,33 @@
+{
+  "name": "mellow",
+  "private": true,
+  "version": "0.1.0",
+  "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dexie": "^4.2.1",
+    "framer-motion": "^12.23.22",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "fake-indexeddb": "^6.2.5",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}
