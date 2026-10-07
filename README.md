@@ -16,7 +16,21 @@ npm run dev
 推送到 GitHub 的 `main` 分支后，Actions 会自动构建并发布网页。
 
 1. 代码推送到 GitHub 后，在本机运行 `npm run deploy:pages` 会把 `dist` 发布到 `gh-pages` 分支。
-2. 访问 `https://<你的用户名>.github.io/<仓库名>/`（本仓库为 `https://island1357910.github.io/Mellow/`）。
+2. 访问 `https://mymellow.top/`（域名审核通过后）或 `https://island1357910.github.io/Mellow/`。
+
+### 域名 mymellow.top（DNS 审核通过后配置）
+
+在域名服务商处添加：
+
+| 类型 | 主机记录 | 值 |
+|------|----------|-----|
+| A | @ | `185.199.108.153` |
+| A | @ | `185.199.109.153` |
+| A | @ | `185.199.110.153` |
+| A | @ | `185.199.111.153` |
+| CNAME | www | `Island1357910.github.io` |
+
+GitHub 仓库 **Settings → Pages → Custom domain** 已预设为 `mymellow.top`，DNS 生效后自动启用 HTTPS。
 
 若要用 GitHub Actions 自动部署，需给 `gh` 授权 `workflow` 权限后，再把 `.github/workflows/deploy.yml` 推上去，并在 **Settings → Pages** 里选 **GitHub Actions**。
 
