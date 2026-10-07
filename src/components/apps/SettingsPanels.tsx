@@ -301,7 +301,6 @@ export function MinimaxPanel() {
               setStatus(`正在试听「${voiceLabel(voiceList, voiceId)}」`)
             })().catch((error: unknown) => setStatus(error instanceof Error ? error.message : '试听失败'))
           }}>试听默认音色</button>
-          <a href="/minimax-voice.html" target="_blank" rel="noreferrer" className="chip chip-lilac shrink-0">语音接入教程</a>
         </div>
         <button type="button" className="chip chip-solid w-full" onClick={() => {
           if (!model) {
