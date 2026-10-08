@@ -69,7 +69,7 @@ export function WorldBookApp(props: { onBack: () => void }) {
             <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="条目名" className="soft-input" />
             <input value={draft.keys} onChange={(event) => setDraft({ ...draft, keys: event.target.value })} placeholder="关键词，用逗号分开" className="soft-input" />
             <textarea value={draft.content} rows={8} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="这条设定本身" className="soft-input resize-none leading-6" />
-            <button type="button" className="chip" style={draft.enabled ? { background: '#D5F0E4' } : undefined} onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}>{draft.enabled ? '这个角色会用' : '先留着，不用'}</button>
+            <button type="button" className="chip" style={!draft.enabled ? { background: '#D5F0E4' } : undefined} onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}>{draft.enabled ? '点此停用（不再注入对话）' : '点此启用（注入对话）'}</button>
             <button type="button" className="chip chip-solid" disabled={!draft.content.trim()} onClick={saveDraft}>保存</button>
           </div>
         ) : (
@@ -121,7 +121,7 @@ export function WorldBookApp(props: { onBack: () => void }) {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    <button type="button" className="chip" style={item.enabled ? { background: '#D5F0E4' } : undefined} onClick={() => keepBound(bound.map((row) => row.id === item.id ? { ...row, enabled: !row.enabled } : row))}>{item.enabled ? '在用' : '停用'}</button>
+                    <button type="button" className="chip" style={!item.enabled ? { background: '#D5F0E4' } : undefined} onClick={() => keepBound(bound.map((row) => row.id === item.id ? { ...row, enabled: !row.enabled } : row))}>{item.enabled ? '点此停用' : '点此启用'}</button>
                     <button type="button" className="chip" onClick={() => setDraft(item)}>改</button>
                     <button type="button" className="chip chip-danger" onClick={() => keepBound(bound.filter((row) => row.id !== item.id))}>删除</button>
                   </div>

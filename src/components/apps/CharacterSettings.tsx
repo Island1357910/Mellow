@@ -58,7 +58,7 @@ export function CharacterSettingsSheet(props: {
           <p className="text-xs font-medium">MiniMax 音色</p>
           <p className="preset-hint mt-1">只影响这个角色的语音条。留空则用全局默认。</p>
           {!isTrustedVoiceCache(mini.fetchedVoices) ? (
-            <PillNote tone="sky" compact><span className="break-words">请先在 设置 → MiniMax 语音 里拉取平台音色。</span></PillNote>
+            <PillNote tone="sky" compact>请先在设置里拉取音色</PillNote>
           ) : (
             <div className="mt-2">
               <VoiceSelect

@@ -1,7 +1,9 @@
+import { stickerLabel } from '../data/stickers.ts'
+import { stickerCatalogForPrompt } from '../lib/stickerReply.ts'
 import { loreEntries } from '../lib/sillytavern.ts'
 import type { AIMessage, Character, ChatMessage, Identity, Preset } from '../types/index.ts'
 
-const CHANNEL = '当前是短信。只写 {{char}} 这一条要发出去的正文。不要加名字前缀，不要写 {{user}} 的回复，不要用标题和列表。通常一两句，最多三句。'
+const CHANNEL = '当前是短信。只写 {{char}} 要发出去的内容。不要加名字前缀，不要写 {{user}} 的回复，不要用标题和列表。通常一两句；要发表情时用 <<<分>>> 另起一条写 [表情:标签]，一条消息里只放一个表情。'
 
 const FOURTH_WALL = `你不是真人。你是一段运行在本地小手机里的 AI 角色。
 正在和你对话的人，是屏幕外的真实玩家。
@@ -79,6 +81,8 @@ export function buildSmsMessages(input: {
   }
   if (fourthWall) systems.push(FOURTH_WALL)
   if (input.note?.trim()) systems.push(input.note.trim())
+  systems.push('短信里不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
+  systems.push(stickerCatalogForPrompt())
   systems.push(fill(CHANNEL, character, identity))
 
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
@@ -107,7 +111,7 @@ export function describeMessage(item: ChatMessage): string {
     case 'image':
       return '（发来一张图片）'
     case 'sticker':
-      return `（发了一个表情 ${item.content}）`
+      return `（发了一个表情包：${stickerLabel(item.content)}）`
     case 'redpacket':
       return `（发了一个红包：¥${head}${rest[0] ? `，写着“${rest[0]}”` : ''}${rest[1] ? `，${rest[1]}` : ''}）`
     case 'transfer':

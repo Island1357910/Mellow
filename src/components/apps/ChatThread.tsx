@@ -16,9 +16,8 @@ import { useMellow } from '../../store/useMellow.ts'
 import type { BubbleStyle, Character, Chat, ChatMessage, Identity, MessageKind } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
 import { VoiceSelect } from './SettingsPanels.tsx'
+import { ALL_SMS_STICKERS } from '../../data/stickers.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
-
-const STICKERS = ['🌸', '🌙', '🐱', '🍵', '🫧', '🍀', '⭐', '🍑', '🧸', '🍰', '🎀', '☁️', '🐰', '🍓', '💌', '🌷']
 
 type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
 
@@ -324,9 +323,11 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
                       <button type="button" className="chip px-2.5 py-1 text-[11px]" onClick={() => setPanel('tools')}>‹ 返回</button>
                       <span className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>点一下就发出</span>
                     </div>
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {STICKERS.map((item) => (
-                        <button key={item} type="button" className="grid aspect-square place-items-center rounded-2xl bg-[#FFF8EC] text-2xl transition-transform active:scale-90" onClick={() => void send(item, 'sticker')}>{item}</button>
+                    <div className="grid max-h-52 grid-cols-4 gap-2 overflow-y-auto">
+                      {ALL_SMS_STICKERS.map((item) => (
+                        <button key={item.url} type="button" title={item.label} className="overflow-hidden rounded-2xl bg-[#FFF8EC] transition-transform active:scale-95" onClick={() => void send(item.url, 'sticker')}>
+                          <img src={item.url} alt={item.label} className="aspect-square w-full object-contain p-1" loading="lazy" />
+                        </button>
                       ))}
                     </div>
                   </>
@@ -550,7 +551,11 @@ function Bubble(props: {
   if (image) {
     body = <img src={props.message.content} alt="" className="max-w-[200px] rounded-2xl" />
   } else if (kind === 'sticker') {
-    body = <span className="block px-1 text-5xl leading-none">{props.message.content}</span>
+    body = props.message.content.startsWith('http') || props.message.content.startsWith('/stickers/') ? (
+      <img src={props.message.content} alt="" className="max-w-[140px] rounded-2xl" loading="lazy" />
+    ) : (
+      <span className="block px-1 text-5xl leading-none">{props.message.content}</span>
+    )
   } else if (kind === 'redpacket' || kind === 'transfer' || kind === 'gift') {
     body = <CardBubble message={props.message} />
   } else if (kind === 'call' || kind === 'party' || kind === 'music') {
@@ -655,7 +660,7 @@ function ChatMenu(props: {
     ['特别关心', Boolean(props.chat.specialCare), { specialCare: !props.chat.specialCare }],
     ['消息免打扰', Boolean(props.chat.muted), { muted: !props.chat.muted }],
     ['现实时间', props.chat.realTime !== false, { realTime: props.chat.realTime === false }],
-    ['允许主动消息', Boolean(props.chat.allowProactive), { allowProactive: !props.chat.allowProactive }],
+    ['允许主动消息', props.chat.allowProactive !== false, { allowProactive: props.chat.allowProactive === false }],
     ['MiniMax 语音', Boolean(props.chat.voiceEnabled), { voiceEnabled: !props.chat.voiceEnabled }],
     ['拉黑', Boolean(props.chat.blocked), { blocked: !props.chat.blocked }],
   ]
@@ -689,13 +694,26 @@ function ChatMenu(props: {
                 <SwitchRow key={text} label={text} on={on} onClick={() => props.onPatch(patch)} />
               ))}
             </section>
-            <p className="mt-2 px-1 text-[11px] leading-5" style={dim}>
-              短信默认文字聊天；开启 MiniMax 语音后，角色会在合适时机发语音条。线下/番外仅文字，不使用语音。
-            </p>
+            <section className="menu-card mt-3">
+              <label className={label} style={dim}>
+                主动发消息间隔（分钟）
+                <input
+                  type="number"
+                  min={0}
+                  max={10080}
+                  value={props.chat.proactiveMinutes ?? ''}
+                  placeholder="留空则用全局设置"
+                  onChange={(event) => {
+                    const raw = event.target.value.trim()
+                    props.onPatch({ proactiveMinutes: raw ? Math.max(1, Math.min(10080, Number(raw) || 0)) : undefined })
+                  }}
+                  className="soft-input mt-1"
+                />
+              </label>
+            </section>
             {props.character ? (
               <section className="menu-card mt-3 min-w-0">
                 <p className="text-xs font-medium">角色 MiniMax 音色</p>
-                <p className="mt-1 text-[11px] leading-5" style={dim}>只影响 {props.character.name} 的语音条。留空则用全局默认。</p>
                 {props.voiceReady ? (
                   <>
                     <VoiceSelect
@@ -711,7 +729,7 @@ function ChatMenu(props: {
                     </p>
                   </>
                 ) : (
-                  <PillNote tone="sky" compact><span className="break-words">请先在 设置 → MiniMax 语音 拉取平台音色。</span></PillNote>
+                  <PillNote tone="sky" compact>请先在设置里拉取音色</PillNote>
                 )}
               </section>
             ) : null}
@@ -960,25 +978,25 @@ function WorldBookSmsPanel(props: {
               <div className="divide-y divide-black/5 rounded-2xl bg-black/[0.02] px-2">
                 {list.map((entry) => {
                   const globalOn = entry.enabled
-                  const smsOn = globalOn && !off.has(entry.id)
+                  const smsPaused = globalOn && off.has(entry.id)
+                  const smsActive = globalOn && !smsPaused
                   return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      disabled={!globalOn}
-                      aria-pressed={smsOn}
-                      onClick={() => globalOn && toggle(entry.id)}
-                      className="flex w-full items-center justify-between gap-2 py-2.5 text-left disabled:opacity-45"
-                    >
+                    <div key={entry.id} className="flex w-full items-center justify-between gap-2 py-2.5">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm">{entry.title.trim() || '未命名'}</span>
                         {entry.keys ? <span className="preset-desc block truncate">{entry.keys}</span> : null}
-                        {!globalOn ? <span className="preset-desc block">世界书里已停用</span> : null}
+                        {!globalOn ? <span className="preset-desc block">世界书里已停用</span> : <span className="preset-desc block">{smsActive ? '短信在用' : '短信已停用'}</span>}
                       </span>
-                      <span className="relative h-6 w-10 shrink-0 rounded-full transition-colors" style={{ background: smsOn ? '#9ED9C4' : '#ebe5df' }}>
-                        <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ left: smsOn ? 18 : 2 }} />
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!globalOn}
+                        className="chip shrink-0 text-[11px] disabled:opacity-45"
+                        style={smsActive ? undefined : { background: '#D5F0E4' }}
+                        onClick={() => globalOn && toggle(entry.id)}
+                      >
+                        {smsActive ? '点此停用' : '点此启用'}
+                      </button>
+                    </div>
                   )
                 })}
               </div>

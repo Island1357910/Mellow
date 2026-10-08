@@ -1,14 +1,7 @@
 import type { ReactNode } from 'react'
 import { BellOff, Eye, Sparkles, SunMedium } from 'lucide-react'
 import { useMellow } from '../../store/useMellow.ts'
-import type { ProactiveLevel } from '../../types/index.ts'
-
-const LEVELS: Array<{ id: ProactiveLevel; label: string }> = [
-  { id: 'off', label: '关' },
-  { id: 'low', label: '低' },
-  { id: 'mid', label: '中' },
-  { id: 'high', label: '高' },
-]
+const PROACTIVE_MINUTES = [0, 30, 60, 120, 240] as const
 
 export function ControlCenter() {
   const open = useMellow((state) => state.controlOpen)
@@ -61,23 +54,23 @@ export function ControlCenter() {
           <p className="mb-2 flex items-center gap-2 text-sm">
             <Sparkles size={16} /> 主动开口
           </p>
-          <div className="grid grid-cols-4 gap-1">
-            {LEVELS.map((level) => (
+          <div className="grid grid-cols-5 gap-1">
+            {PROACTIVE_MINUTES.map((minutes) => (
               <button
-                key={level.id}
+                key={minutes}
                 type="button"
-                onClick={() => void patchSettings({ proactive: level.id })}
+                onClick={() => void patchSettings({ proactiveMinutes: minutes })}
                 className="rounded-full py-1.5 text-xs"
                 style={{
-                  background: settings.proactive === level.id ? 'var(--m-primary)' : 'transparent',
+                  background: settings.proactiveMinutes === minutes ? 'var(--m-primary)' : 'transparent',
                 }}
               >
-                {level.label}
+                {minutes === 0 ? '关' : `${minutes}分`}
               </button>
             ))}
           </div>
           <p className="mt-2 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            频率先记着。心跳还没走，这一版不会自己发消息。高频率以后会更费 token。
+            你超过设定分钟没回，角色可能会自己发消息。间隔越短越费 token。
           </p>
         </div>
         <p className="mt-3 px-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>

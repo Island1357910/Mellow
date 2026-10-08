@@ -1,5 +1,12 @@
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
-import type { AppSettings, BackupSettings, DecorCard, HomeLayout, PresetMode } from '../types/index.ts'
+import type { AppSettings, BackupSettings, DecorCard, HomeLayout, PresetMode, ProactiveLevel } from '../types/index.ts'
+
+function legacyProactiveMinutes(level: ProactiveLevel | undefined): number {
+  if (level === 'high') return 30
+  if (level === 'mid') return 60
+  if (level === 'low') return 120
+  return 0
+}
 
 export const MODE_PRESET_DEFAULTS: Record<PresetMode, string> = {
   sms: 'preset_sms_alive',
@@ -45,6 +52,7 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
     modePresets: { ...MODE_PRESET_DEFAULTS },
     fourthWall: false,
     proactive: 'off',
+    proactiveMinutes: 0,
     dnd: false,
     quietHours: false,
     dndStart: '23:00',
@@ -66,6 +74,7 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
       voiceId: 'female-shaonv',
       userVoiceId: 'male-qn-qingse',
       fetchedVoices: [],
+      voiceAccountTag: '',
       ready: false,
     },
   }
@@ -111,7 +120,11 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
       ...minimax,
       groupId: minimax?.groupId ?? base.minimax.groupId,
       userVoiceId: minimax?.userVoiceId ?? base.minimax.userVoiceId,
-      fetchedVoices: isTrustedVoiceCache(minimax?.fetchedVoices ?? []) ? minimax!.fetchedVoices : [],
+      fetchedVoices: isTrustedVoiceCache(minimax?.fetchedVoices ?? []) && minimax?.voiceAccountTag ? minimax.fetchedVoices : [],
+      voiceAccountTag: minimax?.voiceAccountTag ?? '',
     },
+    proactiveMinutes: typeof raw?.proactiveMinutes === 'number'
+      ? Math.max(0, Math.min(10_080, Math.round(raw.proactiveMinutes)))
+      : legacyProactiveMinutes(raw?.proactive),
   }
 }

@@ -2,7 +2,7 @@ import { Heart, MessageCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { modePresetId } from '../../lib/defaults.ts'
-import { loadFeed, needsAiStarSeed, saveFeed, type FeedComment, type FeedPost } from '../../lib/feed.ts'
+import { loadFeed, needsAiStarSeed, saveFeed, STAR_POST_MAX, type FeedComment, type FeedPost } from '../../lib/feed.ts'
 import { refreshStarFeedAi, replyStarCommentAi, seedStarFeedAi } from '../../lib/starAi.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
@@ -48,7 +48,13 @@ export function StarApp(props: { onBack: () => void }) {
     let stop = false
     void (async () => {
       const chars = await storage.listCharacters(phone.namespace)
-      const brief = chars.map((item) => ({ id: item.id, name: item.name }))
+      const brief = chars.map((item) => ({
+        id: item.id,
+        name: item.name,
+        personality: item.personality,
+        signature: item.signature,
+        description: item.description,
+      }))
       const rows = await loadFeed(phone.namespace, phone.name, brief)
       if (stop) return
       setPosts(rows)
@@ -95,7 +101,7 @@ export function StarApp(props: { onBack: () => void }) {
       id: uid('post'),
       author: phone.name,
       handle: '我',
-      text: text.slice(0, 140),
+      text: text.slice(0, STAR_POST_MAX),
       at: Date.now(),
       likes: 0,
       liked: false,
@@ -131,7 +137,14 @@ export function StarApp(props: { onBack: () => void }) {
     const started = runAiJob(key, async () => {
       try {
         const chars = await storage.listCharacters(phone.namespace)
-        await refreshStarFeedAi(phone.namespace, chars.map((item) => ({ id: item.id, name: item.name })))
+        const next = await refreshStarFeedAi(phone.namespace, chars.map((item) => ({
+          id: item.id,
+          name: item.name,
+          personality: item.personality,
+          signature: item.signature,
+          description: item.description,
+        })))
+        setPosts(next)
         setNote('')
       } catch (reason) {
         setNote(reason instanceof Error ? reason.message : '这次没有写成，稍后再试')
@@ -164,7 +177,7 @@ export function StarApp(props: { onBack: () => void }) {
       >
         {writing ? (
           <div className="menu-card">
-            <textarea value={draft} maxLength={140} rows={4} onChange={(event) => setDraft(event.target.value)} placeholder="今天" className="soft-input resize-none" />
+            <textarea value={draft} maxLength={STAR_POST_MAX} rows={5} onChange={(event) => setDraft(event.target.value)} placeholder="今天" className="soft-input resize-none" />
             <button type="button" className="chip chip-solid mt-3" disabled={!draft.trim()} onClick={publish}>发出</button>
           </div>
         ) : null}

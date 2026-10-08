@@ -62,7 +62,7 @@ export async function deliverReplyParts(input: {
   identity: Identity
   character: Character
   chat: Chat
-  parts: string[]
+  parts: Array<{ kind: 'text' | 'sticker'; content: string }>
   voiceReady: boolean
   history: ChatMessage[]
   makeMessage: (part: string, kind: ChatMessage['kind'], index: number) => ChatMessage
@@ -72,18 +72,20 @@ export async function deliverReplyParts(input: {
 
   for (const [index, part] of input.parts.entries()) {
     if (index > 0) await sleep(staggerDelay(index))
-    const kind = shouldReplyAsVoice({
-      chat,
-      voiceReady: input.voiceReady,
-      history: [...input.history, ...replies],
-      partIndex: index,
-      partCount: input.parts.length,
-      content: part,
-    })
-      ? 'voice'
-      : 'text'
+    const kind = part.kind === 'sticker'
+      ? 'sticker'
+      : shouldReplyAsVoice({
+          chat,
+          voiceReady: input.voiceReady,
+          history: [...input.history, ...replies],
+          partIndex: index,
+          partCount: input.parts.length,
+          content: part.content,
+        })
+        ? 'voice'
+        : 'text'
     const reply = {
-      ...input.makeMessage(part, kind, index),
+      ...input.makeMessage(part.content, kind, index),
       createdAt: Date.now() + index * 3,
     }
     await storage.putMessage(input.namespace, reply)

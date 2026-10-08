@@ -1,12 +1,18 @@
 import type { AIRequest, AIResponse, ApiConfig } from '../types/index.ts'
 
+/** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
+const DEFAULT_MAX_TOKENS = 8192
+const COMPLETE_ATTEMPTS = 3
+
 export class AIError extends Error {
   code: 'config' | 'network' | 'api' | 'unsupported'
+  retryable: boolean
 
-  constructor(message: string, code: AIError['code'] = 'api') {
+  constructor(message: string, code: AIError['code'] = 'api', retryable = false) {
     super(message)
     this.name = 'AIError'
     this.code = code
+    this.retryable = retryable
   }
 }
 
@@ -26,6 +32,10 @@ function joinUrl(endpoint: string, suffix: string): string {
   return `${base}${suffix}`
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 async function readError(response: Response): Promise<string> {
   const text = await response.text()
   if (!text) return `接口返回了 ${response.status}`
@@ -40,17 +50,52 @@ async function readError(response: Response): Promise<string> {
   return text.slice(0, 240)
 }
 
-function asText(value: unknown): string {
+function partText(part: unknown): string {
+  if (typeof part === 'string') return part
+  if (typeof part !== 'object' || !part) return ''
+  const row = part as Record<string, unknown>
+  if (typeof row.text === 'string') return row.text
+  if (typeof row.content === 'string') return row.content
+  if (row.type === 'text' && typeof row.text === 'string') return row.text
+  return ''
+}
+
+function messageContent(value: unknown): string {
+  if (value == null) return ''
   if (typeof value === 'string') return value.trim()
-  if (!Array.isArray(value)) return ''
-  return value
-    .map((part) => {
-      if (typeof part === 'string') return part
-      if (typeof part === 'object' && part && 'text' in part && typeof part.text === 'string') return part.text
-      return ''
-    })
-    .join('')
-    .trim()
+  if (Array.isArray(value)) return value.map(partText).join('').trim()
+  if (typeof value === 'object') {
+    const row = value as Record<string, unknown>
+    if (typeof row.text === 'string') return row.text.trim()
+    if (typeof row.content === 'string') return row.content.trim()
+  }
+  return ''
+}
+
+function pickString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+/** 兼容多种 OpenAI 兼容接口的返回格式 */
+function extractContent(data: unknown): string {
+  if (!data || typeof data !== 'object') return ''
+  const root = data as Record<string, unknown>
+  const choice = (root.choices as Array<Record<string, unknown>> | undefined)?.[0]
+  if (choice) {
+    const message = choice.message as Record<string, unknown> | undefined
+    if (message) {
+      const main = messageContent(message.content)
+      if (main) return main
+      const fallback = pickString(message.reasoning_content, message.output, message.text)
+      if (fallback) return fallback
+    }
+    const direct = pickString(choice.text, choice.content, messageContent(choice.message))
+    if (direct) return direct
+  }
+  return pickString(root.content, root.output, root.output_text, root.response)
 }
 
 /**
@@ -98,54 +143,76 @@ export class AIAdapter {
     if (!this.config.model.trim()) throw new AIError('还没选择模型。', 'config')
     if (!this.config.endpoint.trim()) throw new AIError('还没写接口地址。', 'config')
     if (!this.config.key.trim()) throw new AIError('还没保存 API Key。', 'config')
-    try {
-      return await this.openai(request)
-    } catch (error) {
-      if (error instanceof AIError) throw error
-      throw AIAdapter.asNetworkError(error)
+
+    let last: AIError | null = null
+    for (let attempt = 0; attempt < COMPLETE_ATTEMPTS; attempt++) {
+      if (attempt > 0) await sleep(700 * attempt)
+      try {
+        return await this.openai(request)
+      } catch (error) {
+        const aiError = error instanceof AIError ? error : AIAdapter.asNetworkError(error)
+        last = aiError
+        if (!AIAdapter.shouldRetry(aiError, attempt)) throw aiError
+      }
     }
+    throw last ?? new AIError('请求失败了')
+  }
+
+  static shouldRetry(error: AIError, attempt: number): boolean {
+    if (attempt >= COMPLETE_ATTEMPTS - 1) return false
+    if (error.code === 'config') return false
+    return error.code === 'network' || error.retryable
   }
 
   static asNetworkError(error: unknown): AIError {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      return new AIError('等了太久，接口没有回来。', 'network')
+      return new AIError('等了太久，接口没有回来。', 'network', true)
     }
     if (error instanceof TypeError) {
-      return new AIError('连不上接口。浏览器直接请求时，多半是跨域。', 'network')
+      return new AIError('连不上接口。浏览器直接请求时，多半是跨域。', 'network', true)
     }
     if (error instanceof Error) {
       const msg = error.message.toLowerCase()
       if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('abort') || msg.includes('signal')) {
-        return new AIError('等了太久，接口没有回来。', 'network')
+        return new AIError('等了太久，接口没有回来。', 'network', true)
       }
     }
     return new AIError(error instanceof Error ? error.message : '请求失败了', 'api')
   }
 
   private async openai(request: AIRequest): Promise<AIResponse> {
-    const response = await fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
-      method: 'POST',
-      signal: AbortSignal.timeout(120_000),
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        messages: request.messages,
-        temperature: request.temperature,
-        top_p: request.topP,
-        ...(request.frequencyPenalty ? { frequency_penalty: request.frequencyPenalty } : {}),
-        ...(request.presencePenalty ? { presence_penalty: request.presencePenalty } : {}),
-        max_tokens: request.maxTokens ?? 800,
-      }),
-    })
-    if (!response.ok) throw new AIError(await readError(response))
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>
+    let response: Response
+    try {
+      response = await fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
+        method: 'POST',
+        signal: AbortSignal.timeout(120_000),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: request.messages,
+          temperature: request.temperature,
+          top_p: request.topP,
+          ...(request.frequencyPenalty ? { frequency_penalty: request.frequencyPenalty } : {}),
+          ...(request.presencePenalty ? { presence_penalty: request.presencePenalty } : {}),
+          max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+        }),
+      })
+    } catch (error) {
+      throw AIAdapter.asNetworkError(error)
     }
-    const content = asText(data.choices?.[0]?.message?.content)
-    if (!content) throw new AIError('接口回来了，但没有文字。')
+
+    if (!response.ok) {
+      const message = await readError(response)
+      const retryable = response.status === 429 || response.status >= 500
+      throw new AIError(message, retryable ? 'network' : 'api', retryable)
+    }
+
+    const data = (await response.json()) as unknown
+    const content = extractContent(data)
+    if (!content) throw new AIError('接口回来了，但没有文字。', 'api', true)
     return { content, model: this.config.model, provider: 'openai' }
   }
 }

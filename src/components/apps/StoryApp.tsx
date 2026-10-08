@@ -476,6 +476,13 @@ function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<t
   const html = props.config.renderHtml && hasHtml(shown)
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
   const inner = html ? <HtmlFrame mode={props.mode} html={shown} reading={reading} color="#3a3a3a" /> : <p className={sc('prose', 'whitespace-pre-wrap')} style={text}><Prose text={shown} quote={reading.quoteColor} /></p>
+  if (html) {
+    return (
+      <span className={sc('bubble', `block overflow-hidden p-0 shadow-none ${props.mine ? 'is-mine' : 'is-theirs'}`)} style={{ background: 'transparent' }}>
+        {inner}
+      </span>
+    )
+  }
   if (props.mine) {
     return (
       <span className={sc('bubble', 'is-mine block rounded-[20px] rounded-br-[6px] px-3.5 py-2 shadow-[0_6px_14px_rgba(243,168,186,0.2)]')} style={{ background: '#FBE0E8' }}>
@@ -498,13 +505,19 @@ function HtmlFrame(props: { mode: StoryMode; html: string; reading: ReadingStyle
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { mellowFrame?: string; h?: number } | null
-      if (data && data.mellowFrame === id && typeof data.h === 'number') setHeight(Math.min(720, Math.max(24, Math.ceil(data.h))))
+      if (data && data.mellowFrame === id && typeof data.h === 'number') setHeight(Math.min(2400, Math.max(24, Math.ceil(data.h))))
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [id])
   return (
-    <iframe title="渲染内容" sandbox="allow-scripts" srcDoc={doc} className={storyCssClass(props.mode, 'html-frame', 'block w-full border-0')} style={{ height, minHeight: 24, maxHeight: 720 }} />
+    <iframe
+      title="渲染内容"
+      sandbox="allow-scripts"
+      srcDoc={doc}
+      className={storyCssClass(props.mode, 'html-frame', 'block w-full overflow-hidden border-0')}
+      style={{ height, minHeight: 24, maxHeight: 2400, display: 'block', verticalAlign: 'top', background: 'transparent' }}
+    />
   )
 }
 

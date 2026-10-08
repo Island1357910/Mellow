@@ -8,19 +8,12 @@ import { resolveIdentityId } from '../../engine/identity.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { themeFromUnknown } from '../../theme/themes.ts'
-import type { Preset, PresetMode, ProactiveLevel } from '../../types/index.ts'
+import type { Preset, PresetMode } from '../../types/index.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { Field, ModalPortal, PillNote, Screen, SectionTitle, SoftCard, Toggle } from '../ui/primitives.tsx'
 import { ApiPanel, BackupPanel, HomeLayoutPanel, IconPanel, MinimaxPanel, PrivacyPanel } from './SettingsPanels.tsx'
 
 const AVATARS = ['🙂', '🌙', '🌸', '🐱', '🍵', '⭐', '🫧', '🍀']
-
-const PROACTIVE: Array<{ id: ProactiveLevel; label: string }> = [
-  { id: 'off', label: '关闭' },
-  { id: 'low', label: '低 · 一天一两句' },
-  { id: 'mid', label: '中 · 一天几句' },
-  { id: 'high', label: '高 · 更费 token' },
-]
 
 export function SettingsApp(props: { onBack: () => void }) {
   const identities = useMellow((state) => state.identities)
@@ -391,20 +384,23 @@ function RoleCard() {
           onChange={(value) => void patchSettings({ fourthWall: value })}
         />
         <label className="mt-2 block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
-          主动开口
-          <select
-            value={settings.proactive}
-            onChange={(event) => void patchSettings({ proactive: event.target.value as ProactiveLevel })}
-            className="soft-select mt-1 w-full text-sm"
-          >
-            {PROACTIVE.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          主动发消息间隔（分钟）
+          <input
+            type="number"
+            min={0}
+            max={10080}
+            value={settings.proactiveMinutes || ''}
+            onChange={(event) => {
+              const raw = event.target.value.trim()
+              void patchSettings({ proactiveMinutes: raw ? Math.max(1, Math.min(10080, Number(raw) || 0)) : 0 })
+            }}
+            placeholder="0 表示关闭"
+            className="soft-input mt-1 w-full text-sm"
+          />
         </label>
-        <div className="mt-3"><PillNote tone="butter" compact>心跳还没接上，选择会先留下来</PillNote></div>
+        <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--m-text-secondary)' }}>
+          你超过这么多分钟没回，角色可能会自己发一条。可在单个会话里单独改。设为 0 则关闭。
+        </p>
       </SoftCard>
   )
 }

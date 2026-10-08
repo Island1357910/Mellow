@@ -9,7 +9,6 @@ import {
   loadConfig,
   loadSave,
   needsSummary,
-  pickStoryMaxTokens,
   putSave,
   writeSummary,
   type StoryMode,
@@ -60,7 +59,6 @@ export async function runStoryGeneration(input: {
   const content = await generateStoryReply({
     messages,
     preset,
-    maxTokens: pickStoryMaxTokens(config.maxTokensMin, config.maxTokensMax),
     charsMin: config.replyCharsMin,
     charsMax: config.replyCharsMax,
   })

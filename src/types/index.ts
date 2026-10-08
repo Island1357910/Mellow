@@ -56,9 +56,12 @@ export interface LorebookEntry {
   keys?: string[]
   content: string
   enabled?: boolean
+  disable?: boolean
   constant?: boolean
   insertion_order?: number
   name?: string
+  /** SillyTavern 里条目的显示名，常写在 comment */
+  comment?: string
 }
 
 export interface Lorebook {
@@ -132,6 +135,10 @@ export interface Chat {
   replyMin?: number
   replyMax?: number
   allowProactive?: boolean
+  /** 这条会话：玩家多少分钟没回，角色会主动发消息；空则用全局设置 */
+  proactiveMinutes?: number
+  /** 上次主动发消息的时间，避免重复触发 */
+  proactiveLastAt?: number
   /** 把现实时间写进提示词 */
   realTime?: boolean
   voiceEnabled?: boolean
@@ -382,6 +389,8 @@ export interface MinimaxSettings {
   userVoiceId: string
   /** 拉取到的平台音色列表 */
   fetchedVoices: MinimaxVoice[]
+  /** 音色列表对应的账号（endpoint|groupId|密钥尾） */
+  voiceAccountTag?: string
   ready: boolean
 }
 
@@ -395,7 +404,10 @@ export interface AppSettings {
   /** 短信、线下、番外、创作、桌游等各自用哪一套 */
   modePresets: Record<PresetMode, string>
   fourthWall: boolean
-  proactive: ProactiveLevel
+  /** @deprecated 旧版档位，迁移到 proactiveMinutes */
+  proactive?: ProactiveLevel
+  /** 玩家多少分钟没回消息，角色会主动发一条；0 表示关闭 */
+  proactiveMinutes: number
   /** 手动免打扰 */
   dnd: boolean
   /** 是否启用免打扰时段 */

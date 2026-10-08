@@ -94,10 +94,6 @@ export interface StoryConfig {
   autoSummary: boolean
   /** 攒够多少轮旧对话自动写一条小总结 */
   summaryEvery: number
-  /** 单次回复 token 下限 */
-  maxTokensMin: number
-  /** 单次回复 token 上限 */
-  maxTokensMax: number
   /** 单次回复正文字数下限（不计 HTML 标签） */
   replyCharsMin: number
   /** 单次回复正文字数上限 */
@@ -280,17 +276,8 @@ export const DEFAULT_CONFIG: StoryConfig = {
   keepRounds: 12,
   autoSummary: true,
   summaryEvery: 8,
-  maxTokensMin: 600,
-  maxTokensMax: 1000,
   replyCharsMin: 800,
   replyCharsMax: 1500,
-}
-
-export function pickStoryMaxTokens(min: number, max: number): number {
-  const lo = Math.min(min, max)
-  const hi = Math.max(min, max)
-  if (lo >= hi) return hi
-  return lo + Math.floor(Math.random() * (hi - lo + 1))
 }
 
 export const STATUS_EXAMPLE = {
@@ -311,20 +298,16 @@ function bagKeys(id: string) {
 }
 
 export async function loadConfig(namespace: string): Promise<StoryConfig> {
-  const raw = await storage.getBag<Partial<StoryConfig & { maxTokens?: number }>>(namespace, 'story_config')
-  const legacy = raw?.maxTokens
-  let maxTokensMin = raw?.maxTokensMin ?? (legacy != null ? Math.max(200, Math.round(legacy * 0.6)) : DEFAULT_CONFIG.maxTokensMin)
-  let maxTokensMax = raw?.maxTokensMax ?? legacy ?? DEFAULT_CONFIG.maxTokensMax
-  if (maxTokensMin > maxTokensMax) [maxTokensMin, maxTokensMax] = [maxTokensMax, maxTokensMin]
+  const raw = await storage.getBag<
+    Partial<StoryConfig & { maxTokens?: number; maxTokensMin?: number; maxTokensMax?: number }>
+  >(namespace, 'story_config')
   let replyCharsMin = raw?.replyCharsMin ?? DEFAULT_CONFIG.replyCharsMin
   let replyCharsMax = raw?.replyCharsMax ?? DEFAULT_CONFIG.replyCharsMax
   if (replyCharsMin > replyCharsMax) [replyCharsMin, replyCharsMax] = [replyCharsMax, replyCharsMin]
-  const { maxTokens: _legacy, ...rest } = raw ?? {}
+  const { maxTokens: _legacy, maxTokensMin: _tokMin, maxTokensMax: _tokMax, ...rest } = raw ?? {}
   return {
     ...DEFAULT_CONFIG,
     ...rest,
-    maxTokensMin,
-    maxTokensMax,
     replyCharsMin,
     replyCharsMax,
     reading: { ...DEFAULT_READING, ...(raw?.reading ?? {}) },
@@ -612,7 +595,8 @@ export function buildStoryPrompt(input: {
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
   if (memory.text) systems.push(memory.text)
-  if (config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
+  if (mode === 'side' && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
+  if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
 
   const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
@@ -669,7 +653,7 @@ export function needsSummary(save: StorySave, config: StoryConfig): boolean {
   return save.lines.length - config.keepRounds * 2 - covered >= config.summaryEvery * 2
 }
 
-export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens: number): Promise<string> {
+export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number): Promise<string> {
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const response = await adapter.complete({
     messages,
@@ -677,7 +661,7 @@ export async function generate(messages: AIMessage[], preset: Preset | null, max
     topP: preset?.data.top_p ?? 0.95,
     frequencyPenalty: preset?.data.frequency_penalty ?? 0,
     presencePenalty: preset?.data.presence_penalty ?? 0,
-    maxTokens,
+    ...(maxTokens != null ? { maxTokens } : {}),
   })
   return response.content
 }
@@ -685,12 +669,11 @@ export async function generate(messages: AIMessage[], preset: Preset | null, max
 export async function generateStoryReply(input: {
   messages: AIMessage[]
   preset: Preset | null
-  maxTokens: number
   charsMin: number
   charsMax: number
 }): Promise<string> {
   const range = storyCharRange(input.charsMin, input.charsMax)
-  let content = await generate(input.messages, input.preset, input.maxTokens)
+  let content = await generate(input.messages, input.preset)
   let len = plainStoryLength(content)
   if (len >= range.lo && len <= range.hi) return content
 
@@ -708,7 +691,6 @@ export async function generateStoryReply(input: {
         },
       ],
       input.preset,
-      input.maxTokens,
     )
     content = `${content.trimEnd()}\n${tail.trim()}`
     len = plainStoryLength(content)
@@ -745,5 +727,5 @@ export function htmlBody(text: string): string {
 }
 
 export function frameDoc(id: string, html: string, reading: ReadingStyle, color: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:transparent;overflow:hidden;min-height:0!important;height:auto!important}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important}body>*:last-child{margin-bottom:0!important}body>*{max-width:100%}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';});}function m(){strip();var b=document.body;var h=Math.ceil(Math.max(b.scrollHeight,b.offsetHeight,document.documentElement.scrollHeight));h=Math.max(24,Math.min(h,720));parent.postMessage({mellowFrame:id,h:h},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important;line-height:0}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){var h=Math.min(measure(),2400);parent.postMessage({mellowFrame:id,h:h},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
 }

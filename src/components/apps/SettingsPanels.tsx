@@ -6,6 +6,7 @@ import {
   isLikelyMinimaxKey,
   isTrustedVoiceCache,
   listMinimaxVoices,
+  minimaxAccountTag,
   minimaxSpeak,
   MINIMAX_MODELS,
   normalizeMinimaxKey,
@@ -212,15 +213,14 @@ export function MinimaxPanel() {
   const [voiceId, setVoiceId] = useState(mini.voiceId || 'female-shaonv')
   const [userVoiceId, setUserVoiceId] = useState(mini.userVoiceId || 'male-qn-qingse')
   const models = mini.model && !MINIMAX_MODELS.includes(mini.model) ? [mini.model, ...MINIMAX_MODELS] : MINIMAX_MODELS
-  const storedVoices = isTrustedVoiceCache(mini.fetchedVoices) ? mini.fetchedVoices : []
-  const [voices, setVoices] = useState(storedVoices.length > 0 ? storedVoices : BUILTIN_VOICES)
-  const [localFetched, setLocalFetched] = useState(storedVoices.length > 0)
+  const [voices, setVoices] = useState<typeof BUILTIN_VOICES>(BUILTIN_VOICES)
+  const [localFetched, setLocalFetched] = useState(false)
   const [status, setStatus] = useState(mini.ready ? '语音已可用' : '')
   const [voiceQuery, setVoiceQuery] = useState('')
   const [userVoiceQuery, setUserVoiceQuery] = useState('')
   const voiceList = localFetched && isTrustedVoiceCache(voices) ? voices : BUILTIN_VOICES
-  const trustedCount = localFetched ? voices.length : storedVoices.length
-  const staleCache = mini.fetchedVoices.length > 0 && !isTrustedVoiceCache(mini.fetchedVoices)
+  const trustedCount = localFetched ? voices.length : 0
+  const staleCache = mini.fetchedVoices.length > 0 && !mini.voiceAccountTag
 
   const secret = async () => {
     let raw = key.trim()
@@ -233,9 +233,47 @@ export function MinimaxPanel() {
     }
     const token = normalizeMinimaxKey(raw)
     if (!token) return ''
-    if (!isLikelyMinimaxKey(token)) throw new Error('密钥格式不对，请粘贴 eyJ 开头的 JWT')
+    if (!isLikelyMinimaxKey(token)) throw new Error('密钥格式不对')
     return token
   }
+
+  useEffect(() => {
+    let stop = false
+    void (async () => {
+      if (!mini.encryptedKey) {
+        if (!stop) {
+          setVoices(BUILTIN_VOICES)
+          setLocalFetched(false)
+        }
+        return
+      }
+      try {
+        const raw = await decryptSecret(mini.encryptedKey)
+        const tag = minimaxAccountTag({ endpoint: mini.endpoint, groupId: mini.groupId, key: raw })
+        if (!stop && tag && tag === mini.voiceAccountTag && isTrustedVoiceCache(mini.fetchedVoices)) {
+          setVoices(mini.fetchedVoices)
+          setLocalFetched(true)
+          return
+        }
+      } catch {
+        /* 密钥读不出则不用旧列表 */
+      }
+      if (!stop) {
+        setVoices(BUILTIN_VOICES)
+        setLocalFetched(false)
+      }
+    })()
+    return () => {
+      stop = true
+    }
+  }, [mini.encryptedKey, mini.endpoint, mini.groupId, mini.voiceAccountTag, mini.fetchedVoices])
+
+  useEffect(() => {
+    const credsDirty = Boolean(key.trim()) || groupId.trim() !== mini.groupId || endpoint.trim() !== mini.endpoint
+    if (!credsDirty) return
+    setLocalFetched(false)
+    setVoices(BUILTIN_VOICES)
+  }, [endpoint, groupId, key, mini.groupId, mini.endpoint])
 
   return (
     <SoftCard className="min-w-0 overflow-hidden">
@@ -243,7 +281,7 @@ export function MinimaxPanel() {
       <div className="min-w-0 space-y-3">
         <Field label="语音接口" value={endpoint} onChange={setEndpoint} placeholder="https://api.minimax.cn" />
         <Field label="GroupId（合成语音时需要）" value={groupId} onChange={setGroupId} placeholder="开放平台账户里的数字 GroupId" />
-        <Field label={mini.encryptedKey ? '语音密钥（留空不改）' : '语音密钥'} value={key} onChange={setKey} type="password" placeholder="MiniMax API Key（eyJ 开头）" />
+        <Field label={mini.encryptedKey ? '语音密钥（留空不改）' : '语音密钥'} value={key} onChange={setKey} type="password" placeholder="sk-api-..." />
         <label className="block min-w-0 text-xs" style={{ color: 'var(--m-text-secondary)' }}>
           语音模型
           <select value={model} onChange={(event) => setModel(event.target.value)} className="soft-select mt-1 w-full min-w-0 max-w-full text-sm">
@@ -261,8 +299,8 @@ export function MinimaxPanel() {
               ? `检测到 ${mini.fetchedVoices.length} 条旧缓存（不是平台全量），请重新粘贴密钥后点「拉取音色」。`
               : `还没拉取过平台音色，下拉框里是 ${BUILTIN_VOICES.length} 个内置兜底。`}
         </p>
-        <div className="flex min-w-0 flex-wrap gap-2 rounded-2xl bg-black/[0.04] p-2">
-          <button type="button" className="chip chip-sky shrink-0" onClick={() => {
+        <div className="grid min-w-0 grid-cols-3 gap-2">
+          <button type="button" className="chip chip-sky min-w-0 w-full" onClick={() => {
             void (async () => {
               const apiKey = await secret()
               if (!apiKey) {
@@ -277,13 +315,14 @@ export function MinimaxPanel() {
               if (!list.some((item) => item.id === userVoiceId)) setUserVoiceId(list[0]?.id ?? userVoiceId)
               setStatus(`拉到 ${list.length} 个音色`)
               const encryptedKey = key.trim() ? await encryptSecret(apiKey) : mini.encryptedKey
+              const voiceAccountTag = minimaxAccountTag({ endpoint, groupId, key: apiKey })
               if (encryptedKey) {
-                await patchSettings({ minimax: { endpoint, groupId, encryptedKey, model, voiceId, userVoiceId, fetchedVoices: list, ready: true } })
+                await patchSettings({ minimax: { endpoint, groupId, encryptedKey, model, voiceId, userVoiceId, fetchedVoices: list, voiceAccountTag, ready: true } })
                 setKey('')
               }
             })().catch((error: unknown) => setStatus(error instanceof Error ? error.message : '没拉到音色'))
           }}>拉取音色</button>
-          <button type="button" className="chip shrink-0" onClick={() => {
+          <button type="button" className="chip min-w-0 w-full" onClick={() => {
             void (async () => {
               const apiKey = await secret()
               if (!apiKey) {
@@ -301,29 +340,38 @@ export function MinimaxPanel() {
               setStatus(`正在试听「${voiceLabel(voiceList, voiceId)}」`)
             })().catch((error: unknown) => setStatus(error instanceof Error ? error.message : '试听失败'))
           }}>试听默认音色</button>
+          <button type="button" className="chip chip-solid min-w-0 w-full" onClick={() => {
+            if (!model) {
+              setStatus('先选择模型')
+              return
+            }
+            void (async () => {
+              const apiKey = key.trim() ? normalizeMinimaxKey(key) : ''
+              if (apiKey && !isLikelyMinimaxKey(apiKey)) {
+                setStatus('密钥格式不对')
+                return
+              }
+              const encryptedKey = apiKey ? await encryptSecret(apiKey) : mini.encryptedKey
+              if (!encryptedKey) {
+                setStatus('先写密钥')
+                return
+              }
+              const storedKey = apiKey || (mini.encryptedKey ? await decryptSecret(mini.encryptedKey) : '')
+              const voiceAccountTag = minimaxAccountTag({ endpoint, groupId, key: storedKey })
+              let fetchedVoices = localFetched && isTrustedVoiceCache(voices) ? voices : []
+              if (!fetchedVoices.length && voiceAccountTag === mini.voiceAccountTag && isTrustedVoiceCache(mini.fetchedVoices)) {
+                fetchedVoices = mini.fetchedVoices
+              }
+              await patchSettings({ minimax: { endpoint, groupId, encryptedKey, model, voiceId, userVoiceId, fetchedVoices, voiceAccountTag, ready: true } })
+              if (!fetchedVoices.length) {
+                setLocalFetched(false)
+                setVoices(BUILTIN_VOICES)
+              }
+              setKey('')
+              setStatus(fetchedVoices.length ? '语音已保存' : '已保存，请点「拉取音色」')
+            })()
+          }}>保存</button>
         </div>
-        <button type="button" className="chip chip-solid w-full" onClick={() => {
-          if (!model) {
-            setStatus('先选择模型')
-            return
-          }
-          void (async () => {
-            const apiKey = key.trim() ? normalizeMinimaxKey(key) : ''
-            if (apiKey && !isLikelyMinimaxKey(apiKey)) {
-              setStatus('密钥格式不对，应是 eyJ 开头')
-              return
-            }
-            const encryptedKey = apiKey ? await encryptSecret(apiKey) : mini.encryptedKey
-            if (!encryptedKey) {
-              setStatus('先写密钥')
-              return
-            }
-            const fetchedVoices = localFetched && isTrustedVoiceCache(voices) ? voices : storedVoices
-            await patchSettings({ minimax: { endpoint, groupId, encryptedKey, model, voiceId, userVoiceId, fetchedVoices, ready: true } })
-            setKey('')
-            setStatus('语音已保存')
-          })()
-        }}>保存语音</button>
         {status ? <PillNote tone="lilac" inline><span className="break-words">{status}</span></PillNote> : null}
       </div>
     </SoftCard>

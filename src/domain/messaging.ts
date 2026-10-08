@@ -6,6 +6,7 @@ import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
+import { capReplySegments, expandReplyParts } from '../lib/stickerReply.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { useMellow } from '../store/useMellow.ts'
@@ -101,6 +102,8 @@ export async function postUserText(input: {
   }
   await storage.putMessage(input.namespace, userMessage)
   await touchChat(input.namespace, input.chat, userMessage.content, 0, userMessage.kind)
+  const fresh = await storage.getChat(input.namespace, input.chat.id)
+  if (fresh?.proactiveLastAt) await storage.putChat(input.namespace, { ...fresh, proactiveLastAt: undefined })
   if (input.chat.memberIds[0]) await noteRemoteChat(input.namespace, input.chat.memberIds[0], true)
   eventBus.emit({
     type: 'send_message',
@@ -235,6 +238,7 @@ export async function replyInChat(input: {
   activePresetId: string
   fourthWall: boolean
   voiceReady?: boolean
+  proactive?: boolean
 }): Promise<ChatMessage> {
   if (replyLocks.has(input.chat.id)) {
     throw new AIError('BUSY', 'api')
@@ -253,7 +257,7 @@ export async function replyInChat(input: {
   replyLocks.add(input.chat.id)
   try {
     const all = await storage.listMessages(input.namespace, input.chat.id)
-    const history = all.filter((item) => item.kind === 'text' || item.role === 'user' || item.role === 'assistant').slice(-(input.chat.contextLimit ?? 30))
+    const history = all.filter((item) => item.kind !== 'system').slice(-(input.chat.contextLimit ?? 30))
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
     const glance = await searchNoteFor(input.namespace, input.character.id)
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
@@ -264,7 +268,13 @@ export async function replyInChat(input: {
       preset,
       history,
       fourthWall: input.fourthWall,
-      note: [replyNote(input.chat), storyBridge, glance, world].filter(Boolean).join('\n'),
+      note: [
+        replyNote(input.chat),
+        input.proactive ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
+        storyBridge,
+        glance,
+        world,
+      ].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()
@@ -279,7 +289,7 @@ export async function replyInChat(input: {
       maxTokens: Math.min(1600, 220 * max),
     })
     const { text, change } = takeProfileChange(response.content)
-    const parts = splitReply(text || '……', max)
+    const parts = capReplySegments(expandReplyParts(splitReply(text || '……', max)), max)
     const replies = await deliverReplyParts({
       namespace: input.namespace,
       identity: input.identity,
@@ -364,6 +374,7 @@ export async function deliverSms(input: {
       topP: built.topP,
       frequencyPenalty: built.frequencyPenalty,
       presencePenalty: built.presencePenalty,
+      maxTokens: 800,
     })
     const reply = textMessage({
       chatId: input.chat.id,

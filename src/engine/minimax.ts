@@ -40,7 +40,21 @@ export function normalizeMinimaxKey(raw: string): string {
 
 export function isLikelyMinimaxKey(key: string): boolean {
   const normalized = normalizeMinimaxKey(key)
-  return normalized.startsWith('eyJ') && normalized.includes('.')
+  if (normalized.startsWith('sk-api-') && normalized.length > 24) return true
+  if (normalized.startsWith('eyJ') && normalized.includes('.')) return true
+  return false
+}
+
+/** 标记音色列表属于哪个账号，换密钥 / GroupId 后旧缓存作废 */
+export function minimaxAccountTag(input: { endpoint: string; groupId: string; key: string }): string {
+  const key = normalizeMinimaxKey(input.key)
+  if (!key) return ''
+  return `${(input.endpoint || '').trim()}|${input.groupId.trim()}|${key.slice(-16)}`
+}
+
+export function voicesMatchAccount(settings: MinimaxSettings, key: string): boolean {
+  const tag = minimaxAccountTag({ endpoint: settings.endpoint, groupId: settings.groupId, key })
+  return Boolean(tag && tag === settings.voiceAccountTag && isTrustedVoiceCache(settings.fetchedVoices))
 }
 
 export function isTrustedVoiceCache(voices: MinimaxVoice[]): boolean {
@@ -145,11 +159,11 @@ export async function listMinimaxModels(endpoint: string, key: string, groupId =
 }
 
 /** 拉取平台音色（官方接口 POST /v1/get_voice，通常 300+ 条系统音色） */
-export async function listMinimaxVoices(endpoint: string, key: string, _groupId = ''): Promise<MinimaxVoice[]> {
+export async function listMinimaxVoices(endpoint: string, key: string, groupId = ''): Promise<MinimaxVoice[]> {
   const token = normalizeMinimaxKey(key)
   if (!token) throw new AIError('先写 MiniMax 密钥。', 'config')
-  if (!isLikelyMinimaxKey(token)) throw new AIError('密钥格式不对，请粘贴 eyJ 开头的 API Key。', 'config')
-  const response = await fetch(joinUrl(endpoint || 'https://api.minimax.cn', '/v1/get_voice'), {
+  if (!isLikelyMinimaxKey(token)) throw new AIError('密钥格式不对，请粘贴 MiniMax API Key。', 'config')
+  const response = await fetch(apiUrl(endpoint, '/v1/get_voice', groupId), {
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ voice_type: 'all' }),
@@ -164,7 +178,10 @@ export async function listMinimaxVoices(endpoint: string, key: string, _groupId 
 }
 
 export function voiceOptions(settings: MinimaxSettings): MinimaxVoice[] {
-  return settings.fetchedVoices.length > 0 ? settings.fetchedVoices : BUILTIN_VOICES
+  if (settings.fetchedVoices.length > 0 && settings.voiceAccountTag && isTrustedVoiceCache(settings.fetchedVoices)) {
+    return settings.fetchedVoices
+  }
+  return BUILTIN_VOICES
 }
 
 export function voiceLabel(voices: MinimaxVoice[], id: string): string {
@@ -182,7 +199,7 @@ export async function minimaxSpeak(settings: MinimaxSettings, key: string, text:
   if (!settings.ready || !settings.model) throw new AIError('MiniMax 还没拉取并保存。', 'config')
   const token = normalizeMinimaxKey(key)
   if (!token) throw new AIError('没有 MiniMax 密钥。', 'config')
-  if (!isLikelyMinimaxKey(token)) throw new AIError('密钥格式不对，请重新粘贴 eyJ 开头的 API Key。', 'config')
+  if (!isLikelyMinimaxKey(token)) throw new AIError('密钥格式不对，请重新粘贴 MiniMax API Key。', 'config')
   const body = {
     model: settings.model,
     text: text.slice(0, 400),

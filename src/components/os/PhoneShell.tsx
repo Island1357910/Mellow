@@ -19,6 +19,7 @@ import { maybeAskAboutLock } from '../../domain/locks.ts'
 import { importDroppedJson } from '../../domain/importing.ts'
 import { findIdentity, resolveIdentityId } from '../../engine/identity.ts'
 import { tickDeliveries } from '../../lib/delivery.ts'
+import { tickProactive } from '../../lib/proactive.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { formatClock } from '../../lib/format.ts'
 import { themeOf, useMellow } from '../../store/useMellow.ts'
@@ -40,6 +41,7 @@ export function PhoneShell() {
   const veil = useMellow((state) => state.veil)
   const themes = useMellow((state) => state.themes)
   const settings = useMellow((state) => state.settings)
+  const presets = useMellow((state) => state.presets)
   const [dragging, setDragging] = useState(false)
   const [backupAsk, setBackupAsk] = useState(false)
   const patchSettings = useMellow((state) => state.patchSettings)
@@ -99,6 +101,18 @@ export function PhoneShell() {
     }
   }, [ready, locked, identities, activeIdentityId, touchData])
 
+  useEffect(() => {
+    if (!ready || locked || settings.proactiveMinutes <= 0) return
+    const phone = identities.find((item) => item.id === activeIdentityId)
+    if (!phone) return
+    const run = () => {
+      void tickProactive({ identity: phone, settings, presets }).catch(() => undefined)
+    }
+    run()
+    const timer = window.setInterval(run, 60_000)
+    return () => window.clearInterval(timer)
+  }, [ready, locked, identities, activeIdentityId, settings, presets])
+
   return (
     <div className="stage">
       <div
@@ -140,7 +154,7 @@ export function PhoneShell() {
               <ControlCenter />
             </>
           ) : null}
-          <StatusBar showClock={!locked || !ready} />
+          <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />
           <div
             className="pointer-events-none absolute inset-0 z-[15]"
             style={{ background: '#2c2628', opacity: (1 - brightness) * 0.62 }}

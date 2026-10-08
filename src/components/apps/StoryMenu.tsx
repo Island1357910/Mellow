@@ -134,7 +134,7 @@ export function StoryMenu(props: {
         {tab === 'read' ? <ReadTab mode={props.mode} reading={props.config.reading} onChange={(reading) => props.onConfig({ reading })} /> : null}
         {tab === 'saves' ? <SavesTab {...props} onNote={setNote} /> : null}
         {tab === 'memory' ? <MemoryTab {...props} onNote={setNote} /> : null}
-        {tab === 'regex' ? <RegexTab config={props.config} onConfig={props.onConfig} onNote={setNote} /> : null}
+        {tab === 'regex' ? <RegexTab mode={props.mode} config={props.config} onConfig={props.onConfig} onNote={setNote} /> : null}
         {tab === 'persona' ? <PersonaTab {...props} onNote={setNote} /> : null}
       </div>
     </div>
@@ -302,15 +302,9 @@ function MemoryTab(props: TabProps) {
           <Num label="最近几轮保留原文" value={config.keepRounds} min={1} max={100} onChange={(keepRounds) => props.onConfig({ keepRounds })} />
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <Num label="单次回复长度下限" value={config.maxTokensMin} min={200} max={4000} step={100} onChange={(maxTokensMin) => props.onConfig({ maxTokensMin, maxTokensMax: Math.max(maxTokensMin, config.maxTokensMax) })} />
-          <Num label="单次回复长度上限" value={config.maxTokensMax} min={200} max={4000} step={100} onChange={(maxTokensMax) => props.onConfig({ maxTokensMax, maxTokensMin: Math.min(maxTokensMax, config.maxTokensMin) })} />
-        </div>
-        <p className="mt-2 text-[11px] leading-5" style={dim}>每次生成时在 {config.maxTokensMin}～{config.maxTokensMax} token 之间随机取值。</p>
-        <div className="mt-2 grid grid-cols-2 gap-2">
           <Num label="正文字数下限" value={config.replyCharsMin} min={50} max={3000} step={10} onChange={(replyCharsMin) => props.onConfig({ replyCharsMin, replyCharsMax: Math.max(replyCharsMin, config.replyCharsMax) })} />
           <Num label="正文字数上限" value={config.replyCharsMax} min={50} max={3000} step={10} onChange={(replyCharsMax) => props.onConfig({ replyCharsMax, replyCharsMin: Math.min(replyCharsMax, config.replyCharsMin) })} />
         </div>
-        <p className="mt-2 text-[11px] leading-5" style={dim}>AI 回复目标 {config.replyCharsMin}～{config.replyCharsMax} 字（HTML 不计），可上下浮动 10%；偏短时会自动续写，不重写。</p>
         <p className="mt-3 text-[11px] leading-5" style={dim}>超出 {config.keepRounds} 轮的旧剧情，只把摘要发给模型。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段之后的原文，共 {save.lines.length - rawFrom} 段。</p>
       </Block>
       <Block title="自动总结">
@@ -353,7 +347,7 @@ function blankRule(): RegexRule {
   return { id: uid('rx'), name: '新规则', find: '', flags: 'g', replace: '', target: 'display', roles: 'assistant', enabled: true }
 }
 
-function RegexTab(props: { config: StoryConfig; onConfig: (patch: Partial<StoryConfig>) => void; onNote: (text: string) => void }) {
+function RegexTab(props: { mode: StoryMode; config: StoryConfig; onConfig: (patch: Partial<StoryConfig>) => void; onNote: (text: string) => void }) {
   const { config } = props
   const [open, setOpen] = useState<string | null>(null)
   const [sample, setSample] = useState('')
@@ -367,12 +361,19 @@ function RegexTab(props: { config: StoryConfig; onConfig: (patch: Partial<StoryC
   return (
     <>
       <Block title="渲染">
-        <SwitchRow label="渲染 HTML / style 状态栏" hint="回复里出现 HTML 标签时，放进隔离的小窗里渲染，样式不会影响手机" on={config.renderHtml} onClick={() => props.onConfig({ renderHtml: !config.renderHtml })} />
+        <SwitchRow
+          label={props.mode === 'side' ? '渲染 HTML / style 状态栏' : '渲染 HTML'}
+          hint={props.mode === 'side' ? '回复里出现 HTML 标签时，放进隔离的小窗里渲染，样式不会影响手机' : '回复里出现 HTML 标签时，放进隔离的小窗里渲染'}
+          on={config.renderHtml}
+          onClick={() => props.onConfig({ renderHtml: !config.renderHtml })}
+        />
         <SwitchRow label="使用角色卡自带的正则" hint="导入角色卡时会自动写入 regex_scripts；也可继续读卡内 extensions" on={config.useCardRegex} onClick={() => props.onConfig({ useCardRegex: !config.useCardRegex })} />
       </Block>
-      <Block title="状态栏提示词" right={<button type="button" className="chip chip-butter" style={small} onClick={useExample}>填入示例</button>}>
-        <textarea value={config.statusPrompt} rows={4} onChange={(event) => props.onConfig({ statusPrompt: event.target.value })} placeholder="告诉模型每次回复末尾输出什么状态栏，比如 <status>…</status>。配合下面的正则把它变成漂亮的卡片。" className="soft-input resize-none text-xs leading-5" />
-      </Block>
+      {props.mode === 'side' ? (
+        <Block title="状态栏提示词" right={<button type="button" className="chip chip-butter" style={small} onClick={useExample}>填入示例</button>}>
+          <textarea value={config.statusPrompt} rows={4} onChange={(event) => props.onConfig({ statusPrompt: event.target.value })} placeholder="告诉模型每次回复末尾输出什么状态栏，比如 <status>…</status>。配合下面的正则把它变成漂亮的卡片。" className="soft-input resize-none text-xs leading-5" />
+        </Block>
+      ) : null}
       <Block
         title={`正则 · ${config.regex.length}`}
         right={

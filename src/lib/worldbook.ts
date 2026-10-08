@@ -53,6 +53,21 @@ function keysToString(keys?: string[]): string {
   return (keys ?? []).map((key) => key.trim()).filter(Boolean).join('，')
 }
 
+function entryTitle(entry: { name?: string; comment?: string; keys?: string[]; constant?: boolean }): string {
+  const comment = entry.comment?.trim()
+  if (comment) return comment
+  const name = entry.name?.trim()
+  if (name) return name
+  const keys = keysToString(entry.keys)
+  if (keys) return keys.split('，')[0] ?? keys
+  return entry.constant ? '常驻设定' : '设定'
+}
+
+function entryEnabled(entry: { enabled?: boolean; disable?: boolean }): boolean {
+  if (entry.disable === true) return false
+  return entry.enabled !== false
+}
+
 /** 把角色卡里的 character_book 与设定提示词，转成世界书条目。 */
 export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
   const now = Date.now()
@@ -71,8 +86,8 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
   const book = character.characterBook
   for (const entry of loreEntries(book)) {
     if (!entry.content.trim()) continue
-    const title = entry.name?.trim() || (entry.constant ? '常驻设定' : '设定')
-    rows.push(stamp(title, entry.content, keysToString(entry.keys), entry.enabled !== false))
+    const title = entryTitle(entry)
+    rows.push(stamp(title, entry.content, keysToString(entry.keys), entryEnabled(entry)))
   }
   if (character.systemPrompt.trim()) {
     rows.push(stamp('系统提示', character.systemPrompt))
