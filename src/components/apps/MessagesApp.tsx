@@ -90,6 +90,16 @@ export function MessagesApp(props: { onBack: () => void }) {
     return () => window.clearInterval(timer)
   }, [onlineNamespace])
 
+  useEffect(() => {
+    const onPop = () => {
+      if (!nearbyHistory.current) return
+      nearbyHistory.current = false
+      setSocial((current) => (current === 'nearby' ? null : current))
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
   if (openChatRequest && identity && openChatRequest.identityId === identity.id && handled !== openChatRequest.token) {
     setHandled(openChatRequest.token)
     setOpenId(openChatRequest.chatId)
@@ -129,15 +139,6 @@ export function MessagesApp(props: { onBack: () => void }) {
     }
   }
 
-  useEffect(() => {
-    const onPop = () => {
-      if (!nearbyHistory.current) return
-      nearbyHistory.current = false
-      setSocial((current) => (current === 'nearby' ? null : current))
-    }
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
   const likeNearby = async (person: NearPerson) => {
     const character = await createNearbyContact(identity.namespace, person)
     await ensureDirectChat(identity.namespace, character)
