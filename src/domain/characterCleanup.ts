@@ -25,6 +25,7 @@ async function purgeWorldbook(namespace: string, charId: string): Promise<void> 
 async function purgeAppData(namespace: string, charId: string): Promise<void> {
   await storage.deleteBag(namespace, `peek_${charId}`)
   await storage.deleteBag(namespace, `char_diary_${charId}`)
+  await storage.deleteBag(namespace, `char_searches_${charId}`)
 
   const glance = (await storage.getBag<Record<string, string[]>>(namespace, 'glance')) ?? {}
   if (glance[charId]) {

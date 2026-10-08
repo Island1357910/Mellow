@@ -5,8 +5,10 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { PHONE_APPS } from '../../data/apps.ts'
 
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { loadCharSearches } from '../../lib/charSearchPeek.ts'
 import { assessCharOpen } from '../../lib/peekAssess.ts'
 import { loadPeek, refreshPeek, type PeekThread } from '../../lib/peek.ts'
+import type { SearchHit } from '../../domain/glance.ts'
 
 import type { FeedPost } from '../../lib/feed.ts'
 
@@ -31,6 +33,8 @@ import { PillNote, Screen } from '../ui/primitives.tsx'
 const CHAR_APPS = [
 
   { id: 'sms', name: '短信', need: 0, blurb: '你和 TA 的聊天', emoji: '💬', tint: '#F8D0DC', accent: '#EE9AB0' },
+
+  { id: 'search', name: '搜索栏', need: 2, blurb: '搜过什么', emoji: '🔍', tint: '#E7E0D8', accent: '#C4BAB0' },
 
   { id: 'moments', name: '朋友圈', need: 3, blurb: '动态与碎碎念', emoji: '🌿', tint: '#F8E6C0', accent: '#E9B949' },
 
@@ -366,6 +370,8 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
   const [pages, setPages] = useState<Array<{ text: string; at: number }>>([])
 
+  const [searches, setSearches] = useState<SearchHit[]>([])
+
   const [seen, setSeen] = useState<string[]>([])
 
   const [page, setPage] = useState<string | null>(null)
@@ -531,6 +537,32 @@ export function HuizhenApp(props: { onBack: () => void }) {
       if (!rows) await storage.setBag(phone.namespace, `char_diary_${bound}`, ready)
 
       if (!stop) setPages(ready)
+
+    })
+
+    return () => {
+
+      stop = true
+
+    }
+
+  }, [phone, page, bound, chars])
+
+
+
+  useEffect(() => {
+
+    if (!phone || page !== 'search' || !bound) return
+
+    const person = chars.find((item) => item.id === bound)
+
+    if (!person) return
+
+    let stop = false
+
+    void loadCharSearches(phone.namespace, person).then((rows) => {
+
+      if (!stop) setSearches(rows)
 
     })
 
@@ -768,7 +800,34 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
           </div>
 
+        ) : page === 'search' ? (
+
+          <div>
+
+            {searches.length === 0 ? (
+
+              <PillNote tone="mint">搜索栏还是空的</PillNote>
+
+            ) : (
+
+              searches.map((item) => (
+
+                <article key={`${item.at}-${item.query}`} className="hz-search-row">
+
+                  <p className="hz-search-query">{item.query}</p>
+
+                  <p className="hz-search-when">{diaryWhen(item.at)}</p>
+
+                </article>
+
+              ))
+
+            )}
+
+          </div>
+
         ) : (
+
 
           <>
 
@@ -830,7 +889,7 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
             <div className="mt-3 pick-card-grid max-h-[52vh] overflow-y-auto">
 
-              {PHONE_APPS.filter((item) => item.id !== 'search').map((app) => {
+              {PHONE_APPS.map((app) => {
 
                 const allowed = seen.includes(app.id)
 

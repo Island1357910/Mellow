@@ -4,6 +4,7 @@ import type { Character, ChatMessage } from '../types/index.ts'
 
 const APP_IDS = [
   { id: 'sms', name: '短信' },
+  { id: 'search', name: '搜索栏' },
   { id: 'moments', name: '朋友圈' },
   { id: 'star', name: '星博' },
   { id: 'album', name: '相册' },

@@ -781,6 +781,29 @@ button {
   color: #4a3540;
 }
 
+.hz-search-row {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff, #f7f3ef);
+  box-shadow: 0 6px 16px rgba(120, 80, 100, 0.06);
+}
+
+.hz-search-row + .hz-search-row {
+  margin-top: 10px;
+}
+
+.hz-search-query {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a3540;
+}
+
+.hz-search-when {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--m-text-secondary);
+}
+
 .voice-bar {
   min-width: 9.5rem;
   max-width: 14rem;
