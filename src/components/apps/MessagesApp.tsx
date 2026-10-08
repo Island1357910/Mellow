@@ -2,7 +2,7 @@ import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, writeCharacter } from '../../domain/importing.ts'
-import { createNearbyContact, findNearbyContact } from '../../lib/nearbyContact.ts'
+import { createNearbyContact, findNearbyContact, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
 import { initialOf } from '../../lib/format.ts'
@@ -148,6 +148,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   }
 
   const talkTo = async (person: NearPerson) => {
+    await markNearbySeen(identity.namespace, person.name)
     if (nearbyHistory.current) {
       nearbyHistory.current = false
       window.history.back()

@@ -1,4 +1,5 @@
 import { AIAdapter } from '../engine/AIAdapter.ts'
+import { isNearbyCharacter, listNearbySeen } from './nearbyContact.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 
@@ -62,11 +63,16 @@ export async function generateMomentsFeed(namespace: string, names: string): Pro
 }
 
 export async function generateNearbyPeople(namespace: string, visit: number): Promise<SocialNearPerson[]> {
+  const [seen, chars] = await Promise.all([listNearbySeen(namespace), storage.listCharacters(namespace)])
+  const skip = new Set([
+    ...seen,
+    ...chars.filter(isNearbyCharacter).map((item) => item.name),
+  ])
   const raw = await ask('生成 7 个彼此不同的附近的人。名字两个或三个字，不要重复。资料短，像卡片，不要写成故事。只返回 {"people":[{"name":"","gender":"","age":"","city":"","signature":"","bio":"","tags":["",""]}]}', 1100)
   const data = readJson(raw) as { people?: Array<Record<string, unknown>> }
   const next = (data.people ?? []).slice(0, 8).flatMap((item) => {
     const name = asText(item.name)
-    if (!name) return []
+    if (!name || skip.has(name)) return []
     const tags = Array.isArray(item.tags) ? item.tags.map(asText).filter(Boolean).slice(0, 3) : []
     return [{ name, gender: asText(item.gender) || '保密', age: asText(item.age), city: asText(item.city), signature: asText(item.signature), bio: asText(item.bio), tags }]
   })

@@ -2,6 +2,7 @@ import { Camera, ChevronLeft, ChevronRight, Ellipsis, Plus, Settings2 } from 'lu
 import { deleteCharacterConfirmText } from '../../domain/characterCleanup.ts'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { listNearbySeen, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { generateMomentsFeed, generateNearbyPeople } from '../../lib/socialAi.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { nameLetter } from '../../lib/pinyin.ts'
@@ -78,7 +79,7 @@ function Face(props: { value: string; className: string }) {
 export function FeedHub(props: { onOpen: (page: 'moments' | 'nearby' | 'games') => void }) {
   const rows: Array<{ id: 'moments' | 'nearby' | 'games'; title: string; hint: string; tint: string }> = [
     { id: 'moments', title: '朋友圈', hint: '看看别人，也发一条', tint: 'var(--m-primary)' },
-    { id: 'nearby', title: '附近的人', hint: '每次走进去，都是新的几位', tint: 'var(--m-secondary)' },
+    { id: 'nearby', title: '附近的人', hint: '滑过或聊过的，不会再出现', tint: 'var(--m-secondary)' },
     { id: 'games', title: '游戏', hint: '自己经营，和好友比成绩', tint: '#C9B6E8' },
   ]
   return (
@@ -214,20 +215,30 @@ export function NearbyPage(props: {
 }) {
   const dataRevision = useMellow((state) => state.dataRevision)
   const [people, setPeople] = useState<NearPerson[]>([])
-  const [index, setIndex] = useState(0)
+  const [seen, setSeen] = useState<Set<string>>(new Set())
   const [dx, setDx] = useState(0)
   const [note, setNote] = useState('正在往这边看')
   const [liked, setLiked] = useState('')
   const [dragging, setDragging] = useState(false)
   const drag = useRef<NearbyDrag | null>(null)
   const nearbyBusy = isAiJobRunning(jobKey(props.namespace, 'nearby', String(props.visit)))
+
+  useEffect(() => {
+    let alive = true
+    void listNearbySeen(props.namespace).then((names) => {
+      if (alive) setSeen(names)
+    })
+    return () => {
+      alive = false
+    }
+  }, [props.namespace])
+
   useEffect(() => {
     let alive = true
     void storage.getBag<{ visit: number; people: NearPerson[] }>(props.namespace, 'nearby_people').then((cached) => {
       if (!alive) return
       if (cached?.visit === props.visit && cached.people.length >= 6) {
         setPeople(cached.people)
-        setIndex(0)
         setNote('')
         return
       }
@@ -248,7 +259,7 @@ export function NearbyPage(props: {
     return () => {
       alive = false
     }
-  }, [props.visit, props.namespace, dataRevision])
+  }, [props.visit, props.namespace])
 
   useEffect(() => {
     void storage.getBag<{ visit: number; people: NearPerson[] }>(props.namespace, 'nearby_people').then((cached) => {
@@ -259,18 +270,34 @@ export function NearbyPage(props: {
     })
   }, [props.visit, props.namespace, dataRevision])
 
-  const person = people[index]
+  const pending = people.filter((item) => !seen.has(item.name))
+  const person = pending[0]
+  const done = people.length > 0 && pending.length === 0
+
+  const remember = (name: string) => {
+    setSeen((current) => {
+      if (current.has(name)) return current
+      const next = new Set(current)
+      next.add(name)
+      return next
+    })
+    void markNearbySeen(props.namespace, name)
+  }
+
   const finish = (dir: 'left' | 'right') => {
     if (!person) return
+    remember(person.name)
     if (dir === 'right') {
       setLiked(`喜欢了 ${person.name}，已加入联系人`)
       void props.onLike(person)
     }
     setDx(dir === 'right' ? 360 : -360)
-    window.setTimeout(() => {
-      setDx(0)
-      setIndex((value) => value + 1)
-    }, 180)
+    window.setTimeout(() => setDx(0), 180)
+  }
+
+  const chat = (target: NearPerson) => {
+    remember(target.name)
+    void props.onChat(target)
   }
 
   const resetDrag = () => {
@@ -363,13 +390,13 @@ export function NearbyPage(props: {
             </div>
           </div>
         ) : (
-          <PillNote tone={people.length > 0 && index >= people.length ? 'mint' : 'lilac'}>{people.length > 0 && index >= people.length ? '这一带的人看完了' : nearbyBusy ? '正在往这边看' : note || '正在往这边看'}</PillNote>
+          <PillNote tone={done ? 'mint' : 'lilac'}>{done ? '这一带的人看完了' : nearbyBusy ? '正在往这边看' : note || '正在往这边看'}</PillNote>
         )}
       </div>
       {person ? (
         <div className="flex shrink-0 items-center justify-center gap-4 px-6 pb-14 pt-2">
           <button type="button" className="chip chip-danger min-w-[5.5rem] py-2.5 text-sm" onClick={() => finish('left')}>跳过</button>
-          <button type="button" className="chip chip-sky min-w-[5.5rem] py-2.5 text-sm" onClick={() => void props.onChat(person)}>聊天</button>
+          <button type="button" className="chip chip-sky min-w-[5.5rem] py-2.5 text-sm" onClick={() => chat(person)}>聊天</button>
           <button type="button" className="chip chip-mint min-w-[5.5rem] py-2.5 text-sm" onClick={() => finish('right')}>喜欢</button>
         </div>
       ) : null}

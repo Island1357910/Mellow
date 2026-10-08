@@ -41,6 +41,22 @@ export function findNearbyContact(chars: Character[], person: NearPerson): Chara
   return chars.find((item) => item.name === person.name && isNearbyCharacter(item))
 }
 
+const NEARBY_SEEN_BAG = 'nearby_seen'
+
+export async function listNearbySeen(namespace: string): Promise<Set<string>> {
+  const names = (await storage.getBag<string[]>(namespace, NEARBY_SEEN_BAG)) ?? []
+  return new Set(names)
+}
+
+/** 左滑跳过、右滑喜欢或发起聊天后，不再出现在附近的人列表。 */
+export async function markNearbySeen(namespace: string, name: string): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed) return
+  const prev = (await storage.getBag<string[]>(namespace, NEARBY_SEEN_BAG)) ?? []
+  if (prev.includes(trimmed)) return
+  await storage.setBag(namespace, NEARBY_SEEN_BAG, [...prev, trimmed])
+}
+
 function seedSchedule(person: NearPerson): ScheduleSlot[] {
   const hint = `${person.bio} ${person.signature}`.slice(0, 40)
   const work = /班|公司|实习|店|课/.test(hint)
