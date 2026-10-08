@@ -27,6 +27,48 @@ export interface ForumThread {
 
 const BOARDS = ['树洞', '日常', '提问', '剧情']
 
+export function normalizeForumThreads(raw: unknown): ForumThread[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Partial<ForumThread>
+    const text = typeof row.text === 'string' ? row.text.trim() : ''
+    const author = typeof row.author === 'string' && row.author.trim() ? row.author.trim() : '路人'
+    if (!text) return []
+    const at = typeof row.at === 'number' && Number.isFinite(row.at) ? row.at : clock()
+    const titleRaw = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : text
+    const board = typeof row.board === 'string' && BOARDS.includes(row.board) ? row.board : '日常'
+    const replies = Array.isArray(row.replies)
+      ? row.replies.flatMap((reply) => {
+          if (!reply || typeof reply !== 'object') return []
+          const rowReply = reply as Partial<ForumReply>
+          const replyText = typeof rowReply.text === 'string' ? rowReply.text.trim() : ''
+          if (!replyText) return []
+          return [{
+            id: typeof rowReply.id === 'string' ? rowReply.id : uid('reply'),
+            author: typeof rowReply.author === 'string' && rowReply.author.trim() ? rowReply.author.trim() : '路人',
+            text: replyText.slice(0, 400),
+            at: typeof rowReply.at === 'number' && Number.isFinite(rowReply.at) ? rowReply.at : at,
+            likes: typeof rowReply.likes === 'number' && Number.isFinite(rowReply.likes) ? rowReply.likes : 0,
+            liked: Boolean(rowReply.liked),
+          }]
+        })
+      : []
+    return [{
+      id: typeof row.id === 'string' ? row.id : uid('topic'),
+      title: titleRaw.slice(0, 24),
+      board,
+      author,
+      text: text.slice(0, 400),
+      at,
+      likes: typeof row.likes === 'number' && Number.isFinite(row.likes) ? row.likes : replies.length,
+      liked: Boolean(row.liked),
+      replies,
+      mine: Boolean(row.mine),
+    }]
+  }).slice(0, 40)
+}
+
 function clock(): number {
   return Date.now()
 }

@@ -2,7 +2,7 @@ import { Heart, MessageCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { modePresetId } from '../../lib/defaults.ts'
-import { loadFeed, needsAiStarSeed, saveFeed, STAR_POST_MAX, type FeedComment, type FeedPost } from '../../lib/feed.ts'
+import { loadFeed, needsAiStarSeed, normalizeFeedPosts, saveFeed, STAR_POST_MAX, type FeedComment, type FeedPost } from '../../lib/feed.ts'
 import { refreshStarFeedAi, replyStarCommentAi, seedStarFeedAi } from '../../lib/starAi.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
@@ -77,8 +77,9 @@ export function StarApp(props: { onBack: () => void }) {
   useEffect(() => {
     if (!phone) return
     let stop = false
-    void storage.getBag<FeedPost[]>(phone.namespace, 'star_feed').then((rows) => {
-      if (!stop && rows?.length) setPosts(rows)
+    void storage.getBag(phone.namespace, 'star_feed').then((rows) => {
+      const normalized = normalizeFeedPosts(rows)
+      if (!stop && normalized.length) setPosts(normalized)
     })
     return () => {
       stop = true

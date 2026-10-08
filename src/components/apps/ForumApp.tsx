@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { modePresetId } from '../../lib/defaults.ts'
-import { generatePlotForumPost, generateRandomForumPost, replyForumCommentAi, type ForumThread } from '../../lib/forumAi.ts'
+import { generatePlotForumPost, generateRandomForumPost, normalizeForumThreads, replyForumCommentAi, type ForumThread } from '../../lib/forumAi.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
@@ -76,9 +76,13 @@ export function ForumApp(props: { onBack: () => void }) {
     if (!phone) return
     let stop = false
     void (async () => {
-      const saved = (await storage.getBag<ForumThread[]>(phone.namespace, 'forum')) ?? []
+      const raw = await storage.getBag(phone.namespace, 'forum')
+      const saved = normalizeForumThreads(raw)
       if (stop) return
       setRows(saved)
+      if (raw !== null && JSON.stringify(saved) !== JSON.stringify(raw)) {
+        await storage.setBag(phone.namespace, 'forum', saved)
+      }
       if (saved.length === 0) {
         const seeded = await storage.getBag<boolean>(phone.namespace, 'forum_seeded')
         if (!seeded) {

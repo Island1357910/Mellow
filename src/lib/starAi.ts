@@ -5,6 +5,7 @@ import {
   freshFallbackPosts,
   isFixedStarNpc,
   needsAiStarSeed,
+  normalizeFeedPosts,
   passerby,
   saveFeed,
   STAR_POST_MAX,
@@ -179,7 +180,7 @@ export async function seedStarFeedAi(
   player: string,
   chars: StarPerson[],
 ): Promise<void> {
-  const saved = (await storage.getBag<FeedPost[]>(namespace, 'star_feed')) ?? []
+  const saved = normalizeFeedPosts(await storage.getBag(namespace, 'star_feed'))
   const done = await storage.getBag<boolean>(namespace, 'star_feed_ai_done')
   if (done && !needsAiStarSeed(saved)) return
 
@@ -211,7 +212,7 @@ export async function refreshStarFeedAi(
   namespace: string,
   chars: StarPerson[],
 ): Promise<FeedPost[]> {
-  const saved = (await storage.getBag<FeedPost[]>(namespace, 'star_feed')) ?? []
+  const saved = normalizeFeedPosts(await storage.getBag(namespace, 'star_feed'))
   const avoidAuthors = saved.map((item) => item.author)
   let extra: FeedPost[]
   try {
@@ -237,7 +238,7 @@ export async function replyStarCommentAi(input: {
   player: string
   starVoice: string
 }): Promise<void> {
-  const saved = (await storage.getBag<FeedPost[]>(input.namespace, 'star_feed')) ?? []
+  const saved = normalizeFeedPosts(await storage.getBag(input.namespace, 'star_feed'))
   const post = saved.find((item) => item.id === input.postId)
   if (!post) return
   const mine = [...post.comments].reverse().find((item) => item.author === input.player)

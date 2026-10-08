@@ -247,39 +247,83 @@ export function isPresetStarText(text: string): boolean {
   return STAR_PRESET_LINES.includes(text.trim())
 }
 
-/** 全是内置句子、或空列表 → 需要 AI 重新生成 */
+/** 空列表或只有自己的帖 → 需要 AI 首次生成 */
 export function needsAiStarSeed(posts: FeedPost[]): boolean {
   if (!posts.length) return true
-  const others = posts.filter((item) => !item.mine)
-  if (!others.length) return false
-  const legacyNpc = others.some((item) => isFixedStarNpc(item.author))
-  const allPresetText = others.every((item) => isPresetStarText(item.text))
-  return legacyNpc || allPresetText
+  return posts.every((item) => item.mine)
+}
+
+export function normalizeFeedPosts(raw: unknown): FeedPost[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Partial<FeedPost>
+    const text = typeof row.text === 'string' ? row.text.trim() : ''
+    if (!text) return []
+    const author = typeof row.author === 'string' && row.author.trim() ? row.author.trim() : '网友'
+    const handle = typeof row.handle === 'string' && row.handle.trim() ? row.handle.trim() : author.slice(0, 14)
+    const at = typeof row.at === 'number' && Number.isFinite(row.at) ? row.at : Date.now()
+    const comments = Array.isArray(row.comments)
+      ? row.comments.flatMap((comment) => {
+          if (!comment || typeof comment !== 'object') return []
+          const rowComment = comment as Partial<FeedComment>
+          const commentText = typeof rowComment.text === 'string' ? rowComment.text.trim() : ''
+          if (!commentText) return []
+          return [{
+            id: typeof rowComment.id === 'string' ? rowComment.id : uid('cmt'),
+            author: typeof rowComment.author === 'string' && rowComment.author.trim() ? rowComment.author.trim() : '网友',
+            text: commentText.slice(0, STAR_POST_MAX),
+            at: typeof rowComment.at === 'number' && Number.isFinite(rowComment.at) ? rowComment.at : at,
+          }]
+        })
+      : []
+    return [{
+      id: typeof row.id === 'string' ? row.id : uid('post'),
+      author,
+      handle,
+      text: text.slice(0, STAR_POST_MAX),
+      at,
+      likes: typeof row.likes === 'number' && Number.isFinite(row.likes) ? row.likes : 0,
+      liked: Boolean(row.liked),
+      comments,
+      mine: Boolean(row.mine),
+      charId: typeof row.charId === 'string' ? row.charId : undefined,
+    }]
+  }).slice(0, 40)
+}
+
+function fillMissingComments(posts: FeedPost[]): { posts: FeedPost[]; dirty: boolean } {
+  let dirty = false
+  const next = posts.map((item) => {
+    if (item.mine || item.comments.length > 0) return item
+    dirty = true
+    return { ...item, comments: randomCommenters(item.author, 2) }
+  })
+  return { posts: next, dirty }
 }
 
 export async function loadFeed(namespace: string, player: string, _chars: StarPerson[]): Promise<FeedPost[]> {
-  const saved = await storage.getBag<FeedPost[]>(namespace, 'star_feed')
-  if (saved?.length) {
-    let dirty = false
-    const filled = saved.map((item) => {
-      if (item.mine || item.comments.length > 0) return item
-      dirty = true
-      return { ...item, comments: randomCommenters(item.author, 2) }
-    })
-    if (dirty) await storage.setBag(namespace, 'star_feed', filled)
-    return filled
+  const saved = normalizeFeedPosts(await storage.getBag(namespace, 'star_feed'))
+  if (saved.length) {
+    const { posts, dirty } = fillMissingComments(saved)
+    if (dirty) await storage.setBag(namespace, 'star_feed', posts)
+    return posts
   }
-  const legacy = await storage.getBag<Array<{ id: string; text: string; at: number }>>(namespace, 'star')
-  const mine = (legacy ?? []).filter((item) => item.text.trim()).map((item) => post({
+  const legacy = await storage.getBag<Array<{ id?: string; text?: string; at?: number }>>(namespace, 'star')
+  const mine = normalizeFeedPosts((legacy ?? []).map((item) => ({
+    id: item.id,
     author: player,
     handle: '我',
     text: item.text,
     at: item.at,
     likes: 0,
+    liked: false,
+    comments: [],
     mine: true,
-  }))
+  })))
   if (mine.length) {
     await storage.setBag(namespace, 'star_feed', mine)
+    await storage.deleteBag(namespace, 'star')
     return mine
   }
   return []

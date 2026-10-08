@@ -18,6 +18,14 @@ if ($customDomain) {
   Write-Host "Building with BASE_PATH=$($env:BASE_PATH)"
 }
 
+$commit = git rev-parse --short HEAD 2>$null
+if ($commit) {
+  $env:BUILD_ID = "$commit.$(Get-Date -Format 'yyyyMMddHHmmss')"
+} else {
+  $env:BUILD_ID = "local.$(Get-Date -Format 'yyyyMMddHHmmss')"
+}
+Write-Host "BUILD_ID=$($env:BUILD_ID)"
+
 npm run build
 
 if ($customDomain) {

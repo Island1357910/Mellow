@@ -21,8 +21,27 @@ import type {
   Theme,
 } from '../types/index.ts'
 import { purgeCharacterBindings } from '../domain/characterCleanup.ts'
+import { normalizeForumThreads } from '../lib/forumAi.ts'
+import { normalizeFeedPosts } from '../lib/feed.ts'
+import { markBuildCurrent, needsDataUpgrade } from '../lib/upgrade.ts'
 import { decryptSecret, encryptSecret } from './crypto.ts'
 import { MetaDB, NamespaceDB } from './db.ts'
+
+const EPHEMERAL_BAG_IDS = new Set([
+  'circle-feed',
+  'circle-feed_error',
+  'nearby_people',
+  'nearby_error',
+  'map_world',
+  'create_draft',
+])
+
+const EPHEMERAL_BAG_PREFIXES = ['browser_', 'browser_error_', 'browser_detail_error_', 'table_say_', 'story_error_']
+
+function isEphemeralBag(id: string): boolean {
+  if (EPHEMERAL_BAG_IDS.has(id)) return true
+  return EPHEMERAL_BAG_PREFIXES.some((prefix) => id.startsWith(prefix))
+}
 
 export interface BootSnapshot {
   identities: Identity[]
@@ -140,8 +159,75 @@ class StorageService {
         await this.meta.settings.add(settings)
       },
     )
+    if (needsDataUpgrade()) await this.runDataUpgrade()
     await this.ensureBundled()
+    markBuildCurrent()
     return this.snapshot()
+  }
+
+  private async runDataUpgrade(): Promise<void> {
+    await this.migratePersistedContent()
+    await this.purgeEphemeralCaches()
+    const settings = await this.meta.settings.get('global')
+    if (settings) {
+      const normalized = normalizeSettings(settings)
+      if (JSON.stringify(normalized) !== JSON.stringify(settings)) {
+        await this.meta.settings.put(normalized)
+      }
+    }
+  }
+
+  private async migratePersistedContent(): Promise<void> {
+    const identities = await this.meta.identities.toArray()
+    for (const identity of identities) {
+      await this.migrateNamespaceContent(identity.namespace, identity.name)
+      await this.migrateNamespaceContent(`${identity.namespace}__side`, identity.name)
+    }
+  }
+
+  private async migrateNamespaceContent(namespace: string, playerName: string): Promise<void> {
+    const db = this.ns(namespace)
+    const starFeedRow = await db.appData.get('star_feed')
+    const legacyStarRow = await db.appData.get('star')
+    let posts = normalizeFeedPosts(starFeedRow?.value)
+    if (!posts.length && legacyStarRow?.value) {
+      posts = normalizeFeedPosts(
+        (legacyStarRow.value as Array<{ id?: string; text?: string; at?: number }>).map((item) => ({
+          id: item.id,
+          author: playerName,
+          handle: '我',
+          text: item.text,
+          at: item.at,
+          likes: 0,
+          liked: false,
+          comments: [],
+          mine: true,
+        })),
+      )
+      if (posts.length) await db.appData.delete('star')
+    }
+    if (posts.length && JSON.stringify(posts) !== JSON.stringify(starFeedRow?.value)) {
+      await db.appData.put({ id: 'star_feed', value: posts })
+    }
+
+    const forumRow = await db.appData.get('forum')
+    if (forumRow) {
+      const threads = normalizeForumThreads(forumRow.value)
+      if (JSON.stringify(threads) !== JSON.stringify(forumRow.value)) {
+        await db.appData.put({ id: 'forum', value: threads })
+      }
+    }
+  }
+
+  private async purgeEphemeralCaches(): Promise<void> {
+    const identities = await this.meta.identities.toArray()
+    const namespaces = [...new Set(identities.flatMap((item) => [item.namespace, `${item.namespace}__side`]))]
+    for (const namespace of namespaces) {
+      const db = this.ns(namespace)
+      const rows = await db.appData.toArray()
+      const stale = rows.filter((row) => isEphemeralBag(row.id)).map((row) => row.id)
+      if (stale.length > 0) await db.appData.bulkDelete(stale)
+    }
   }
 
   private async ensureBundled(): Promise<void> {
@@ -150,10 +236,12 @@ class StorageService {
     const missingThemes = BUNDLED_THEMES.filter((item) => !themeIds.has(item.id))
     if (missingThemes.length > 0) await this.meta.themes.bulkAdd(missingThemes)
 
-    const presets = await this.meta.presets.toArray()
-    const presetIds = new Set(presets.map((item) => item.id))
-    const missingPresets = OFFICIAL_PRESETS.filter((item) => !presetIds.has(item.id))
-    if (missingPresets.length > 0) await this.meta.presets.bulkAdd(missingPresets)
+    for (const official of OFFICIAL_PRESETS) {
+      const existing = await this.meta.presets.get(official.id)
+      if (!existing || existing.type === 'system' || existing.author === 'mellow') {
+        await this.meta.presets.put(official)
+      }
+    }
   }
 
   private async snapshot(): Promise<BootSnapshot> {
