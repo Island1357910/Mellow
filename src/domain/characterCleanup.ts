@@ -39,6 +39,14 @@ async function purgeAppData(namespace: string, charId: string): Promise<void> {
     await storage.setBag(namespace, 'char_open', rest)
   }
 
+  for (const bag of ['search_react_at', 'search_react_query'] as const) {
+    const row = (await storage.getBag<Record<string, unknown>>(namespace, bag)) ?? {}
+    if (charId in row) {
+      const { [charId]: _drop, ...rest } = row
+      await storage.setBag(namespace, bag, rest)
+    }
+  }
+
   const bound = await storage.getBag<string>(namespace, 'huizhen')
   if (bound === charId) await storage.deleteBag(namespace, 'huizhen')
 

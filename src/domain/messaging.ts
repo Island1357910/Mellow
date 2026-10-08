@@ -1,6 +1,7 @@
 import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
+import { glanceExplainNote, userAskedHowYouKnow } from '../lib/glanceExplain.ts'
 import { buildSmsMessages, pickPreset } from '../engine/prompt.ts'
 import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
@@ -240,6 +241,7 @@ export async function replyInChat(input: {
   fourthWall: boolean
   voiceReady?: boolean
   proactive?: boolean
+  triggerNote?: string
 }): Promise<ChatMessage> {
   if (replyLocks.has(input.chat.id)) {
     throw new AIError('BUSY', 'api')
@@ -261,6 +263,8 @@ export async function replyInChat(input: {
     const history = all.filter((item) => item.kind !== 'system').slice(-(input.chat.contextLimit ?? 30))
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
     const glance = await searchNoteFor(input.namespace, input.character.id)
+    const explain =
+      userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
     const storyBridge = await storyBridgeForSms(input.namespace, input.character)
     const built = buildSmsMessages({
@@ -271,9 +275,11 @@ export async function replyInChat(input: {
       fourthWall: input.fourthWall,
       note: [
         replyNote(input.chat),
-        input.proactive ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
+        input.triggerNote ?? '',
+        input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
         storyBridge,
-        glance,
+        input.triggerNote ? '' : glance,
+        explain,
         world,
       ].filter(Boolean).join('\n'),
     })
@@ -358,13 +364,15 @@ export async function deliverSms(input: {
     const history = await storage.listMessages(input.namespace, input.chat.id)
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
     const glance = await searchNoteFor(input.namespace, input.character.id)
+    const explain =
+      userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
       preset,
       history,
       fourthWall: input.fourthWall,
-      note: glance,
+      note: [glance, explain].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()

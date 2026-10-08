@@ -4,6 +4,7 @@ import { eventBus } from '../engine/EventBus.ts'
 import { findIdentity, resolveIdentityId } from '../engine/identity.ts'
 import { uid } from '../lib/id.ts'
 import { shouldSuppressMessage } from '../lib/quietHours.ts'
+import { maybeReactToSearch } from '../lib/searchReaction.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { ApiMeta, ApiProfileView, AppSettings, Chat, Identity, Notice, PlayerEvent, Preset, Theme } from '../types/index.ts'
 import { create } from 'zustand'
@@ -81,6 +82,9 @@ function wireEvents(): void {
     const state = useMellow.getState()
     const identity = state.identities.find((item) => item.id === event.identityId)
     if (!identity) return
+    if (event.type === 'search' && event.query?.trim()) {
+      void maybeReactToSearch(identity.namespace, event.identityId, event.query)
+    }
     void storage.addEvent(identity.namespace, event).then(() => {
       if (useMellow.getState().activeIdentityId === event.identityId) {
         void useMellow.getState().refreshEvents()
