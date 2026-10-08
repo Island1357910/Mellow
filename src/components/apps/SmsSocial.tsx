@@ -205,7 +205,13 @@ export function MomentsPage(props: {
 
 type NearbyDrag = { x: number; y: number; axis: 'h' | 'v' | null }
 
-export function NearbyPage(props: { visit: number; namespace: string; onChat: (person: NearPerson) => Promise<void>; onBack: () => void }) {
+export function NearbyPage(props: {
+  visit: number
+  namespace: string
+  onLike: (person: NearPerson) => Promise<void>
+  onChat: (person: NearPerson) => Promise<void>
+  onBack: () => void
+}) {
   const dataRevision = useMellow((state) => state.dataRevision)
   const [people, setPeople] = useState<NearPerson[]>([])
   const [index, setIndex] = useState(0)
@@ -256,7 +262,10 @@ export function NearbyPage(props: { visit: number; namespace: string; onChat: (p
   const person = people[index]
   const finish = (dir: 'left' | 'right') => {
     if (!person) return
-    if (dir === 'right') setLiked(`喜欢了 ${person.name}`)
+    if (dir === 'right') {
+      setLiked(`喜欢了 ${person.name}，已加入联系人`)
+      void props.onLike(person)
+    }
     setDx(dir === 'right' ? 360 : -360)
     window.setTimeout(() => {
       setDx(0)

@@ -2,6 +2,8 @@ import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
 import { glanceExplainNote, userAskedHowYouKnow } from '../lib/glanceExplain.ts'
+import { maybeEnrichNearby } from '../lib/nearbyEnrich.ts'
+import { nearbyLifeNote } from '../lib/nearbyContact.ts'
 import { buildSmsMessages, pickPreset } from '../engine/prompt.ts'
 import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
@@ -265,6 +267,7 @@ export async function replyInChat(input: {
     const glance = await searchNoteFor(input.namespace, input.character.id)
     const explain =
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
+    const life = await nearbyLifeNote(input.namespace, input.character)
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
     const storyBridge = await storyBridgeForSms(input.namespace, input.character)
     const built = buildSmsMessages({
@@ -280,6 +283,7 @@ export async function replyInChat(input: {
         storyBridge,
         input.triggerNote ? '' : glance,
         explain,
+        life,
         world,
       ].filter(Boolean).join('\n'),
     })
@@ -310,6 +314,7 @@ export async function replyInChat(input: {
     })
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
+    void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
     return last
   } catch (error) {
     const message =
@@ -366,13 +371,14 @@ export async function deliverSms(input: {
     const glance = await searchNoteFor(input.namespace, input.character.id)
     const explain =
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
+    const life = await nearbyLifeNote(input.namespace, input.character)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
       preset,
       history,
       fourthWall: input.fourthWall,
-      note: [glance, explain].filter(Boolean).join('\n'),
+      note: [glance, explain, life].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()
@@ -393,6 +399,7 @@ export async function deliverSms(input: {
     })
     await storage.putMessage(input.namespace, reply)
     await touchChat(input.namespace, chat, reply.content, 1, reply.kind)
+    void maybeEnrichNearby(input.namespace, input.character, [...history, userMessage, reply])
     return reply
   } catch (error) {
     const message = error instanceof AIError ? error.message : error instanceof Error ? error.message : '没能发出去'

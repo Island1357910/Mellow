@@ -2,6 +2,7 @@ import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, writeCharacter } from '../../domain/importing.ts'
+import { createNearbyContact, findNearbyContact } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
 import { initialOf } from '../../lib/format.ts'
@@ -137,18 +138,21 @@ export function MessagesApp(props: { onBack: () => void }) {
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
+  const likeNearby = async (person: NearPerson) => {
+    const character = await createNearbyContact(identity.namespace, person)
+    await ensureDirectChat(identity.namespace, character)
+    touchData()
+    await load(identity)
+    await refreshInbox()
+  }
+
   const talkTo = async (person: NearPerson) => {
     if (nearbyHistory.current) {
       nearbyHistory.current = false
       window.history.back()
     }
-    const created = await writeCharacter({
-      identity,
-      name: person.name,
-      personality: [person.gender, person.age, person.city].filter(Boolean).join('，'),
-      description: person.bio || person.signature,
-      firstMes: person.signature || '嗨。',
-    })
+    const existing = findNearbyContact(chars, person)
+    const created = existing ?? (await createNearbyContact(identity.namespace, person, { greet: true }))
     const thread = await ensureDirectChat(identity.namespace, created)
     touchData()
     await load(identity)
@@ -293,7 +297,16 @@ export function MessagesApp(props: { onBack: () => void }) {
           }}
         />
       ) : null}
-      {social === 'nearby' ? <NearbyPage key={nearbyVisit} visit={nearbyVisit} namespace={identity.namespace} onBack={closeNearby} onChat={talkTo} /> : null}
+      {social === 'nearby' ? (
+        <NearbyPage
+          key={nearbyVisit}
+          visit={nearbyVisit}
+          namespace={identity.namespace}
+          onBack={closeNearby}
+          onLike={likeNearby}
+          onChat={talkTo}
+        />
+      ) : null}
       {social === 'games' ? <GamesPage namespace={identity.namespace} chars={chars} onBack={() => setSocial(null)} /> : null}
       {settingsCharId ? (() => {
         const person = chars.find((item) => item.id === settingsCharId)

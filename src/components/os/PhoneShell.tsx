@@ -19,6 +19,7 @@ import { maybeAskAboutLock } from '../../domain/locks.ts'
 import { importDroppedJson } from '../../domain/importing.ts'
 import { findIdentity, resolveIdentityId } from '../../engine/identity.ts'
 import { tickDeliveries } from '../../lib/delivery.ts'
+import { tickNearbyLife } from '../../lib/nearbyLife.ts'
 import { tickProactive } from '../../lib/proactive.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { formatClock } from '../../lib/format.ts'
@@ -102,11 +103,14 @@ export function PhoneShell() {
   }, [ready, locked, identities, activeIdentityId, touchData])
 
   useEffect(() => {
-    if (!ready || locked || settings.proactiveMinutes <= 0) return
+    if (!ready || locked) return
     const phone = identities.find((item) => item.id === activeIdentityId)
     if (!phone) return
     const run = () => {
-      void tickProactive({ identity: phone, settings, presets }).catch(() => undefined)
+      if (settings.proactiveMinutes > 0) {
+        void tickProactive({ identity: phone, settings, presets }).catch(() => undefined)
+      }
+      void tickNearbyLife({ namespace: phone.namespace, identity: phone, settings, presets }).catch(() => undefined)
     }
     run()
     const timer = window.setInterval(run, 60_000)

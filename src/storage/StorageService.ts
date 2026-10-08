@@ -411,6 +411,14 @@ class StorageService {
     if (!state) await db.charState.put(defaultCharState(character.id))
   }
 
+  async getCharState(namespace: string, charId: string): Promise<CharacterInternalState | undefined> {
+    return this.ns(namespace).charState.get(charId)
+  }
+
+  async saveCharState(namespace: string, state: CharacterInternalState): Promise<void> {
+    await this.ns(namespace).charState.put(state)
+  }
+
   async getCharacter(namespace: string, id: string): Promise<Character | undefined> {
     return this.ns(namespace).chars.get(id)
   }
