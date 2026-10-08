@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { AudioLines, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, VenetianMask, Wallet } from 'lucide-react'
+import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
@@ -58,6 +58,8 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const [revealedVoice, setRevealedVoice] = useState<Record<string, boolean>>({})
   const [quote, setQuote] = useState<{ id: string; text: string } | null>(null)
   const [actionId, setActionId] = useState<string | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [worldRows, setWorldRows] = useState<WorldEntry[]>([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const replyLock = useRef(false)
@@ -139,7 +141,38 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
 
   const removeMessage = async (messageId: string) => {
     await storage.deleteMessage(props.identity.namespace, messageId)
+    await storage.refreshChatPreview(props.identity.namespace, chat.id)
     await reload()
+    const fresh = await storage.getChat(props.identity.namespace, chat.id)
+    if (fresh) props.onChat(fresh)
+  }
+
+  const removeSelected = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    if (!window.confirm(`删除选中的 ${ids.length} 条消息？`)) return
+    await storage.deleteMessages(props.identity.namespace, chat.id, ids)
+    setSelectedIds(new Set())
+    setSelectMode(false)
+    setActionId(null)
+    await reload()
+    const fresh = await storage.getChat(props.identity.namespace, chat.id)
+    if (fresh) props.onChat(fresh)
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setActionId(null)
+  }
+
+  const toggleSelected = (messageId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(messageId)) next.delete(messageId)
+      else next.add(messageId)
+      return next
+    })
   }
 
   const hideMessage = async (message: ChatMessage) => {
@@ -213,19 +246,43 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
     <div className={`sms-shell relative flex h-full min-h-0 flex-col ${scope}`} style={{ background: backdrop }}>
       <style>{bubbleSheet(scope, radius, bubble, chat.bubbleCss)}</style>
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
-        <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}>
-          <ChevronLeft size={18} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold">{title}</p>
-          <p className="truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{status}</p>
-        </div>
-        <button type="button" aria-label="语音通话" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setCalling(true)}>
-          <Phone size={15} />
-        </button>
-        <button type="button" aria-label="会话设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
-          <Ellipsis size={16} />
-        </button>
+        {selectMode ? (
+          <>
+            <button type="button" className="chip chip-pink shrink-0 px-3 py-1.5 text-xs" onClick={exitSelectMode}>取消</button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold">已选 {selectedIds.size} 条</p>
+              <p className="truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>点消息勾选，再点删除</p>
+            </div>
+            <button
+              type="button"
+              aria-label="删除选中"
+              disabled={selectedIds.size === 0}
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)] disabled:opacity-45"
+              onClick={() => void removeSelected()}
+            >
+              <Trash2 size={16} className="text-[#c45c5c]" />
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}>
+              <ChevronLeft size={18} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold">{title}</p>
+              <p className="truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{status}</p>
+            </div>
+            <button type="button" aria-label="多选删除" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => { setSelectMode(true); setActionId(null); setPanel(null) }}>
+              <CheckSquare size={15} />
+            </button>
+            <button type="button" aria-label="语音通话" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setCalling(true)}>
+              <Phone size={15} />
+            </button>
+            <button type="button" aria-label="会话设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
+              <Ellipsis size={16} />
+            </button>
+          </>
+        )}
       </header>
       <div ref={scrollRef} className="scroll min-h-0 flex-1 space-y-2 px-4 pb-2" onClick={() => setPanel(null)}>
         {messages.filter((item) => !item.hidden).map((message) => (
@@ -236,7 +293,10 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             canSpeak={settings.minimax.ready}
             speaking={speaking === message.id}
             voiceRevealed={Boolean(revealedVoice[message.id])}
-            menuOpen={actionId === message.id}
+            selectMode={selectMode}
+            selected={selectedIds.has(message.id)}
+            menuOpen={!selectMode && actionId === message.id}
+            onToggleSelect={() => toggleSelected(message.id)}
             onMenu={() => setActionId((current) => (current === message.id ? null : message.id))}
             onRevealVoice={() => setRevealedVoice((current) => ({ ...current, [message.id]: true }))}
             onSpeak={() => speak(message)}
@@ -251,12 +311,29 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         ))}
       </div>
       <div className="shrink-0">
-        {quote ? (
+        {selectMode ? (
+          <div className="flex items-center justify-between gap-2 px-4 pb-14 pt-2">
+            <button type="button" className="chip px-3 py-2 text-xs" onClick={() => {
+              const visible = messages.filter((item) => !item.hidden && item.kind !== 'system')
+              setSelectedIds(new Set(visible.map((item) => item.id)))
+            }}>全选</button>
+            <button
+              type="button"
+              className="chip chip-danger flex-1 py-2 text-sm"
+              disabled={selectedIds.size === 0}
+              onClick={() => void removeSelected()}
+            >
+              删除 {selectedIds.size > 0 ? selectedIds.size : ''} 条
+            </button>
+          </div>
+        ) : null}
+        {!selectMode && quote ? (
           <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl bg-white/90 px-3 py-2 text-xs ring-1 ring-black/5">
             <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--m-text-secondary)' }}>引用：{quote.text}</span>
             <button type="button" className="chip chip-pink shrink-0 px-2 py-0.5 text-[10px]" onClick={() => setQuote(null)}>取消</button>
           </div>
         ) : null}
+        {!selectMode ? (
         <form
           className="flex items-center gap-1.5 px-3 pt-1 transition-[padding]"
           style={{ paddingBottom: panel ? 8 : 56 }}
@@ -305,6 +382,8 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             <SendHorizontal size={17} />
           </button>
         </form>
+        ) : null}
+        {!selectMode ? (
         <AnimatePresence initial={false}>
           {panel ? (
             <motion.div
@@ -350,6 +429,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             </motion.div>
           ) : null}
         </AnimatePresence>
+        ) : null}
       </div>
       {sheet === 'redpacket' || sheet === 'transfer' ? (
         <MoneySheet mode={sheet} group={chat.kind === 'group'} people={people} onClose={() => setSheet(null)} onSend={(content) => void send(content, sheet)} />
@@ -381,6 +461,12 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
           onPatch={(patch) => void saveChat(patch)}
           onPatchCharacter={(patch) => void saveCharacter(patch)}
           worldRows={worldRows}
+          onSelectDelete={() => {
+            setMenu(false)
+            setSelectMode(true)
+            setActionId(null)
+            setPanel(null)
+          }}
           onClear={async () => {
             await storage.clearChat(props.identity.namespace, chat.id)
             await reload()
@@ -527,7 +613,10 @@ function Bubble(props: {
   canSpeak: boolean
   speaking: boolean
   voiceRevealed: boolean
+  selectMode: boolean
+  selected: boolean
   menuOpen: boolean
+  onToggleSelect: () => void
   onMenu: () => void
   onRevealVoice: () => void
   onSpeak: () => void
@@ -588,12 +677,29 @@ function Bubble(props: {
       </div>
     )
   }
+  const selectable = props.selectMode
+  const check = selectable ? (
+    <button type="button" aria-label={props.selected ? '取消选中' : '选中'} className="grid h-6 w-6 shrink-0 place-items-center self-center" onClick={props.onToggleSelect}>
+      {props.selected ? <CheckSquare size={18} className="text-[#F3A8BA]" /> : <Square size={18} style={{ color: 'var(--m-text-secondary)' }} />}
+    </button>
+  ) : null
+
   return (
-    <div className={mine ? 'flex justify-end' : 'flex justify-start gap-2'}>
-      {!mine ? <MiniFace name={person?.nickname || person?.name || '群'} avatar={person?.avatar ?? ''} /> : null}
+    <div className={`${mine ? 'flex justify-end' : 'flex justify-start gap-2'} ${selectable && props.selected ? 'rounded-2xl bg-white/35 px-1 py-0.5' : ''}`}>
+      {!mine && !selectable ? <MiniFace name={person?.nickname || person?.name || '群'} avatar={person?.avatar ?? ''} /> : null}
+      {!mine && selectable ? check : null}
       <div className={mine ? 'flex flex-col items-end' : ''}>
-        {!mine && person ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}{props.message.starred ? ' · 已收藏' : ''}</p> : null}
-        <button type="button" className="text-left" onClick={props.onMenu} onContextMenu={(event) => { event.preventDefault(); props.onMenu() }}>
+        {!mine && person && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}{props.message.starred ? ' · 已收藏' : ''}</p> : null}
+        <button
+          type="button"
+          className="text-left"
+          onClick={selectable ? props.onToggleSelect : props.onMenu}
+          onContextMenu={(event) => {
+            if (selectable) return
+            event.preventDefault()
+            props.onMenu()
+          }}
+        >
           {body}
         </button>
         {props.menuOpen ? (
@@ -606,6 +712,7 @@ function Bubble(props: {
         ) : null}
         <p className="mt-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{formatChatTime(props.message.createdAt)}</p>
       </div>
+      {mine && selectable ? check : null}
     </div>
   )
 }
@@ -642,6 +749,7 @@ function ChatMenu(props: {
   onPatch: (patch: Partial<Chat>) => void
   onPatchCharacter: (patch: Partial<Character>) => void
   worldRows: WorldEntry[]
+  onSelectDelete: () => void
   onClear: () => Promise<void>
   onExport: () => void
   onImport: (file: File) => Promise<void>
@@ -891,7 +999,7 @@ function ChatMenu(props: {
                 </ul>
               ) : props.query.trim() ? <div className="mt-2"><PillNote tone="sky" compact>没有找到</PillNote></div> : null}
             </section>
-            <section className="menu-card mt-3 grid grid-cols-3 gap-2">
+            <section className="menu-card mt-3 grid grid-cols-2 gap-2">
               <button type="button" className="chip chip-mint" onClick={props.onExport}>导出</button>
               <label className="chip chip-sky">
                 导入
@@ -900,6 +1008,7 @@ function ChatMenu(props: {
                   if (file) void props.onImport(file)
                 }} />
               </label>
+              <button type="button" className="chip" onClick={props.onSelectDelete}>多选删除</button>
               <button type="button" className="chip chip-danger" onClick={() => {
                 if (window.confirm('清空这段聊天记录？')) void props.onClear()
               }}>清空记录</button>

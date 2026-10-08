@@ -7,6 +7,7 @@ import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
 import { capReplySegments, expandReplyParts } from '../lib/stickerReply.ts'
+import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { useMellow } from '../store/useMellow.ts'
@@ -288,7 +289,7 @@ export async function replyInChat(input: {
       presencePenalty: built.presencePenalty,
       maxTokens: Math.min(1600, 220 * max),
     })
-    const { text, change } = takeProfileChange(response.content)
+    const { text, change } = takeProfileChange(stripThinkingFromSms(response.content))
     const parts = capReplySegments(expandReplyParts(splitReply(text || '……', max)), max)
     const replies = await deliverReplyParts({
       namespace: input.namespace,
@@ -379,7 +380,7 @@ export async function deliverSms(input: {
     const reply = textMessage({
       chatId: input.chat.id,
       role: 'assistant',
-      content: response.content,
+      content: stripThinkingFromSms(response.content) || '……',
       charId: input.character.id,
     })
     await storage.putMessage(input.namespace, reply)

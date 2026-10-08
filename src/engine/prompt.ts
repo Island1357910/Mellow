@@ -82,6 +82,7 @@ export function buildSmsMessages(input: {
   if (fourthWall) systems.push(FOURTH_WALL)
   if (input.note?.trim()) systems.push(input.note.trim())
   systems.push('短信里不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
+  systems.push('禁止输出思维链、推理过程、内心分析或 <thinking> 等标签；只写 {{char}} 真正要发出去的那几句。')
   systems.push(stickerCatalogForPrompt())
   systems.push(fill(CHANNEL, character, identity))
 

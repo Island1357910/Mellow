@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { OFFICIAL_PRESETS } from '../data/officialPresets.ts'
 import { sortChats } from '../lib/chats.ts'
+import { messagePreview } from '../lib/messagePreview.ts'
 import { normalizeSettings } from '../lib/defaults.ts'
 import { uid } from '../lib/id.ts'
 import { BUNDLED_THEMES } from '../theme/themes.ts'
@@ -476,6 +477,31 @@ class StorageService {
 
   async deleteMessage(namespace: string, messageId: string): Promise<void> {
     await this.ns(namespace).messages.delete(messageId)
+  }
+
+  async deleteMessages(namespace: string, chatId: string, messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return
+    await this.ns(namespace).messages.bulkDelete(messageIds)
+    await this.refreshChatPreview(namespace, chatId)
+  }
+
+  async refreshChatPreview(namespace: string, chatId: string): Promise<void> {
+    const db = this.ns(namespace)
+    const chat = await db.chats.get(chatId)
+    if (!chat) return
+    const messages = await this.listMessages(namespace, chatId)
+    const visible = messages.filter((item) => !item.hidden && item.kind !== 'system')
+    const last = visible[visible.length - 1]
+    if (last) {
+      await db.chats.put({
+        ...chat,
+        lastMessage: messagePreview(last.content, last.kind),
+        lastMessageAt: last.createdAt,
+        updatedAt: Date.now(),
+      })
+      return
+    }
+    await db.chats.put({ ...chat, lastMessage: '', updatedAt: Date.now() })
   }
 
   async getSpace(namespace: string): Promise<IdentitySpaceState> {
