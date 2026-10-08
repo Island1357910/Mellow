@@ -46,6 +46,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   const [social, setSocial] = useState<Social>(null)
   const [settingsCharId, setSettingsCharId] = useState<string | null>(null)
   const [nearbyVisit, setNearbyVisit] = useState(0)
+  const nearbyHistory = useRef(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const load = async (who: Identity) => {
@@ -116,8 +117,31 @@ export function MessagesApp(props: { onBack: () => void }) {
   const openNearby = () => {
     setNearbyVisit((value) => value + 1)
     setSocial('nearby')
+    window.history.pushState({ mellowNearby: true }, '')
+    nearbyHistory.current = true
   }
+  const closeNearby = () => {
+    setSocial((current) => (current === 'nearby' ? null : current))
+    if (nearbyHistory.current) {
+      nearbyHistory.current = false
+      window.history.back()
+    }
+  }
+
+  useEffect(() => {
+    const onPop = () => {
+      if (!nearbyHistory.current) return
+      nearbyHistory.current = false
+      setSocial((current) => (current === 'nearby' ? null : current))
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   const talkTo = async (person: NearPerson) => {
+    if (nearbyHistory.current) {
+      nearbyHistory.current = false
+      window.history.back()
+    }
     const created = await writeCharacter({
       identity,
       name: person.name,
@@ -269,7 +293,7 @@ export function MessagesApp(props: { onBack: () => void }) {
           }}
         />
       ) : null}
-      {social === 'nearby' ? <NearbyPage key={nearbyVisit} visit={nearbyVisit} namespace={identity.namespace} onBack={() => setSocial(null)} onChat={talkTo} /> : null}
+      {social === 'nearby' ? <NearbyPage key={nearbyVisit} visit={nearbyVisit} namespace={identity.namespace} onBack={closeNearby} onChat={talkTo} /> : null}
       {social === 'games' ? <GamesPage namespace={identity.namespace} chars={chars} onBack={() => setSocial(null)} /> : null}
       {settingsCharId ? (() => {
         const person = chars.find((item) => item.id === settingsCharId)

@@ -203,6 +203,8 @@ export function MomentsPage(props: {
   )
 }
 
+type NearbyDrag = { x: number; y: number; axis: 'h' | 'v' | null }
+
 export function NearbyPage(props: { visit: number; namespace: string; onChat: (person: NearPerson) => Promise<void>; onBack: () => void }) {
   const dataRevision = useMellow((state) => state.dataRevision)
   const [people, setPeople] = useState<NearPerson[]>([])
@@ -211,7 +213,7 @@ export function NearbyPage(props: { visit: number; namespace: string; onChat: (p
   const [note, setNote] = useState('正在往这边看')
   const [liked, setLiked] = useState('')
   const [dragging, setDragging] = useState(false)
-  const drag = useRef<{ x: number; y: number } | null>(null)
+  const drag = useRef<NearbyDrag | null>(null)
   const nearbyBusy = isAiJobRunning(jobKey(props.namespace, 'nearby', String(props.visit)))
   useEffect(() => {
     let alive = true
@@ -261,50 +263,87 @@ export function NearbyPage(props: { visit: number; namespace: string; onChat: (p
       setIndex((value) => value + 1)
     }, 180)
   }
-  const onDown = (event: PointerEvent<HTMLButtonElement>) => {
-    drag.current = { x: event.clientX, y: event.clientY }
+
+  const resetDrag = () => {
+    drag.current = null
+    setDragging(false)
+    setDx(0)
+  }
+
+  const onDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+    drag.current = { x: event.clientX, y: event.clientY, axis: null }
     setDragging(true)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
-  const onMove = (event: PointerEvent<HTMLButtonElement>) => {
+
+  const onMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return
-    setDx(event.clientX - drag.current.x)
+    const deltaX = event.clientX - drag.current.x
+    const deltaY = event.clientY - drag.current.y
+    if (!drag.current.axis) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return
+      drag.current.axis = Math.abs(deltaX) >= Math.abs(deltaY) ? 'h' : 'v'
+    }
+    if (drag.current.axis !== 'h') return
+    event.preventDefault()
+    setDx(Math.max(-140, Math.min(140, deltaX)))
   }
-  const onUp = (event: PointerEvent<HTMLButtonElement>) => {
-    if (!drag.current || !person) return
-    const delta = event.clientX - drag.current.x
-    const moved = Math.abs(delta) > 12 || Math.abs(event.clientY - drag.current.y) > 12
-    drag.current = null
-    setDragging(false)
-    if (!moved) {
-      setDx(0)
-      void props.onChat(person)
+
+  const onEnd = (event: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current || !person) {
+      resetDrag()
       return
     }
-    if (delta > 72) finish('right')
-    else if (delta < -72) finish('left')
-    else setDx(0)
+    const delta = event.clientX - drag.current.x
+    const axis = drag.current.axis
+    resetDrag()
+    if (axis !== 'h') return
+    if (delta > 88) finish('right')
+    else if (delta < -88) finish('left')
   }
+
+  const swipeHint = dx > 36 ? '喜欢' : dx < -36 ? '跳过' : ''
+
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-[var(--m-background)]">
+    <div
+      className="absolute inset-0 z-30 flex flex-col bg-[var(--m-background)]"
+      style={{ overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/80" onClick={props.onBack}><ChevronLeft size={18} /></button>
         <div className="min-w-0 flex-1">
           <p className="text-sm">附近的人</p>
-          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>左滑跳过，右滑喜欢，点一下聊天</p>
+          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>左滑跳过，右滑喜欢；也可点下方按钮</p>
         </div>
       </header>
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-16">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-4">
         {person ? (
-          <button
-            type="button"
-            className="w-full max-w-sm rounded-[28px] bg-white p-5 text-left shadow-[0_16px_40px_rgba(90,70,80,0.08)]"
-            style={{ transform: `translateX(${dx}px) rotate(${dx / 18}deg)`, transition: dragging ? 'none' : 'transform 0.18s ease' }}
+          <div
+            className="nearby-card relative w-full max-w-sm rounded-[28px] bg-white p-5 text-left shadow-[0_16px_40px_rgba(90,70,80,0.08)]"
+            style={{
+              transform: `translateX(${dx}px) rotate(${dx / 20}deg)`,
+              transition: dragging ? 'none' : 'transform 0.18s ease',
+              touchAction: dragging ? 'none' : 'pan-y',
+            }}
             onPointerDown={onDown}
             onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={() => { drag.current = null; setDragging(false); setDx(0) }}
+            onPointerUp={onEnd}
+            onPointerCancel={resetDrag}
           >
+            {swipeHint ? (
+              <span
+                className="pointer-events-none absolute right-4 top-4 rounded-full px-3 py-1 text-xs font-semibold"
+                style={{
+                  background: dx > 0 ? '#D5F0E4' : '#FBD5D5',
+                  color: dx > 0 ? '#3d6b55' : '#9a4a4a',
+                  opacity: Math.min(1, Math.abs(dx) / 88),
+                }}
+              >
+                {swipeHint}
+              </span>
+            ) : null}
             <span className="grid h-16 w-16 place-items-center rounded-full text-xl" style={{ background: 'var(--m-primary)' }}>{initialOf(person.name)}</span>
             <p className="mt-4 text-2xl">{person.name}</p>
             <p className="mt-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>{[person.gender, person.age, person.city].filter(Boolean).join(' · ')}</p>
@@ -313,12 +352,19 @@ export function NearbyPage(props: { visit: number; namespace: string; onChat: (p
             <div className="mt-3 flex flex-wrap gap-1.5">
               {person.tags.map((tag) => <span key={tag} className="rounded-full bg-black/5 px-2 py-0.5 text-[11px]">{tag}</span>)}
             </div>
-          </button>
+          </div>
         ) : (
           <PillNote tone={people.length > 0 && index >= people.length ? 'mint' : 'lilac'}>{people.length > 0 && index >= people.length ? '这一带的人看完了' : nearbyBusy ? '正在往这边看' : note || '正在往这边看'}</PillNote>
         )}
       </div>
-      {liked ? <p className="pointer-events-none absolute bottom-20 left-0 right-0 text-center text-xs">{liked}</p> : null}
+      {person ? (
+        <div className="flex shrink-0 items-center justify-center gap-4 px-6 pb-14 pt-2">
+          <button type="button" className="chip chip-danger min-w-[5.5rem] py-2.5 text-sm" onClick={() => finish('left')}>跳过</button>
+          <button type="button" className="chip chip-sky min-w-[5.5rem] py-2.5 text-sm" onClick={() => void props.onChat(person)}>聊天</button>
+          <button type="button" className="chip chip-mint min-w-[5.5rem] py-2.5 text-sm" onClick={() => finish('right')}>喜欢</button>
+        </div>
+      ) : null}
+      {liked ? <p className="pointer-events-none absolute bottom-[5.5rem] left-0 right-0 text-center text-xs">{liked}</p> : null}
     </div>
   )
 }
