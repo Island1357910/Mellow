@@ -24,7 +24,7 @@ export function WorldForgeApp(props: { onBack: () => void }) {
     setRawName(file.name)
     setResult(null)
     setApplied(false)
-    setNote('正在拆分大世界卡…')
+    setNote('正在解析大世界卡…')
     let raw: unknown
     try {
       if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
@@ -40,7 +40,11 @@ export function WorldForgeApp(props: { onBack: () => void }) {
       try {
         const forged = await forgeWorldFromCard(raw)
         setResult(forged)
-        setNote(forged.local ? '接口未接上，已用本地规则粗拆' : '拆分完成，确认后可导入')
+        setNote(
+          forged.local
+            ? `已从 character_book 完整拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定`
+            : '拆分完成，确认后可导入',
+        )
       } catch (error) {
         setNote(error instanceof Error ? error.message : '拆分失败')
       }
@@ -64,16 +68,17 @@ export function WorldForgeApp(props: { onBack: () => void }) {
     <div className="sms-shell relative h-full min-h-0">
       <Screen title="世界搭建" subtitle="大世界卡 → 多人 + 世界书" onBack={props.onBack}>
         <div className="mb-4 rounded-[24px] p-4" style={{ background: 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
-          <p className="text-sm leading-6">导入一张含多角色、大段世界观设定的卡，由 AI 拆成：</p>
+          <p className="text-sm leading-6">导入含 character_book 的大世界卡，本地完整解析为：</p>
           <ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            <li>· 世界书条目（时代、势力、规则）</li>
-            <li>· 多位可单独聊天的角色卡</li>
+            <li>· 全部世界书条目（规则、系统、地点等，不截断）</li>
+            <li>· 全部 NPC 角色卡（有多少拆多少）</li>
+            <li>· 保留世界主卡的开场、正则脚本</li>
           </ul>
         </div>
 
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void pickFile(event.target.files?.[0])} />
         <button type="button" className="chip chip-sky flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
-          <Upload size={14} />{busy ? '正在拆分…' : '选择大世界 JSON 卡'}
+          <Upload size={14} />{busy ? '正在解析…' : '选择大世界 JSON 卡'}
         </button>
 
         {rawName ? <p className="mt-2 text-center text-xs" style={{ color: 'var(--m-text-secondary)' }}>{rawName}</p> : null}
@@ -86,9 +91,9 @@ export function WorldForgeApp(props: { onBack: () => void }) {
               {result.worldSummary ? <p className="mt-2 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>{result.worldSummary}</p> : null}
               <p className="mt-2 text-xs" style={{ color: 'var(--m-text-secondary)' }}>{result.worldEntries.length} 条世界设定 · {result.characters.length} 位角色</p>
             </div>
-            <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-[22px] bg-white/90">
-              {result.characters.map((item) => (
-                <li key={item.draft.name} className="flex items-center gap-2 px-4 py-3">
+            <ul className="max-h-[360px] divide-y divide-black/[0.05] overflow-y-auto rounded-[22px] bg-white/90">
+              {result.characters.map((item, index) => (
+                <li key={`${item.draft.name}-${index}`} className="flex items-center gap-2 px-4 py-3">
                   <Hammer size={14} style={{ color: 'var(--m-text-secondary)' }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{item.draft.name}</p>
