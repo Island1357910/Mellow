@@ -23,6 +23,51 @@ async function inflateDeflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
+async function decompressEntry(compression: number, compData: Uint8Array): Promise<Uint8Array | null> {
+  if (compression === 0) return compData
+  if (compression === 8) return inflateDeflateRaw(compData)
+  return null
+}
+
+async function readLocalEntry(data: Uint8Array, offset: number, compSize: number): Promise<Uint8Array | null> {
+  if (offset + 30 > data.length) return null
+  if (data[offset] !== 0x50 || data[offset + 1] !== 0x4b || data[offset + 2] !== 0x03 || data[offset + 3] !== 0x04) return null
+  const compression = (data[offset + 8] ?? 0) | ((data[offset + 9] ?? 0) << 8)
+  const localNameLen = (data[offset + 26] ?? 0) | ((data[offset + 27] ?? 0) << 8)
+  const localExtraLen = (data[offset + 28] ?? 0) | ((data[offset + 29] ?? 0) << 8)
+  const dataStart = offset + 30 + localNameLen + localExtraLen
+  const size = compSize || readU32(data, offset + 18)
+  const compData = data.slice(dataStart, dataStart + size)
+  return decompressEntry(compression, compData)
+}
+
+async function extractZipEntryViaCentralDir(data: Uint8Array, targetName: string): Promise<Uint8Array | null> {
+  const want = targetName.replace(/\\/g, '/')
+  for (let scan = Math.max(0, data.length - 65_536); scan < data.length - 22; scan += 1) {
+    if (data[scan] !== 0x50 || data[scan + 1] !== 0x4b || data[scan + 2] !== 0x05 || data[scan + 3] !== 0x06) continue
+    const centralOffset = readU32(data, scan + 16)
+    let cursor = centralOffset
+    while (cursor + 46 <= data.length) {
+      if (data[cursor] !== 0x50 || data[cursor + 1] !== 0x4b || data[cursor + 2] !== 0x01 || data[cursor + 3] !== 0x02) break
+      const compression = (data[cursor + 10] ?? 0) | ((data[cursor + 11] ?? 0) << 8)
+      const compSize = readU32(data, cursor + 20)
+      const nameLen = (data[cursor + 28] ?? 0) | ((data[cursor + 29] ?? 0) << 8)
+      const extraLen = (data[cursor + 30] ?? 0) | ((data[cursor + 31] ?? 0) << 8)
+      const commentLen = (data[cursor + 32] ?? 0) | ((data[cursor + 33] ?? 0) << 8)
+      const localOffset = readU32(data, cursor + 42)
+      const nameStart = cursor + 46
+      const name = new TextDecoder().decode(data.slice(nameStart, nameStart + nameLen)).replace(/\\/g, '/')
+      cursor = nameStart + nameLen + extraLen + commentLen
+      if (name !== want) continue
+      const local = await readLocalEntry(data, localOffset, compSize)
+      if (local) return local
+      return decompressEntry(compression, data.slice(localOffset))
+    }
+    break
+  }
+  return null
+}
+
 async function extractZipEntry(data: Uint8Array, targetName: string): Promise<Uint8Array | null> {
   const want = targetName.replace(/\\/g, '/')
   let offset = 0
@@ -38,16 +83,15 @@ async function extractZipEntry(data: Uint8Array, targetName: string): Promise<Ui
     const nameStart = offset + 30
     const name = new TextDecoder().decode(data.slice(nameStart, nameStart + nameLen)).replace(/\\/g, '/')
     const dataStart = nameStart + nameLen + extraLen
-    const compData = data.slice(dataStart, dataStart + compSize)
-    offset = dataStart + compSize
+    const compData = data.slice(dataStart, dataStart + (compSize || data.length - dataStart))
+    offset = dataStart + (compSize || 0)
 
     if (name !== want) continue
 
-    if (compression === 0) return compData
-    if (compression === 8) return inflateDeflateRaw(compData)
-    return null
+    const out = await decompressEntry(compression, compData)
+    if (out) return out
   }
-  return null
+  return extractZipEntryViaCentralDir(data, targetName)
 }
 
 function textFromWordXml(xml: string): string {

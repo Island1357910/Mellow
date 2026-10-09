@@ -1,7 +1,12 @@
 import { AIAdapter } from '../engine/AIAdapter.ts'
 import { storage } from '../storage/StorageService.ts'
 
-export async function askLine(system: string, user: string, maxTokens = 180): Promise<string> {
+export async function askLine(
+  system: string,
+  user: string,
+  maxTokens = 180,
+  timeoutMs = 120_000,
+): Promise<string> {
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const result = await adapter.complete({
     messages: [
@@ -10,8 +15,13 @@ export async function askLine(system: string, user: string, maxTokens = 180): Pr
     ],
     temperature: 0.9,
     maxTokens,
+    timeoutMs,
   })
   return result.content.trim()
+}
+
+export async function ensureAiReady(): Promise<void> {
+  await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
 }
 
 function normalizeJsonQuotes(text: string): string {

@@ -470,6 +470,7 @@ export interface AIRequest {
   frequencyPenalty?: number
   presencePenalty?: number
   maxTokens?: number
+  timeoutMs?: number
 }
 
 export interface AIResponse {

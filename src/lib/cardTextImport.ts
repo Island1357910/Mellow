@@ -1,8 +1,11 @@
-import { askLine, readJson } from './ask.ts'
+import { AIError } from '../engine/AIAdapter.ts'
+import { askLine, ensureAiReady, readJson } from './ask.ts'
 import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
 
 const TEXT_NAME = /\.(txt|md|text|doc|docx)$/i
+const AI_TEXT_LIMIT = 28_000
+const AI_IMPORT_TIMEOUT_MS = 180_000
 
 export function cardImportAccept(): string {
   return 'application/json,.json,image/png,.png,text/plain,.txt,.md,.text,.doc,.docx'
@@ -40,7 +43,8 @@ function isPngLike(file: File): boolean {
 }
 
 async function aiTextToCardJson(text: string, mode: 'auto' | 'character' | 'world', fileName: string): Promise<unknown> {
-  const clip = text.length > 120_000 ? `${text.slice(0, 120_000)}\n…（后文已截）` : text
+  await ensureAiReady()
+  const clip = text.length > AI_TEXT_LIMIT ? `${text.slice(0, AI_TEXT_LIMIT)}\n…（后文已截，可先拆成多个 txt 分批导入）` : text
   const kindHint =
     mode === 'world'
       ? '这是大世界/世界观文档。请输出一张 SillyTavern V3 角色卡 JSON，用 character_book.entries 承载全部世界规则与 NPC 档案，保留原文细节。'
@@ -54,8 +58,24 @@ ${kindHint}
 不要 creator_notes。只返回 JSON，不要解释。`,
     `文件名：${fileName}\n\n${clip}`,
     16_000,
+    AI_IMPORT_TIMEOUT_MS,
   )
   return readJson(raw)
+}
+
+function wrapImportError(error: unknown): Error {
+  if (error instanceof AIError) return error
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    if (msg.includes('failed to fetch')) {
+      return new AIError(
+        '连不上 AI 接口。请检查设置里的接口地址、密钥，以及接口是否支持浏览器跨域（CORS）。',
+        'network',
+      )
+    }
+    return error
+  }
+  return new Error('导入失败')
 }
 
 /** 读取 JSON / PNG / txt·doc·docx，文本类经 AI 整理成 SillyTavern JSON。 */
@@ -94,13 +114,21 @@ export async function resolveImportJson(
   if (isTextLike(file)) {
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('文件是空的')
-    return aiTextToCardJson(text, mode, file.name)
+    try {
+      return await aiTextToCardJson(text, mode, file.name)
+    } catch (error) {
+      throw wrapImportError(error)
+    }
   }
   try {
     return JSON.parse(await file.text()) as unknown
   } catch {
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('认不出文件格式')
-    return aiTextToCardJson(text, mode, file.name)
+    try {
+      return await aiTextToCardJson(text, mode, file.name)
+    } catch (error) {
+      throw wrapImportError(error)
+    }
   }
 }
