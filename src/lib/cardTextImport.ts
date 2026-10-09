@@ -2,6 +2,7 @@ import { AIError } from '../engine/AIAdapter.ts'
 import { askJson, ensureAiReady, readJson } from './ask.ts'
 import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
+import { tryParseStructuredDoc } from './structuredDocImport.ts'
 
 const TEXT_NAME = /\.(txt|md|text|doc|docx)$/i
 const AI_TEXT_LIMIT = 28_000
@@ -41,6 +42,12 @@ function isJsonLike(file: File): boolean {
 function isPngLike(file: File): boolean {
   const lower = file.name.toLowerCase()
   return lower.endsWith('.png') || file.type === 'image/png'
+}
+
+async function textToCardJson(text: string, mode: 'auto' | 'character' | 'world', fileName: string): Promise<unknown> {
+  const local = tryParseStructuredDoc(text)
+  if (local) return local
+  return aiTextToCardJson(text, mode, fileName)
 }
 
 async function aiTextToCardJson(text: string, mode: 'auto' | 'character' | 'world', fileName: string): Promise<unknown> {
@@ -116,7 +123,7 @@ export async function resolveImportJson(
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('文件是空的')
     try {
-      return await aiTextToCardJson(text, mode, file.name)
+      return await textToCardJson(text, mode, file.name)
     } catch (error) {
       throw wrapImportError(error)
     }
@@ -127,7 +134,7 @@ export async function resolveImportJson(
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('认不出文件格式')
     try {
-      return await aiTextToCardJson(text, mode, file.name)
+      return await textToCardJson(text, mode, file.name)
     } catch (error) {
       throw wrapImportError(error)
     }
