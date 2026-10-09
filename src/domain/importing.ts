@@ -23,7 +23,12 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-export async function characterFromDraft(namespace: string, draft: CardDraft, avatar = ''): Promise<Character> {
+export async function characterFromDraft(
+  namespace: string,
+  draft: CardDraft,
+  avatar = '',
+  options?: { skipChat?: boolean },
+): Promise<Character> {
   const now = Date.now()
   const character: Character = {
     id: uid('char'),
@@ -51,7 +56,7 @@ export async function characterFromDraft(namespace: string, draft: CardDraft, av
   await storage.putCharacter(namespace, character)
   await importCharacterWorld(namespace, character)
   await importCharacterRegex(namespace, character)
-  await ensureDirectChat(namespace, character)
+  if (!options?.skipChat) await ensureDirectChat(namespace, character)
   return character
 }
 

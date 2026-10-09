@@ -16,6 +16,8 @@ export const MARKET_LISTINGS: MarketListing[] = [
   { id: 'music', name: '音乐速记', category: 'create', description: '一段旋律，一句词。', status: 'ready' },
   { id: 'create', name: '创作', category: 'create', description: '写好想要的人，一键出整张角色卡。可以沿用世界书里已经启用的世界观。', status: 'ready' },
   { id: 'forum', name: '论坛', category: 'social', description: '发帖、看帖、评论。也可以丢一句想看的剧情，让路人或角色写出来。', status: 'ready' },
+  { id: 'jiushi', name: '旧世', category: 'story', description: '穿书入境：导入古风卡、入幕演绎、传书短笺。与 modern 短信分开，模拟旧世小手机。', status: 'ready' },
+  { id: 'worldforge', name: '世界搭建', category: 'create', description: '导入多人大世界卡，AI 拆成世界书 + 多位单人角色，一次搭好整片世界。', status: 'ready' },
 ]
 
 export const CATEGORY_LABEL: Record<MarketListing['category'], string> = {

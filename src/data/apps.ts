@@ -36,6 +36,8 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'music', name: '音乐速记', blurb: '旋律和一句词', tint: '#A9CDE8', dock: false, fixed: false, home: true },
   { id: 'create', name: '创作', blurb: '一键出卡', tint: '#E7B7C9', dock: false, fixed: false, home: true, late: true },
   { id: 'forum', name: '论坛', blurb: '帖子和吃瓜', tint: '#F0C56A', dock: false, fixed: false, home: true, late: true },
+  { id: 'jiushi', name: '旧世', blurb: '穿书入境', tint: '#D4C4A8', dock: false, fixed: false, home: true, late: true },
+  { id: 'worldforge', name: '世界搭建', blurb: '拆大世界卡', tint: '#B8C9D4', dock: false, fixed: false, home: true, late: true },
 ]
 
 /** 第二页图标再多就放不下，多出来的和新应用去第三页。 */

@@ -16,7 +16,7 @@ export function SideApp(props: { onBack: () => void }) {
 type MarketTab = 'all' | 'mine' | MarketListing['category']
 
 const TINTS = ['#F8D0DC', '#D5F0E4', '#F8E6C0', '#E6DDF8', '#D7E7F8', '#FBE0D2']
-const ICONS: Record<string, string> = { diary: '📔', star: '⭐', duotao: '🛍️', flash: '🛵', huizhen: '🪡', table: '🎲', pet: '🐾', plant: '🪴', body: '🩺', dream: '🌙', spark: '💡', write: '✒️', music: '🎼', create: '✒️', forum: '💬' }
+const ICONS: Record<string, string> = { diary: '📔', star: '⭐', duotao: '🛍️', flash: '🛵', huizhen: '🪡', table: '🎲', pet: '🐾', plant: '🪴', body: '🩺', dream: '🌙', spark: '💡', write: '✒️', music: '🎼', create: '✒️', forum: '💬', jiushi: '📜', worldforge: '🏗️' }
 
 export function MarketApp(props: { onBack: () => void }) {
   const settings = useMellow((state) => state.settings)

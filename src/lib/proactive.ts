@@ -1,6 +1,7 @@
 import { replyInChat } from '../domain/messaging.ts'
 import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
 import { modePresetId } from './defaults.ts'
+import { isSmsProactivePaused } from './smsGuard.ts'
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
 import { storage } from '../storage/StorageService.ts'
 import { useMellow } from '../store/useMellow.ts'
@@ -13,6 +14,7 @@ export async function tickProactive(input: {
 }): Promise<void> {
   const globalMinutes = Math.max(0, Math.round(input.settings.proactiveMinutes || 0))
   if (globalMinutes <= 0) return
+  if (isSmsProactivePaused()) return
 
   const state = useMellow.getState()
   if (state.pendingReplyChatId) return

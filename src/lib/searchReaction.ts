@@ -3,6 +3,7 @@ import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
 import { modePresetId } from './defaults.ts'
 import { classifySearchConcern } from './searchConcern.ts'
+import { isSmsProactivePaused } from './smsGuard.ts'
 import { storage } from '../storage/StorageService.ts'
 import { useMellow } from '../store/useMellow.ts'
 
@@ -17,6 +18,7 @@ export async function maybeReactToSearch(namespace: string, identityId: string, 
 
   const state = useMellow.getState()
   if (!state.ready || state.pendingReplyChatId) return
+  if (isSmsProactivePaused()) return
 
   const identity = state.identities.find((item) => item.id === identityId)
   if (!identity || identity.namespace !== namespace) return

@@ -27,6 +27,9 @@ interface MellowState {
   veil: string
   viewingChatId: string | null
   pendingReplyChatId: string | null
+  /** 线下/旧世进行中时暂停短信主动消息，直到此时间戳 */
+  immersiveUntil: number
+  immersiveApp: 'offline' | 'jiushi' | null
   dataRevision: number
   openChatRequest: OpenChatRequest | null
   identities: Identity[]
@@ -105,6 +108,8 @@ export const useMellow = create<MellowState>((set, get) => ({
   veil: '',
   viewingChatId: null,
   pendingReplyChatId: null,
+  immersiveUntil: 0,
+  immersiveApp: null,
   dataRevision: 0,
   openChatRequest: null,
   identities: [],

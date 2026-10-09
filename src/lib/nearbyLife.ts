@@ -1,5 +1,6 @@
 import { replyInChat } from '../domain/messaging.ts'
 import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
+import { isSmsProactivePaused } from './smsGuard.ts'
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
 import { askLine, readJson } from './ask.ts'
 import { modePresetId } from './defaults.ts'
@@ -42,6 +43,7 @@ export async function tickNearbyLife(input: {
   settings: AppSettings
   presets: Preset[]
 }): Promise<void> {
+  if (isSmsProactivePaused()) return
   const chars = (await storage.listCharacters(input.namespace)).filter(isNearbyCharacter)
   if (chars.length === 0) return
 

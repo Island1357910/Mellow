@@ -4,7 +4,7 @@ import { storage } from '../storage/StorageService.ts'
 import type { AIMessage, Character, Identity, Lorebook, LorebookEntry, Preset } from '../types/index.ts'
 import { AIAdapter } from './AIAdapter.ts'
 
-export type StoryMode = 'offline' | 'side'
+export type StoryMode = 'offline' | 'side' | 'jiushi'
 
 export interface StoryLine {
   id: string
@@ -121,6 +121,7 @@ export const DEFAULT_READING: ReadingStyle = {
 export const STORY_CSS_PREFIX: Record<StoryMode, string> = {
   offline: 'offline',
   side: 'side',
+  jiushi: 'side',
 }
 
 /** 生成线下/番外各自的 CSS 类名 */
@@ -170,6 +171,7 @@ export const SIDE_CSS_SELECTORS = [
 export const STORY_CSS_SELECTORS: Record<StoryMode, readonly { selector: string; desc: string }[]> = {
   offline: OFFLINE_CSS_SELECTORS,
   side: SIDE_CSS_SELECTORS,
+  jiushi: SIDE_CSS_SELECTORS,
 }
 
 export const STORY_CSS_TEMPLATES: Record<StoryMode, { name: string; css: string }> = {
@@ -262,6 +264,29 @@ export const STORY_CSS_TEMPLATES: Record<StoryMode, { name: string; css: string 
 .side-send {
   background: linear-gradient(135deg, #F3A8BA, #C9B6E8) !important;
   box-shadow: 0 4px 12px rgba(138, 114, 196, 0.35) !important;
+}`,
+  },
+  jiushi: {
+    name: '旧世 · 宣纸',
+    css: `.side-shell {
+  background: linear-gradient(180deg, #F5F0E6 0%, #FBF7F0 50%, #EDE4D3 100%) !important;
+}
+.side-header {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 252, 245, 0.88);
+  box-shadow: 0 6px 16px rgba(120, 90, 60, 0.08);
+}
+.side-bubble.is-theirs {
+  background: rgba(255, 252, 245, 0.95) !important;
+  border: 1px solid rgba(120, 90, 60, 0.15);
+  border-radius: 20px 20px 20px 6px !important;
+}
+.side-bubble.is-mine {
+  background: linear-gradient(135deg, #E8DCC8, #F5F0E6) !important;
+  border-radius: 18px 18px 6px 18px !important;
+}
+.side-prose {
+  font-family: "Songti SC", "Noto Serif SC", "SimSun", serif !important;
 }`,
   },
 }
@@ -525,6 +550,13 @@ const OFFLINE_RULE = `这是线下：面对面的真实场景，不是手机聊�
 const SIDE_RULE = `这是番外：一条独立的世界线，和主线手机里的事无关，不要提主线。
 你扮演 {{char}}，也可以描写场景和其他路人。用第三人称叙述加对白，对白用“”。不要替 {{user}} 说话或替 {{user}} 做决定。`
 
+const JIUSHI_RULE = `这是旧世入幕：玩家穿书在此世演绎，和主线现代短信无关，不要提手机、微信、App。
+你扮演 {{char}}，也可写场景与路人。用古风/半文白，第三人称叙述加对白，对白用“”。不要替 {{user}} 说话或替 {{user}} 做决定。`
+
+export function sideLike(mode: StoryMode): boolean {
+  return mode === 'side' || mode === 'jiushi'
+}
+
 export function plainStoryLength(text: string): number {
   return unwrapHtmlFence(text).replace(/<[^>]+>/g, '').replace(/\s+/g, '').length
 }
@@ -547,11 +579,13 @@ export function buildStoryPrompt(input: {
   world?: string
   /** 手机短信互通上下文 */
   smsBridge?: string
+  /** 旧世穿书设定等额外系统块 */
+  jiushiBlock?: string
 }): AIMessage[] {
   const { mode, save, config, chars, identity } = input
-  const lead = mode === 'side' ? chars.find((item) => item.id === save.charId) : undefined
-  const userName = mode === 'side' ? save.persona?.name || identity.name : identity.name
-  const userPersona = mode === 'side' ? save.persona?.persona ?? identity.persona : identity.persona
+  const lead = sideLike(mode) ? chars.find((item) => item.id === save.charId) : undefined
+  const userName = sideLike(mode) ? save.persona?.name || identity.name : identity.name
+  const userPersona = sideLike(mode) ? save.persona?.persona ?? identity.persona : identity.persona
   const charName = lead?.name ?? '角色们'
   const recent = save.lines.slice(-6).map((item) => item.content).join('\n')
   const systems: string[] = []
@@ -570,7 +604,10 @@ export function buildStoryPrompt(input: {
   }
   if (input.world?.trim()) systems.push(input.world.trim())
   if (input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
-  systems.push(fill(mode === 'side' ? SIDE_RULE : OFFLINE_RULE, charName, userName))
+  if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
+  systems.push(
+    fill(mode === 'jiushi' ? JIUSHI_RULE : mode === 'side' ? SIDE_RULE : OFFLINE_RULE, charName, userName),
+  )
   const range = storyCharRange(config.replyCharsMin, config.replyCharsMax)
   systems.push(
     `本次回复纯正文（HTML 标签不计入）目标 ${range.min}～${range.max} 汉字，可上下浮动 10%（约 ${range.lo}～${range.hi} 字）。不要为凑字数重复，也不要只写一两句敷衍。`,
@@ -595,12 +632,13 @@ export function buildStoryPrompt(input: {
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
   if (memory.text) systems.push(memory.text)
-  if (mode === 'side' && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
+  if (sideLike(mode) && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
+  if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
 
   const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
-  const rules = [...scoped, ...(config.useCardRegex ? (mode === 'side' ? cardRegex(lead) : focusChars(chars, save).flatMap(cardRegex)) : [])]
+  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? cardRegex(lead) : focusChars(chars, save).flatMap(cardRegex)) : [])]
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
     messages.push({ role: item.role, content: applyRegex(item.content, rules, 'prompt', item.role) })
@@ -612,7 +650,7 @@ export function buildStoryPrompt(input: {
 export function displayRules(mode: StoryMode, config: StoryConfig, chars: Character[], save: StorySave): RegexRule[] {
   const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
   if (!config.useCardRegex) return scoped
-  const extra = mode === 'side' ? cardRegex(chars.find((item) => item.id === save.charId)) : chars.flatMap(cardRegex)
+  const extra = sideLike(mode) ? cardRegex(chars.find((item) => item.id === save.charId)) : chars.flatMap(cardRegex)
   return [...scoped, ...extra]
 }
 

@@ -31,6 +31,8 @@ import {
   type StorySave,
 } from '../../engine/story.ts'
 import { initialOf } from '../../lib/format.ts'
+import { isJiushiCharacter } from '../../lib/jiushi.ts'
+import { touchImmersive } from '../../lib/smsGuard.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { Character, Identity, Lorebook } from '../../types/index.ts'
@@ -40,6 +42,7 @@ import { StoryMenu } from './StoryMenu.tsx'
 const THEME: Record<StoryMode, { tint: string; deep: string; title: string; candy: [string, string, string] }> = {
   offline: { tint: '#D5F0E4', deep: '#5fae93', title: '线下', candy: ['#9ED9C4', '#F8D0DC', '#F8E6C0'] },
   side: { tint: '#E6DDF8', deep: '#8a72c4', title: '番外', candy: ['#C9B6E8', '#F8D0DC', '#D7E7F8'] },
+  jiushi: { tint: '#E8DCC8', deep: '#8a7355', title: '旧世', candy: ['#E8DCC8', '#F5F0E6', '#D4C4A8'] },
 }
 
 function errorText(reason: unknown) {
@@ -53,7 +56,13 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
   const settings = useMellow((state) => state.settings)
   const phone = identities.find((item) => item.id === activeIdentityId)
   const dataRevision = useMellow((state) => state.dataRevision)
-  const namespace = phone ? (props.mode === 'side' ? `${phone.namespace}__side` : phone.namespace) : ''
+  const namespace = phone
+    ? props.mode === 'side'
+      ? `${phone.namespace}__side`
+      : props.mode === 'jiushi'
+        ? `${phone.namespace}__jiushi`
+        : phone.namespace
+    : ''
   const [chars, setChars] = useState<Character[]>([])
   const [config, setConfig] = useState<StoryConfig | null>(null)
   const [saves, setSaves] = useState<SaveIndexRow[]>([])
@@ -64,7 +73,9 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
     if (!phone) return
     let alive = true
     void (async () => {
-      const [people, nextConfig, rows] = await Promise.all([storage.listCharacters(phone.namespace), loadConfig(namespace), listSaves(namespace)])
+      const all = await storage.listCharacters(phone.namespace)
+      const people = props.mode === 'jiushi' ? all.filter(isJiushiCharacter) : all
+      const [nextConfig, rows] = await Promise.all([loadConfig(namespace), listSaves(namespace)])
       let current: StorySave | null = null
       if (props.mode === 'offline') {
         current = nextConfig.activeSaveId ? await loadSave(namespace, nextConfig.activeSaveId) : null
@@ -110,11 +121,13 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
     patchConfig({ activeSaveId: id })
   }
   const lead = save?.charId ? chars.find((item) => item.id === save.charId) : undefined
-  const preset = pickPreset(presets, modePresetId(settings, props.mode === 'side' ? 'side' : 'offline'), props.mode === 'side' ? lead?.presetId ?? null : null, null)
+  const presetMode = props.mode === 'jiushi' || props.mode === 'side' ? 'side' : 'offline'
+  const preset = pickPreset(presets, modePresetId(settings, presetMode), props.mode === 'side' || props.mode === 'jiushi' ? lead?.presetId ?? null : null, null)
 
   if (!save) {
     return (
       <SideLobby
+        mode={props.mode}
         identity={phone}
         chars={chars}
         saves={saves}
@@ -147,10 +160,10 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
       save={save}
       saves={saves}
       preset={preset}
-      presetId={modePresetId(settings, props.mode === 'side' ? 'side' : 'offline')}
+      presetId={modePresetId(settings, presetMode)}
       presets={presets}
       onBack={() => {
-        if (props.mode === 'side') setSave(null)
+        if (props.mode === 'side' || props.mode === 'jiushi') setSave(null)
         else props.onBack()
       }}
       onConfig={patchConfig}
@@ -172,7 +185,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
         const rows = await listSaves(namespace)
         setSaves(rows)
         if (id !== save.id) return
-        if (props.mode === 'side') {
+        if (props.mode === 'side' || props.mode === 'jiushi') {
           setSave(null)
           return
         }
@@ -226,10 +239,15 @@ function StoryView(props: {
   const reading = config.reading
   const rules = useMemo(() => displayRules(props.mode, config, props.chars, save), [props.mode, config, props.chars, save])
   const present = props.mode === 'offline' ? focusChars(props.chars, save).slice(0, 4) : props.lead ? [props.lead] : []
-  const userName = props.mode === 'side' ? save.persona?.name || props.identity.name : props.identity.name
+  const userName = props.mode === 'side' || props.mode === 'jiushi' ? save.persona?.name || props.identity.name : props.identity.name
   const storyJobKey = jobKey(props.namespace, 'story', props.save.id)
   const aiBusy = isAiJobRunning(storyJobKey)
   const busy = aiBusy
+
+  useEffect(() => {
+    if (props.mode === 'offline') touchImmersive('offline')
+    if (props.mode === 'jiushi') touchImmersive('jiushi')
+  }, [props.mode])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -283,6 +301,8 @@ function StoryView(props: {
     const text = draft.trim()
     if (!text || busy) return
     setDraft('')
+    if (props.mode === 'offline') touchImmersive('offline')
+    if (props.mode === 'jiushi') touchImmersive('jiushi')
     const base = await props.onSave({ ...save, lines: [...save.lines, line('user', text)] })
     await run(base)
   }
@@ -321,7 +341,13 @@ function StoryView(props: {
 
   const backdrop = reading.backgroundImage ? `center / cover no-repeat url(${reading.backgroundImage})` : reading.background || undefined
   const candy = { '--candy': props.theme.candy[0], '--candy-2': props.theme.candy[1], '--candy-3': props.theme.candy[2] } as CSSProperties
-  const subtitle = busy ? '正在写…' : note || (props.mode === 'offline' ? (present.length ? `在场：${present.map((item) => item.nickname || item.name).join('、')}` : '想找谁，直接说') : `${save.name} · ${userName}`)
+  const subtitle = busy
+    ? '正在写…'
+    : note || (props.mode === 'offline'
+      ? (present.length ? `在场：${present.map((item) => item.nickname || item.name).join('、')}` : '想找谁，直接说')
+      : props.mode === 'jiushi'
+        ? `${save.name} · ${userName}`
+        : `${save.name} · ${userName}`)
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
 
   return (
@@ -339,7 +365,7 @@ function StoryView(props: {
           <span className="grid h-[30px] w-[30px] place-items-center rounded-full text-sm" style={{ background: props.theme.tint }}><BookOpen size={14} /></span>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold">{props.mode === 'side' ? props.lead?.name || save.name : props.theme.title}</p>
+          <p className="truncate text-[15px] font-semibold">{props.mode === 'side' || props.mode === 'jiushi' ? props.lead?.name || save.name : props.theme.title}</p>
           <p className="truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{subtitle}</p>
         </div>
         <button type="button" aria-label="详情设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
@@ -522,6 +548,7 @@ function HtmlFrame(props: { mode: StoryMode; html: string; reading: ReadingStyle
 }
 
 function SideLobby(props: {
+  mode: StoryMode
   identity: Identity
   chars: Character[]
   saves: SaveIndexRow[]
@@ -530,6 +557,7 @@ function SideLobby(props: {
   onCreate: (save: StorySave) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }) {
+  const ancient = props.mode === 'jiushi'
   const [creating, setCreating] = useState(props.saves.length === 0)
   const [charId, setCharId] = useState(props.chars[0]?.id ?? '')
   const [name, setName] = useState('')
@@ -548,7 +576,7 @@ function SideLobby(props: {
     }
     const opener = lead.firstMes.trim().replaceAll('{{char}}', lead.name).replaceAll('{{user}}', personaName || props.identity.name)
     await props.onCreate(
-      newSave(name.trim() || `${lead.name} 的番外`, {
+      newSave(name.trim() || `${lead.name} 的${ancient ? '旧世线' : '番外'}`, {
         charId: lead.id,
         persona: { name: personaName.trim() || props.identity.name, persona },
         bookCharIds: bookIds.length ? bookIds : lead.characterBook ? [lead.id] : [],
@@ -573,8 +601,8 @@ function SideLobby(props: {
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}><ChevronLeft size={18} /></button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-[22px] font-semibold tracking-tight">番外</h1>
-          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>每一档都是独立的世界线，不影响主线手机</p>
+          <h1 className="text-[22px] font-semibold tracking-tight">{ancient ? '旧世 · 入幕' : '番外'}</h1>
+          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{ancient ? '穿书后的主线演绎，与 modern 短信分开' : '每一档都是独立的世界线，不影响主线手机'}</p>
         </div>
         <button type="button" className="chip chip-lilac" onClick={() => setCreating((value) => !value)}><Plus size={13} />{creating ? '收起' : '新建'}</button>
       </header>
@@ -583,7 +611,7 @@ function SideLobby(props: {
           <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="menu-card mb-4 space-y-4">
             <div>
               <p className="mb-2 text-xs" style={{ color: 'var(--m-text-secondary)' }}>这一档的主角</p>
-              {props.chars.length === 0 ? <PillNote tone="lilac" compact>还没有角色，先去创作或短信里导入</PillNote> : null}
+              {props.chars.length === 0 ? <PillNote tone="lilac" compact>{ancient ? '还没有旧世角色，请先在旧世主页导入古风卡' : '还没有角色，先去创作或短信里导入'}</PillNote> : null}
               <div className="flex flex-wrap gap-2">
                 {props.chars.map((person) => (
                   <button key={person.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs" style={{ background: charId === person.id ? '#E6DDF8' : 'white', boxShadow: charId === person.id ? 'inset 0 0 0 1.5px #B9A3E3' : 'none' }} onClick={() => setCharId(person.id)}>

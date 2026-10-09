@@ -13,7 +13,9 @@ import { MarketApp, OfflineApp, SideApp } from '../apps/QuietApps.tsx'
 import { SettingsApp } from '../apps/SettingsApp.tsx'
 import { DuotaoApp, FlashApp } from '../apps/ShopApps.tsx'
 import { StarApp } from '../apps/StarFeed.tsx'
+import { JiushiApp } from '../apps/JiushiApp.tsx'
 import { TableApp } from '../apps/TableApp.tsx'
+import { WorldForgeApp } from '../apps/WorldForgeApp.tsx'
 import { APP_BY_ID } from '../../data/apps.ts'
 import { maybeAskAboutLock } from '../../domain/locks.ts'
 import { importDroppedJson } from '../../domain/importing.ts'
@@ -256,6 +258,10 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <MusicApp onBack={props.onBack} />
     case 'settings':
       return <SettingsApp onBack={props.onBack} />
+    case 'jiushi':
+      return <JiushiApp onBack={props.onBack} />
+    case 'worldforge':
+      return <WorldForgeApp onBack={props.onBack} />
     default:
       return null
   }

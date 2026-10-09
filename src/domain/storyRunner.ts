@@ -1,5 +1,6 @@
 import { pickPreset } from '../engine/prompt.ts'
 import { smsBridgeForStory } from '../lib/channelBridge.ts'
+import { jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
 import {
   buildStoryPrompt,
@@ -10,6 +11,7 @@ import {
   loadSave,
   needsSummary,
   putSave,
+  sideLike,
   writeSummary,
   type StoryMode,
 } from '../engine/story.ts'
@@ -25,7 +27,7 @@ export async function runStoryGeneration(input: {
   presets: Preset[]
   nudge?: string
 }): Promise<void> {
-  const phoneNs = input.namespace.replace(/__side$/, '')
+  const phoneNs = input.namespace.replace(/__(?:side|jiushi)$/, '')
   const save = await loadSave(input.namespace, input.saveId)
   if (!save) return
   const [chars, config] = await Promise.all([
@@ -36,7 +38,7 @@ export async function runStoryGeneration(input: {
   const preset = pickPreset(
     input.presets,
     input.presetId,
-    input.mode === 'side' ? lead?.presetId ?? null : null,
+    sideLike(input.mode) ? lead?.presetId ?? null : null,
     null,
   )
   const world = await enabledWorldText(phoneNs, save.charId ?? chars[0]?.id)
@@ -45,6 +47,7 @@ export async function runStoryGeneration(input: {
     input.mode === 'offline'
       ? await smsBridgeForStory(phoneNs, focus.length ? focus : chars.slice(0, 4))
       : ''
+  const jiushiConfig = input.mode === 'jiushi' ? await loadJiushiConfig(phoneNs) : null
   const messages = buildStoryPrompt({
     mode: input.mode,
     save,
@@ -55,6 +58,7 @@ export async function runStoryGeneration(input: {
     nudge: input.nudge,
     world,
     smsBridge,
+    jiushiBlock: jiushiConfig ? jiushiPromptBlock(jiushiConfig) : undefined,
   })
   const content = await generateStoryReply({
     messages,

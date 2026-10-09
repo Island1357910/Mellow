@@ -1,4 +1,4 @@
-import { Bike, BookMarked, BookOpen, Coffee, Dices, Feather, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
+import { Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
 import { useMellow } from '../../store/useMellow.ts'
 
 const ICONS = {
@@ -25,6 +25,8 @@ const ICONS = {
   spark: Lightbulb,
   write: Feather,
   music: Music,
+  jiushi: Scroll,
+  worldforge: Hammer,
 }
 
 export function AppGlyph(props: { id: string; tint: string; size?: number }) {
