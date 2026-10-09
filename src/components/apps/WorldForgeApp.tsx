@@ -58,7 +58,7 @@ export function WorldForgeApp(props: { onBack: () => void }) {
       const { characters } = await applyForgeResult(phone, result)
       setApplied(true)
       touchData()
-      setNote(`已导入 ${characters.length} 位角色，世界书已更新。可在世界书 App 与短信/旧世中使用。`)
+      setNote(`已导入 ${characters.length} 位角色。世界观总条目已写入世界书 → 世界观 标签，可在短信中与各 NPC 聊天。`)
     } catch (error) {
       setNote(error instanceof Error ? error.message : '导入失败')
     }

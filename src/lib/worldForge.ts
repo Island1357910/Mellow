@@ -15,6 +15,8 @@ export interface ForgedCharacter {
 export interface ForgeResult {
   worldTitle: string
   worldSummary: string
+  /** 主卡开场/情境，写入世界观总条目 */
+  worldHostBlurb?: string
   worldEntries: Array<{ title: string; keys: string; content: string }>
   characters: ForgedCharacter[]
   local?: boolean
@@ -120,8 +122,32 @@ function localParseWorldCard(raw: unknown): ForgeResult | null {
 
   const summaryParts = [draft.description, draft.scenario].map((part) => part.trim()).filter(Boolean)
   const worldSummary = summaryParts.join('\n\n')
+  const worldHostBlurb = [draft.firstMes, draft.description, draft.scenario].map((part) => part.trim()).filter(Boolean).join('\n\n')
 
-  return { worldTitle, worldSummary, worldEntries, characters, local: true }
+  return { worldTitle, worldSummary, worldHostBlurb, worldEntries, characters, local: true }
+}
+
+function buildMasterWorldEntry(result: ForgeResult, stamped: number): WorldEntry {
+  const sections = result.worldEntries.map((entry) => `【${entry.title}】\n${entry.content.trim()}`).join('\n\n---\n\n')
+  const intro = [result.worldHostBlurb, result.worldSummary].map((part) => part?.trim()).filter(Boolean).join('\n\n---\n\n')
+  const body = [intro, sections].filter(Boolean).join('\n\n==========\n\n')
+  const keySet = new Set<string>([result.worldTitle, '世界', '世界观', '设定'])
+  for (const entry of result.worldEntries) {
+    for (const key of entry.keys.split(/[,，]/)) {
+      const trimmed = key.trim()
+      if (trimmed) keySet.add(trimmed)
+    }
+  }
+  return {
+    id: uid('lore'),
+    title: `${result.worldTitle} · 世界观`,
+    keys: [...keySet].join('，'),
+    content: body || result.worldTitle,
+    enabled: true,
+    updatedAt: stamped,
+    cardImport: true,
+    worldForge: result.worldTitle,
+  }
 }
 
 function parseAllCharacterCards(raw: unknown): CardDraft[] {
@@ -353,30 +379,11 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
 export async function applyForgeResult(identity: Identity, result: ForgeResult): Promise<{ world: WorldEntry[]; characters: Character[] }> {
   const prev = await readWorld(identity.namespace)
   const stamped = Date.now()
-  const worldRows: WorldEntry[] = [...prev]
+  const kept = prev.filter((item) => item.worldForge !== result.worldTitle)
+  const worldRows: WorldEntry[] = [...kept]
 
-  if (result.worldSummary.trim()) {
-    worldRows.push({
-      id: uid('lore'),
-      title: `${result.worldTitle} · 总述`,
-      keys: result.worldTitle,
-      content: result.worldSummary.trim(),
-      enabled: true,
-      updatedAt: stamped,
-      cardImport: true,
-    })
-  }
-
-  for (const entry of result.worldEntries) {
-    worldRows.push({
-      id: uid('lore'),
-      title: entry.title,
-      keys: entry.keys,
-      content: entry.content,
-      enabled: true,
-      updatedAt: stamped,
-      cardImport: true,
-    })
+  if (result.worldEntries.length > 0 || result.worldSummary.trim() || result.worldHostBlurb?.trim()) {
+    worldRows.unshift(buildMasterWorldEntry(result, stamped))
   }
   await writeWorld(identity.namespace, worldRows)
 

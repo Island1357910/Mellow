@@ -14,6 +14,12 @@ export interface WorldEntry {
   charId?: string
   /** 来自角色卡一键导入；再次导入同角色时会替换这批 */
   cardImport?: boolean
+  /** 世界搭建导入的世界名；同世界再次导入时会替换 */
+  worldForge?: string
+}
+
+export function isGlobalWorldEntry(item: WorldEntry): boolean {
+  return !item.charId
 }
 
 export async function readWorld(namespace: string): Promise<WorldEntry[]> {
@@ -29,7 +35,7 @@ export function filterWorldForSms(rows: WorldEntry[], charId: string, smsWorldOf
   return rows.filter((item) => {
     if (!item.enabled || !item.content.trim()) return false
     if (off.has(item.id)) return false
-    return item.charId === charId
+    return !item.charId || item.charId === charId
   })
 }
 
