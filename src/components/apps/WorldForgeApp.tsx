@@ -30,7 +30,7 @@ export function WorldForgeApp(props: {
     setRawName(file.name)
     setResult(null)
     setApplied(false)
-    setNote('正在读文并整理大世界卡…')
+    setNote('AI 正在阅读并整理大世界卡…')
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
         const raw = await resolveImportJson(file, 'world')
