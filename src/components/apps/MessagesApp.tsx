@@ -53,6 +53,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   const nearbyHistory = useRef(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const jsonRef = useRef<HTMLInputElement | null>(null)
+  const importStageRef = useRef<'idle' | 'read' | 'ai'>('idle')
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('沈予安')
@@ -218,19 +219,33 @@ export function MessagesApp(props: { onBack: () => void }) {
             event.target.value = ''
             if (!picked) return
             void deferTask(async () => {
+              importStageRef.current = 'read'
               setNotice('正在读取文件…')
               let file = picked
               try {
                 file = await snapshotFile(picked)
               } catch {
-                // QQ/云端文件可能无法快照，仍用原 File 走 FileReader 兜底
+                // 部分浏览器无法快照，仍用原 File 走 FileReader 兜底
               }
+              importStageRef.current = 'ai'
               setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
               await finishImport((onProgress) => importCardFile(file, identity, onProgress))
+              importStageRef.current = 'idle'
             }).catch((error: unknown) => {
+              const stage = importStageRef.current
+              importStageRef.current = 'idle'
               const msg = error instanceof Error ? error.message : '没放进来'
-              if (msg.includes('Failed to fetch') || msg.includes('读不出来') || msg.includes('文件')) {
-                setNotice('手机读不到文件。请用右上角「粘贴导入」或「导入 JSON」')
+              const fetchFail = msg.includes('Failed to fetch')
+              if (fetchFail && stage === 'read') {
+                setNotice('文件读不出来。Via 请从「下载」文件夹选文件，或用「粘贴导入」')
+                return
+              }
+              if (fetchFail) {
+                setNotice('AI 请求失败（不是文件问题）。可换更快的模型，或用「粘贴导入 / 导入 JSON」')
+                return
+              }
+              if (msg.includes('读不出来') || msg.includes('docx')) {
+                setNotice('docx 解压失败。请用「粘贴导入」或「导入 JSON」')
                 return
               }
               setNotice(msg)
@@ -433,7 +448,7 @@ function MessageList(props: {
       {props.pasteOpen ? (
         <div className="mb-3 space-y-2 rounded-[20px] bg-white/85 p-3">
           <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            手机 QQ 读不了 docx 时：在电脑上打开文档 → 全选复制 → 粘贴到下面。也可粘贴 JSON 全文。
+            文件导入失败时：在电脑上打开文档 → 全选复制 → 粘贴到下面。也可直接粘贴 JSON 全文。
           </p>
           <Field label="角色名" value={props.pasteName} onChange={props.onPasteName} />
           <Field label="设定内容" value={props.pasteText} onChange={props.onPasteText} multiline />
