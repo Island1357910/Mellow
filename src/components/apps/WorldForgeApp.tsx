@@ -24,7 +24,7 @@ export function WorldForgeApp(props: { onBack: () => void }) {
     setRawName(file.name)
     setResult(null)
     setApplied(false)
-    setNote('正在解析大世界卡…')
+    setNote('正在解析大世界卡，AI 整理角色设定…')
     let raw: unknown
     try {
       if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
@@ -42,8 +42,8 @@ export function WorldForgeApp(props: { onBack: () => void }) {
         setResult(forged)
         setNote(
           forged.local
-            ? `已从 character_book 完整拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定`
-            : '拆分完成，确认后可导入',
+            ? `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定（部分角色保留原文）`
+            : `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定，确认后可导入`,
         )
       } catch (error) {
         setNote(error instanceof Error ? error.message : '拆分失败')
@@ -68,17 +68,17 @@ export function WorldForgeApp(props: { onBack: () => void }) {
     <div className="sms-shell relative h-full min-h-0">
       <Screen title="世界搭建" subtitle="大世界卡 → 多人 + 世界书" onBack={props.onBack}>
         <div className="mb-4 rounded-[24px] p-4" style={{ background: 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
-          <p className="text-sm leading-6">导入含 character_book 的大世界卡，本地完整解析为：</p>
+          <p className="text-sm leading-6">导入含 character_book 的大世界卡：</p>
           <ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            <li>· 全部世界书条目（规则、系统、地点等，不截断）</li>
-            <li>· 全部 NPC 角色卡（有多少拆多少）</li>
-            <li>· 保留世界主卡的开场、正则脚本</li>
+            <li>· 全部世界书条目写入世界书（不截断）</li>
+            <li>· 全部 NPC 拆成可短信角色，AI 整理完整设定</li>
+            <li>· 不导入世界主卡为短信联系人</li>
           </ul>
         </div>
 
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void pickFile(event.target.files?.[0])} />
         <button type="button" className="chip chip-sky flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
-          <Upload size={14} />{busy ? '正在解析…' : '选择大世界 JSON 卡'}
+          <Upload size={14} />{busy ? '正在整理…' : '选择大世界 JSON 卡'}
         </button>
 
         {rawName ? <p className="mt-2 text-center text-xs" style={{ color: 'var(--m-text-secondary)' }}>{rawName}</p> : null}
