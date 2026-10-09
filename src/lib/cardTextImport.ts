@@ -1,19 +1,11 @@
 import { askLine, readJson } from './ask.ts'
+import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
 
 const TEXT_NAME = /\.(txt|md|text|doc|docx)$/i
 
 export function cardImportAccept(): string {
   return 'application/json,.json,image/png,.png,text/plain,.txt,.md,.text,.doc,.docx'
-}
-
-async function readDocxText(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  const raw = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  const runs = [...raw.matchAll(/<w:t(?:\s+xml:space="preserve")?>([^<]*)<\/w:t>/g)].map((match) => match[1])
-  const text = runs.join('').trim()
-  if (text.length > 40) return text
-  throw new Error('docx 读不出来，请另存为 .txt 再导入')
 }
 
 async function readDocText(file: File): Promise<string> {
@@ -25,7 +17,7 @@ async function readDocText(file: File): Promise<string> {
 
 export async function readDocumentText(file: File): Promise<string> {
   const lower = file.name.toLowerCase()
-  if (lower.endsWith('.docx')) return readDocxText(file)
+  if (lower.endsWith('.docx')) return readDocxFile(file)
   if (lower.endsWith('.doc')) return readDocText(file)
   return file.text()
 }
