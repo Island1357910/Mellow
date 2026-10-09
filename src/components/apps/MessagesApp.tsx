@@ -1,7 +1,7 @@
 import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
-import { importCardFile, writeCharacter } from '../../domain/importing.ts'
+import { importCardFile, importPastedText, writeCharacter } from '../../domain/importing.ts'
 import { BUILD_ID } from '../../lib/buildInfo.ts'
 import { cardImportAccept } from '../../lib/cardTextImport.ts'
 import { deferTask, snapshotFile } from '../../lib/fileSnapshot.ts'
@@ -52,6 +52,21 @@ export function MessagesApp(props: { onBack: () => void }) {
   const [nearbyVisit, setNearbyVisit] = useState(0)
   const nearbyHistory = useRef(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const jsonRef = useRef<HTMLInputElement | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteName, setPasteName] = useState('沈予安')
+
+  const finishImport = async (
+    run: (onProgress: (msg: string) => void) => Promise<{ characters: { name: string }[]; via: 'ai' | 'local' | 'raw' }>,
+  ) => {
+    const { characters, via } = await run((msg) => setNotice(msg))
+    await load(identity!)
+    await refreshInbox()
+    touchData()
+    const names = characters.map((item) => item.name).join('、')
+    setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
+  }
 
   const load = async (who: Identity) => {
     const [nextChars, nextChats, nextFolders, nextProfile, nextMoments, online] = await Promise.all([
@@ -179,7 +194,9 @@ export function MessagesApp(props: { onBack: () => void }) {
             </button>
             {menu ? (
               <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-2xl bg-white py-1 text-sm shadow-[0_12px_30px_rgba(90,70,80,0.12)]">
-                <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); fileRef.current?.click() }}>导入</button>
+                <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); fileRef.current?.click() }}>导入文件</button>
+                <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); jsonRef.current?.click() }}>导入 JSON</button>
+                <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); setPasteOpen(true); setTab('messages') }}>粘贴导入</button>
                 <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); setAdding(true); setTab('messages') }}>手写</button>
                 {identities.length > 1 ? identities.map((item) => (
                   <button key={item.id} type="button" className="block w-full truncate px-3 py-2 text-left" onClick={() => { setMenu(false); void setAppOverride('messages', item.id === phone.id ? null : item.id) }}>
@@ -209,19 +226,31 @@ export function MessagesApp(props: { onBack: () => void }) {
                 // QQ/云端文件可能无法快照，仍用原 File 走 FileReader 兜底
               }
               setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
-              const { characters, via } = await importCardFile(file, identity, (msg) => setNotice(msg))
-              await load(identity)
-              await refreshInbox()
-              touchData()
-              const names = characters.map((item) => item.name).join('、')
-              setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
+              await finishImport((onProgress) => importCardFile(file, identity, onProgress))
             }).catch((error: unknown) => {
               const msg = error instanceof Error ? error.message : '没放进来'
               if (msg.includes('Failed to fetch') || msg.includes('读不出来') || msg.includes('文件')) {
-                setNotice('手机读不到该 docx。请：① 用文件管理器把 docx 存到「下载」再选；② 或导入 .json（同目录沈予安.json）')
+                setNotice('手机读不到文件。请用右上角「粘贴导入」或「导入 JSON」')
                 return
               }
               setNotice(msg)
+            })
+          }}
+        />
+        <input
+          ref={jsonRef}
+          type="file"
+          accept=".json,application/json,text/plain"
+          className="hidden"
+          onChange={(event) => {
+            const picked = event.target.files?.[0]
+            event.target.value = ''
+            if (!picked) return
+            void deferTask(async () => {
+              setNotice('正在读取 JSON…')
+              await finishImport((onProgress) => importCardFile(picked, identity, onProgress))
+            }).catch((error: unknown) => {
+              setNotice(error instanceof Error ? error.message : 'JSON 没读出来')
             })
           }}
         />
@@ -245,6 +274,31 @@ export function MessagesApp(props: { onBack: () => void }) {
             chars={chars}
             notice={notice}
             adding={adding}
+            pasteOpen={pasteOpen}
+            pasteText={pasteText}
+            pasteName={pasteName}
+            onPasteText={setPasteText}
+            onPasteName={setPasteName}
+            onCancelPaste={() => setPasteOpen(false)}
+            onPasteImport={() => {
+              void deferTask(async () => {
+                setNotice('AI 整理粘贴内容…')
+                await finishImport((onProgress) =>
+                  importPastedText(pasteText, identity, `${pasteName.trim() || '角色'}.txt`, onProgress),
+                )
+                setPasteOpen(false)
+                setPasteText('')
+              }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : '粘贴导入失败'))
+            }}
+            onPasteClipboard={async () => {
+              try {
+                const clip = await navigator.clipboard.readText()
+                if (clip.trim()) setPasteText(clip)
+                else setNotice('剪贴板是空的')
+              } catch {
+                setNotice('读不到剪贴板，请长按粘贴到文本框')
+              }
+            }}
             onOpen={setOpenId}
             onWrite={async (input) => {
               const created = await writeCharacter({ identity, ...input })
@@ -360,6 +414,14 @@ function MessageList(props: {
   chars: Character[]
   notice: string
   adding: boolean
+  pasteOpen: boolean
+  pasteText: string
+  pasteName: string
+  onPasteText: (value: string) => void
+  onPasteName: (value: string) => void
+  onCancelPaste: () => void
+  onPasteImport: () => void
+  onPasteClipboard: () => void
   onOpen: (id: string) => void
   onWrite: (input: { name: string; personality: string; description: string; firstMes: string }) => Promise<void>
   onCancelAdd: () => void
@@ -368,6 +430,20 @@ function MessageList(props: {
   const [personality, setPersonality] = useState('')
   return (
     <div>
+      {props.pasteOpen ? (
+        <div className="mb-3 space-y-2 rounded-[20px] bg-white/85 p-3">
+          <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
+            手机 QQ 读不了 docx 时：在电脑上打开文档 → 全选复制 → 粘贴到下面。也可粘贴 JSON 全文。
+          </p>
+          <Field label="角色名" value={props.pasteName} onChange={props.onPasteName} />
+          <Field label="设定内容" value={props.pasteText} onChange={props.onPasteText} multiline />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="rounded-full bg-[var(--m-secondary)] px-3 py-1.5 text-sm" onClick={props.onPasteImport}>AI 整理并导入</button>
+            <button type="button" className="rounded-full bg-white px-3 py-1.5 text-sm" onClick={() => void props.onPasteClipboard()}>读剪贴板</button>
+            <button type="button" className="rounded-full bg-white px-3 py-1.5 text-sm" onClick={props.onCancelPaste}>取消</button>
+          </div>
+        </div>
+      ) : null}
       {props.adding ? (
         <div className="mb-3 space-y-2">
           <Field label="名字" value={name} onChange={setName} />

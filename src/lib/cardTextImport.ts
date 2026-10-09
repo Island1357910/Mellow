@@ -1,4 +1,5 @@
 import { aiOrganizeDocument } from './aiCardImport.ts'
+import { readFileText } from './fileSnapshot.ts'
 import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
 import { plainTextCardJson, tryParseStructuredDoc } from './structuredDocImport.ts'
@@ -68,6 +69,24 @@ async function textToCardJson(
   }
 }
 
+/** 粘贴文本 / JSON 字符串导入，不经过文件系统（手机 QQ 可用）。 */
+export async function resolveImportText(
+  text: string,
+  fileName: string,
+  mode: 'auto' | 'character' | 'world' = 'auto',
+  onProgress?: (message: string) => void,
+): Promise<{ card: unknown; via: 'ai' | 'local' | 'raw' }> {
+  const body = text.trim()
+  if (!body) throw new Error('内容是空的')
+  try {
+    const parsed = JSON.parse(body) as unknown
+    if (parsed && typeof parsed === 'object') return { card: parsed, via: 'raw' }
+  } catch {
+    // 不是 JSON，走 AI / 本地整理
+  }
+  return textToCardJson(body, mode, fileName, onProgress)
+}
+
 /** 读取 JSON / PNG / txt·doc·docx；文本类由 AI 阅读整理，失败时尝试本地结构化解析。 */
 export async function resolveImportJson(
   file: File,
@@ -103,7 +122,7 @@ export async function resolveImportJson(
     }
   }
   if (isJsonLike(file)) {
-    return { card: JSON.parse(await file.text()) as unknown, via: 'raw' }
+    return { card: JSON.parse(await readFileText(file)) as unknown, via: 'raw' }
   }
   if (isTextLike(file)) {
     const text = await readDocumentText(file)

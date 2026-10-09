@@ -1,7 +1,7 @@
 import { presetFromUnknown } from '../data/officialPresets.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { uid } from '../lib/id.ts'
-import { resolveImportJson } from '../lib/cardTextImport.ts'
+import { resolveImportJson, resolveImportText } from '../lib/cardTextImport.ts'
 import { looksLikeCharacter, parseCharacterCards } from '../lib/sillytavern.ts'
 import type { CardDraft } from '../lib/sillytavern.ts'
 import { importCharacterRegex } from '../engine/story.ts'
@@ -74,6 +74,27 @@ export async function importCardFile(
   const characters: Character[] = []
   for (const draft of drafts) {
     characters.push(await characterFromDraft(identity.namespace, draft, avatar))
+  }
+  eventBus.emit({
+    type: 'import_char',
+    app: 'messages',
+    identityId: identity.id,
+    meta: { count: characters.length, name: characters[0]?.name ?? '' },
+  })
+  return { characters, via }
+}
+
+export async function importPastedText(
+  text: string,
+  identity: Identity,
+  fileName = '粘贴导入.txt',
+  onProgress?: (message: string) => void,
+): Promise<{ characters: Character[]; via: 'ai' | 'local' | 'raw' }> {
+  const { card: raw, via } = await resolveImportText(text, fileName, 'character', onProgress)
+  const drafts = parseCharacterCards(raw)
+  const characters: Character[] = []
+  for (const draft of drafts) {
+    characters.push(await characterFromDraft(identity.namespace, draft))
   }
   eventBus.emit({
     type: 'import_char',
