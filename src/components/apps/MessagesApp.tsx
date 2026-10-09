@@ -198,10 +198,14 @@ export function MessagesApp(props: { onBack: () => void }) {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (!file) return
+            setNotice('正在导入…')
             void importCardFile(file, identity)
-              .then(() => load(identity))
-              .then(() => refreshInbox())
-              .then(() => touchData())
+              .then(async (rows) => {
+                await load(identity)
+                await refreshInbox()
+                touchData()
+                setNotice(`已导入 ${rows.map((item) => item.name).join('、')}`)
+              })
               .catch((error: unknown) => setNotice(error instanceof Error ? error.message : '没放进来'))
           }}
         />
