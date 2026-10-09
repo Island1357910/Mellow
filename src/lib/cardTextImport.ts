@@ -1,10 +1,11 @@
 import { AIError } from '../engine/AIAdapter.ts'
-import { askLine, ensureAiReady, readJson } from './ask.ts'
+import { askJson, ensureAiReady, readJson } from './ask.ts'
 import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
 
 const TEXT_NAME = /\.(txt|md|text|doc|docx)$/i
 const AI_TEXT_LIMIT = 28_000
+const AI_IMPORT_MAX_TOKENS = 8192
 const AI_IMPORT_TIMEOUT_MS = 180_000
 
 export function cardImportAccept(): string {
@@ -51,13 +52,13 @@ async function aiTextToCardJson(text: string, mode: 'auto' | 'character' | 'worl
       : mode === 'character'
         ? '这是单张角色卡文档。请输出 SillyTavern V2/V3 角色卡 JSON，保留全部人设细节。'
         : '判断是单角色卡还是大世界卡：大世界则一张卡 + character_book 多条；单角色则标准角色卡。'
-  const raw = await askLine(
+  const raw = await askJson(
     `你是角色卡整理器。把用户文档转成可导入的 SillyTavern 角色卡 JSON（可有 spec/data 或直接 data/name 字段）。
 ${kindHint}
 必须保留原文全部设定，写入 description、personality、scenario、first_mes、character_book 等，不要空壳。
 不要 creator_notes。只返回 JSON，不要解释。`,
     `文件名：${fileName}\n\n${clip}`,
-    16_000,
+    AI_IMPORT_MAX_TOKENS,
     AI_IMPORT_TIMEOUT_MS,
   )
   return readJson(raw)
@@ -69,7 +70,7 @@ function wrapImportError(error: unknown): Error {
     const msg = error.message.toLowerCase()
     if (msg.includes('failed to fetch')) {
       return new AIError(
-        '连不上 AI 接口。请检查设置里的接口地址、密钥，以及接口是否支持浏览器跨域（CORS）。',
+        '文档整理请求中途断开（Failed to fetch）。聊天正常时，多半是导入请求更大、耗时更长，被网关或接口限时切断。可改用 .txt 或 .json 再试，或换响应更快的模型。',
         'network',
       )
     }

@@ -1,6 +1,6 @@
 import { characterFromDraft } from '../domain/importing.ts'
 import { importCharacterRegex } from '../engine/story.ts'
-import { askLine, readJson } from './ask.ts'
+import { askJson, readJson } from './ask.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
 import { writeWorld, readWorld, type WorldEntry } from './worldbook.ts'
 import { uid } from './id.ts'
@@ -24,6 +24,9 @@ export interface ForgeResult {
 
 const NPC_TAG_RE = /<(romanceable_npc|friendship_npc|friend_npc|town_npc)\s+name="([^"]+)"/i
 const AI_BATCH_SIZE = 5
+const AI_FORGE_MAX_TOKENS = 8192
+const AI_FORGE_TIMEOUT_MS = 180_000
+const AI_FORGE_SOURCE_LIMIT = 40_000
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -260,7 +263,7 @@ async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
 
     let aiMap = new Map<string, CardDraft>()
     try {
-      const text = await askLine(
+      const text = await askJson(
         `你是角色卡整理器。根据 character_book 原文，为每位 NPC 输出完整、可单独聊天的角色字段。
 要求：
 - description 必须保留原文全部人设细节（身份、背景、说话风格、礼物偏好、剧情钩子等），不能省略或概括成空壳
@@ -272,7 +275,8 @@ async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
 只返回 JSON：
 {"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""]}]}`,
         `世界名：${parsed.worldTitle}\n\n${JSON.stringify(payload)}`,
-        16_000,
+        AI_FORGE_MAX_TOKENS,
+        AI_FORGE_TIMEOUT_MS,
       )
       aiMap = readAiCharacterBatch(readJson(text), parsed.worldTitle)
     } catch {
@@ -330,15 +334,20 @@ function localForge(raw: unknown): ForgeResult {
 
 async function aiForge(raw: unknown): Promise<ForgeResult> {
   const source = cardToPrompt(raw)
-  const text = await askLine(
+  const clip =
+    source.length > AI_FORGE_SOURCE_LIMIT
+      ? `${source.slice(0, AI_FORGE_SOURCE_LIMIT)}\n…（后文已截）`
+      : source
+  const text = await askJson(
     `你是大世界卡拆分器。输入可能是一张 SillyTavern 卡、或多角色世界观 JSON。
 请拆成：
 1) 世界总设定条目（有多少写多少，含时代、地理、势力、规则等，保留原文细节）
 2) 可单独游玩的 NPC 角色卡（有多少写多少），每人必须有完整 name、description、personality、scenario、firstMes、systemPrompt
 不要导入世界主卡本身为角色。不要 creatorNotes。不要解释、不要省略条目。只返回 JSON：
 {"worldTitle":"","worldSummary":"","worldEntries":[{"title":"","keys":"","content":""}],"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""],"note":""}]}`,
-    source,
-    16_000,
+    clip,
+    AI_FORGE_MAX_TOKENS,
+    AI_FORGE_TIMEOUT_MS,
   )
   const parsed = readForgeResult(readJson(text))
   if (!parsed || parsed.characters.length === 0) throw new Error('没拆出角色')
@@ -368,6 +377,18 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
     } catch {
       return dropWorldHostCharacter(local)
     }
+  }
+  try {
+    const fallback = localForge(raw)
+    if (fallback.characters.length > 0) {
+      try {
+        return dropWorldHostCharacter(await aiEnrichCharacters(fallback))
+      } catch {
+        return dropWorldHostCharacter(fallback)
+      }
+    }
+  } catch {
+    // 不是可直接解析的卡结构，继续走 AI 拆分
   }
   try {
     return dropWorldHostCharacter(await aiForge(raw))

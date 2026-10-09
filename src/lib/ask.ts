@@ -6,6 +6,7 @@ export async function askLine(
   user: string,
   maxTokens = 180,
   timeoutMs = 120_000,
+  temperature = 0.9,
 ): Promise<string> {
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const result = await adapter.complete({
@@ -13,11 +14,16 @@ export async function askLine(
       { role: 'system', content: system },
       { role: 'user', content: user },
     ],
-    temperature: 0.9,
+    temperature,
     maxTokens,
     timeoutMs,
   })
   return result.content.trim()
+}
+
+/** 结构化 JSON 输出：低温、较长超时，适合文档/卡包整理 */
+export function askJson(system: string, user: string, maxTokens = 8192, timeoutMs = 180_000): Promise<string> {
+  return askLine(system, user, maxTokens, timeoutMs, 0.2)
 }
 
 export async function ensureAiReady(): Promise<void> {

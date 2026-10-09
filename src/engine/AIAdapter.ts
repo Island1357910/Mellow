@@ -172,7 +172,7 @@ export class AIAdapter {
     const msg = raw.toLowerCase()
     if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')) {
       return new AIError(
-        '连不上 AI 接口（Failed to fetch）。请检查：① 设置里接口地址与密钥是否正确；② 接口是否允许浏览器跨域；③ 文档是否过大可改用 txt。',
+        '请求中途断开（Failed to fetch）。若聊天正常，多半是整理/导入请求更大更慢，被网关限时切断；可改用 txt/json 或换更快的模型。',
         'network',
         true,
       )
