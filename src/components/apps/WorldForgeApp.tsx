@@ -1,11 +1,16 @@
 import { ChevronRight, Hammer, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { cardImportAccept, resolveImportJson } from '../../lib/cardTextImport.ts'
 import { applyForgeResult, forgeWorldFromCard, type ForgeResult } from '../../lib/worldForge.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
-export function WorldForgeApp(props: { onBack: () => void }) {
+export function WorldForgeApp(props: {
+  onBack: () => void
+  jiushi?: boolean
+  worldNamespace?: string
+}) {
   const identities = useMellow((state) => state.identities)
   const activeIdentityId = useMellow((state) => state.activeIdentityId)
   const touchData = useMellow((state) => state.touchData)
@@ -17,27 +22,18 @@ export function WorldForgeApp(props: { onBack: () => void }) {
   const [applied, setApplied] = useState(false)
 
   if (!phone) return null
-  const busy = isAiJobRunning(jobKey(phone.namespace, 'worldforge'))
+  const jobNs = props.jiushi ? `${phone.namespace}__jiushi-forge` : phone.namespace
+  const busy = isAiJobRunning(jobKey(jobNs, 'worldforge'))
 
   const pickFile = async (file: File | undefined) => {
     if (!file) return
     setRawName(file.name)
     setResult(null)
     setApplied(false)
-    setNote('正在解析大世界卡，AI 整理角色设定…')
-    let raw: unknown
-    try {
-      if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
-        setNote('PNG 卡请先在世界搭建外预览；当前请优先用 JSON 大世界卡')
-        return
-      }
-      raw = JSON.parse(await file.text()) as unknown
-    } catch {
-      setNote('JSON 读不出来')
-      return
-    }
-    runAiJob(jobKey(phone.namespace, 'worldforge'), async () => {
+    setNote('正在读文并整理大世界卡…')
+    runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
+        const raw = await resolveImportJson(file, 'world')
         const forged = await forgeWorldFromCard(raw)
         setResult(forged)
         setNote(
@@ -55,10 +51,18 @@ export function WorldForgeApp(props: { onBack: () => void }) {
     if (!result) return
     setNote('正在写入世界书与角色…')
     try {
-      const { characters } = await applyForgeResult(phone, result)
+      const { characters } = await applyForgeResult(phone, result, {
+        jiushi: props.jiushi,
+        skipChat: props.jiushi,
+        worldNamespace: props.worldNamespace,
+      })
       setApplied(true)
       touchData()
-      setNote(`已导入 ${characters.length} 位角色。世界观总条目已写入世界书 → 世界观 标签，可在短信中与各 NPC 聊天。`)
+      setNote(
+        props.jiushi
+          ? `已纳入 ${characters.length} 位旧世人物，世界观总条目在「世界书 → 世界观」。`
+          : `已导入 ${characters.length} 位角色。世界观总条目已写入世界书 → 世界观 标签，可在短信中与各 NPC 聊天。`,
+      )
     } catch (error) {
       setNote(error instanceof Error ? error.message : '导入失败')
     }
@@ -66,19 +70,23 @@ export function WorldForgeApp(props: { onBack: () => void }) {
 
   return (
     <div className="sms-shell relative h-full min-h-0">
-      <Screen title="世界搭建" subtitle="大世界卡 → 多人 + 世界书" onBack={props.onBack}>
-        <div className="mb-4 rounded-[24px] p-4" style={{ background: 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
-          <p className="text-sm leading-6">导入含 character_book 的大世界卡：</p>
+      <Screen
+        title={props.jiushi ? '世界搭建' : '世界搭建'}
+        subtitle={props.jiushi ? '旧世 · 大世界入境' : '大世界卡 → 多人 + 世界书'}
+        onBack={props.onBack}
+      >
+        <div className="mb-4 rounded-[24px] p-4" style={{ background: props.jiushi ? 'linear-gradient(135deg,#F5F0E6,#EDE4D3)' : 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
+          <p className="text-sm leading-6">导入大世界卡或文档（JSON / txt / doc / docx）：</p>
           <ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            <li>· 全部世界书条目写入世界书（不截断）</li>
-            <li>· 全部 NPC 拆成可短信角色，AI 整理完整设定</li>
-            <li>· 不导入世界主卡为短信联系人</li>
+            <li>· 文本文档经 AI 整理成 JSON 再拆分</li>
+            <li>· 全部世界书条目写入世界观总条目</li>
+            <li>· 全部 NPC {props.jiushi ? '纳入旧世人物，不进现代短信' : '拆成可短信角色'}</li>
           </ul>
         </div>
 
-        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void pickFile(event.target.files?.[0])} />
+        <input ref={fileRef} type="file" accept={cardImportAccept()} className="hidden" onChange={(event) => void pickFile(event.target.files?.[0])} />
         <button type="button" className="chip chip-sky flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
-          <Upload size={14} />{busy ? '正在整理…' : '选择大世界 JSON 卡'}
+          <Upload size={14} />{busy ? '正在整理…' : '选择大世界文件'}
         </button>
 
         {rawName ? <p className="mt-2 text-center text-xs" style={{ color: 'var(--m-text-secondary)' }}>{rawName}</p> : null}
@@ -104,7 +112,7 @@ export function WorldForgeApp(props: { onBack: () => void }) {
               ))}
             </ul>
             {!applied ? (
-              <button type="button" className="chip chip-mint w-full py-2.5" onClick={() => void apply()} disabled={busy}>确认导入到当前身份</button>
+              <button type="button" className="chip chip-mint w-full py-2.5" onClick={() => void apply()} disabled={busy}>确认导入</button>
             ) : null}
           </div>
         ) : null}

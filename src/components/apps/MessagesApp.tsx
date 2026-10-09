@@ -2,6 +2,7 @@ import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, writeCharacter } from '../../domain/importing.ts'
+import { cardImportAccept } from '../../lib/cardTextImport.ts'
 import { createNearbyContact, findNearbyContact, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
@@ -191,7 +192,7 @@ export function MessagesApp(props: { onBack: () => void }) {
         <input
           ref={fileRef}
           type="file"
-          accept=".json,.png,application/json,image/png"
+          accept={cardImportAccept()}
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0]

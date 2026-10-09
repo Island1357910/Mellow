@@ -1,6 +1,8 @@
 import { pickPreset } from '../engine/prompt.ts'
 import { smsBridgeForStory } from '../lib/channelBridge.ts'
-import { jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
+import { jiushiLetterBridgeForStory } from '../lib/jiushiBridge.ts'
+import { isJiushiCharacter, jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
+import { jiushiWorldNs } from '../lib/jiushiPhone.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
 import {
   buildStoryPrompt,
@@ -41,11 +43,19 @@ export async function runStoryGeneration(input: {
     sideLike(input.mode) ? lead?.presetId ?? null : null,
     null,
   )
-  const world = await enabledWorldText(phoneNs, save.charId ?? chars[0]?.id)
+  const worldNs = input.mode === 'jiushi' ? jiushiWorldNs(phoneNs) : phoneNs
+  const world = await enabledWorldText(worldNs, save.charId ?? chars[0]?.id)
   const focus = input.mode === 'offline' ? focusChars(chars, save) : []
+  const jiushiFocus = input.mode === 'jiushi'
+    ? chars.filter(isJiushiCharacter).slice(0, 6)
+    : []
   const smsBridge =
     input.mode === 'offline'
       ? await smsBridgeForStory(phoneNs, focus.length ? focus : chars.slice(0, 4))
+      : ''
+  const letterBridge =
+    input.mode === 'jiushi'
+      ? await jiushiLetterBridgeForStory(phoneNs, jiushiFocus.length ? jiushiFocus : chars.filter(isJiushiCharacter).slice(0, 4))
       : ''
   const jiushiConfig = input.mode === 'jiushi' ? await loadJiushiConfig(phoneNs) : null
   const messages = buildStoryPrompt({
@@ -57,7 +67,7 @@ export async function runStoryGeneration(input: {
     preset,
     nudge: input.nudge,
     world,
-    smsBridge,
+    smsBridge: [smsBridge, letterBridge].filter(Boolean).join('\n'),
     jiushiBlock: jiushiConfig ? jiushiPromptBlock(jiushiConfig) : undefined,
   })
   const content = await generateStoryReply({

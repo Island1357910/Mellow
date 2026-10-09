@@ -376,8 +376,24 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
   }
 }
 
-export async function applyForgeResult(identity: Identity, result: ForgeResult): Promise<{ world: WorldEntry[]; characters: Character[] }> {
-  const prev = await readWorld(identity.namespace)
+export interface ForgeApplyOptions {
+  /** 世界书写入的 namespace，默认 identity.namespace */
+  worldNamespace?: string
+  /** 不创建短信会话 */
+  skipChat?: boolean
+  allowProactive?: boolean
+  /** 打上旧世标签并 skipChat */
+  jiushi?: boolean
+  extraTags?: string[]
+}
+
+export async function applyForgeResult(
+  identity: Identity,
+  result: ForgeResult,
+  options: ForgeApplyOptions = {},
+): Promise<{ world: WorldEntry[]; characters: Character[] }> {
+  const worldNs = options.worldNamespace ?? identity.namespace
+  const prev = await readWorld(worldNs)
   const stamped = Date.now()
   const kept = prev.filter((item) => item.worldForge !== result.worldTitle)
   const worldRows: WorldEntry[] = [...kept]
@@ -385,21 +401,35 @@ export async function applyForgeResult(identity: Identity, result: ForgeResult):
   if (result.worldEntries.length > 0 || result.worldSummary.trim() || result.worldHostBlurb?.trim()) {
     worldRows.unshift(buildMasterWorldEntry(result, stamped))
   }
-  await writeWorld(identity.namespace, worldRows)
+  await writeWorld(worldNs, worldRows)
 
+  const skipChat = options.skipChat ?? options.jiushi ?? false
   const characters: Character[] = []
   for (const item of result.characters) {
+    const tags = Array.from(new Set([
+      ...item.draft.tags,
+      '世界搭建',
+      ...(options.jiushi ? ['旧世', '古风'] : []),
+      ...(options.extraTags ?? []),
+    ]))
     const draft: CardDraft = {
       ...item.draft,
       creatorNotes: '',
-      tags: Array.from(new Set([...item.draft.tags, '世界搭建'])),
+      tags,
       scenario: item.draft.scenario || result.worldTitle,
+      extensions: options.jiushi
+        ? { ...item.draft.extensions, jiushi: { importedAt: stamped, worldForge: true } }
+        : item.draft.extensions,
     }
-    const character = await characterFromDraft(identity.namespace, draft, '', { allowProactive: false })
+    const character = await characterFromDraft(identity.namespace, draft, '', {
+      skipChat,
+      allowProactive: options.jiushi ? false : options.allowProactive ?? false,
+    })
     await importCharacterRegex(identity.namespace, character)
     characters.push(character)
   }
 
-  await storage.setBag(identity.namespace, 'worldforge_last', { result, at: stamped })
+  const bagKey = options.jiushi ? 'jiushi_worldforge_last' : 'worldforge_last'
+  await storage.setBag(identity.namespace, bagKey, { result, at: stamped, worldNamespace: worldNs })
   return { world: worldRows, characters }
 }

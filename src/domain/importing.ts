@@ -1,7 +1,8 @@
 import { presetFromUnknown } from '../data/officialPresets.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { uid } from '../lib/id.ts'
-import { looksLikeCharacter, parseCharacterCards, parsePngCharacterCard } from '../lib/sillytavern.ts'
+import { resolveImportJson } from '../lib/cardTextImport.ts'
+import { looksLikeCharacter, parseCharacterCards } from '../lib/sillytavern.ts'
 import type { CardDraft } from '../lib/sillytavern.ts'
 import { importCharacterRegex } from '../engine/story.ts'
 import { importCharacterWorld } from '../lib/worldbook.ts'
@@ -63,15 +64,9 @@ export async function characterFromDraft(
 export async function importCardFile(file: File, identity: Identity): Promise<Character[]> {
   const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
   let avatar = ''
-  let drafts: CardDraft[]
-  if (isPng) {
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    drafts = [parsePngCharacterCard(bytes)]
-    if (file.size < 1_500_000) avatar = await fileToDataUrl(file)
-  } else {
-    const raw = JSON.parse(await file.text()) as unknown
-    drafts = parseCharacterCards(raw)
-  }
+  const raw = await resolveImportJson(file, 'character')
+  const drafts = parseCharacterCards(raw)
+  if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
   for (const draft of drafts) {
     characters.push(await characterFromDraft(identity.namespace, draft, avatar))

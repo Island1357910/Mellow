@@ -1,7 +1,9 @@
 import { importCharacterRegex } from '../engine/story.ts'
 import { characterFromDraft } from '../domain/importing.ts'
 import { askLine, readJson } from './ask.ts'
-import { parseCharacterCards, parsePngCharacterCard, type CardDraft } from './sillytavern.ts'
+import { resolveImportJson } from './cardTextImport.ts'
+import { jiushiStoryBridgeForLetter } from './jiushiBridge.ts'
+import { parseCharacterCards, type CardDraft } from './sillytavern.ts'
 import { importCharacterWorld } from './worldbook.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity } from '../types/index.ts'
@@ -93,15 +95,9 @@ function tagJiushiDraft(draft: CardDraft): CardDraft {
 export async function importJiushiCardFile(file: File, identity: Identity): Promise<Character[]> {
   const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
   let avatar = ''
-  let drafts: CardDraft[]
-  if (isPng) {
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    drafts = [tagJiushiDraft(parsePngCharacterCard(bytes))]
-    if (file.size < 1_500_000) avatar = await fileToDataUrl(file)
-  } else {
-    const raw = JSON.parse(await file.text()) as unknown
-    drafts = parseCharacterCards(raw).map(tagJiushiDraft)
-  }
+  const raw = await resolveImportJson(file, 'character')
+  const drafts = parseCharacterCards(raw).map(tagJiushiDraft)
+  if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
   for (const draft of drafts) {
     const character = await characterFromDraft(identity.namespace, draft, avatar, { skipChat: true })
@@ -180,11 +176,12 @@ export async function replyJiushiLetter(input: {
     .map((item) => `${item.role === 'user' ? '来者' : input.character.name}：${item.content}`)
     .join('\n')
 
+  const storyBridge = await jiushiStoryBridgeForLetter(input.namespace, input.character)
   const raw = await askLine(
     `你是${input.character.name}。${input.character.description.slice(0, 200)}
 ${jiushiPromptBlock(input.config)}
 当前是「传书」：像古人写信，半文白，一段到两段，不要 HTML，不要状态栏，不要替对方写。只返回 JSON：{"letter":""}`,
-    `此前传书：\n${history || '（尚无）'}\n\n来者新笺：${input.userText.trim()}`,
+    [storyBridge, `此前传书：\n${history || '（尚无）'}`, `来者新笺：${input.userText.trim()}`].filter(Boolean).join('\n\n'),
     320,
   )
   const parsed = readJson(raw) as { letter?: unknown }

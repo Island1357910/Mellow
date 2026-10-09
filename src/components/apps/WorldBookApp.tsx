@@ -16,8 +16,9 @@ function usePhone() {
   return identities.find((item) => item.id === activeIdentityId) ?? null
 }
 
-export function WorldBookApp(props: { onBack: () => void }) {
+export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: string; defaultScope?: 'world' | 'char' }) {
   const phone = usePhone()
+  const worldNamespace = props.namespaceOverride ?? phone?.namespace ?? ''
   const [rows, setRows] = useState<WorldEntry[] | null>(null)
   const [chars, setChars] = useState<Character[]>([])
   const [charId, setCharId] = useState('')
@@ -29,19 +30,20 @@ export function WorldBookApp(props: { onBack: () => void }) {
   const cardSources = selected ? worldEntriesFromCharacter(selected) : []
 
   useEffect(() => {
-    if (!phone) return
+    if (!phone || !worldNamespace) return
     let stop = false
-    void Promise.all([readWorld(phone.namespace), storage.listCharacters(phone.namespace)]).then(([saved, people]) => {
+    void Promise.all([readWorld(worldNamespace), storage.listCharacters(phone.namespace)]).then(([saved, people]) => {
       if (stop) return
       setRows(saved)
       setChars(people)
       setCharId((current) => current || people[0]?.id || '')
-      if (saved.some(isGlobalWorldEntry)) setScope('world')
+      if (props.defaultScope) setScope(props.defaultScope)
+      else if (saved.some(isGlobalWorldEntry)) setScope('world')
     })
     return () => {
       stop = true
     }
-  }, [phone])
+  }, [phone, worldNamespace, props.defaultScope])
 
   if (!phone || !rows) return null
 
@@ -54,7 +56,7 @@ export function WorldBookApp(props: { onBack: () => void }) {
 
   const persist = (next: WorldEntry[]) => {
     setRows(next)
-    void writeWorld(phone.namespace, next)
+    void writeWorld(worldNamespace, next)
   }
 
   const keepScope = (nextScope: WorldEntry[]) => {
@@ -132,8 +134,8 @@ export function WorldBookApp(props: { onBack: () => void }) {
                   type="button"
                   className={`chip w-full ${needsSync ? 'chip-solid' : 'chip-sky'}`}
                   onClick={() => {
-                    void importCharacterWorld(phone.namespace, selected).then((count) => {
-                      void readWorld(phone.namespace).then(setRows)
+                    void importCharacterWorld(worldNamespace, selected).then((count) => {
+                      void readWorld(worldNamespace).then(setRows)
                       setNote(count > 0 ? `已从「${selected.remark || selected.name}」的角色卡同步 ${count} 条` : '没有可同步的内容')
                     })
                   }}
