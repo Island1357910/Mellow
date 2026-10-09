@@ -65,10 +65,10 @@ export async function importCardFile(
   file: File,
   identity: Identity,
   onProgress?: (message: string) => void,
-): Promise<Character[]> {
+): Promise<{ characters: Character[]; via: 'ai' | 'local' | 'raw' }> {
   const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
   let avatar = ''
-  const raw = await resolveImportJson(file, 'character', onProgress)
+  const { card: raw, via } = await resolveImportJson(file, 'character', onProgress)
   const drafts = parseCharacterCards(raw)
   if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
@@ -81,7 +81,7 @@ export async function importCardFile(
     identityId: identity.id,
     meta: { count: characters.length, name: characters[0]?.name ?? '' },
   })
-  return characters
+  return { characters, via }
 }
 
 export type DropKind = 'character' | 'preset' | 'theme'
@@ -91,7 +91,7 @@ export async function importDroppedJson(
   identity: Identity,
 ): Promise<{ kind: DropKind; name: string; id: string }> {
   if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
-    const characters = await importCardFile(file, identity)
+    const { characters } = await importCardFile(file, identity)
     return { kind: 'character', name: characters.map((item) => item.name).join('、'), id: characters[0]?.id ?? '' }
   }
   const raw = JSON.parse(await file.text()) as unknown
@@ -106,7 +106,7 @@ export async function importDroppedJson(
     return { kind: 'preset', name: preset.name, id: preset.id }
   }
   if (looksLikeCharacter(raw) || (Array.isArray(raw) && raw.some((item) => looksLikeCharacter(item)))) {
-    const characters = await importCardFile(file, identity)
+    const { characters } = await importCardFile(file, identity)
     return { kind: 'character', name: characters.map((item) => item.name).join('、'), id: characters[0]?.id ?? '' }
   }
   if (isRecord(raw) && (raw.entries || raw.character_book)) {

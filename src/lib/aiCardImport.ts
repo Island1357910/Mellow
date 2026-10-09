@@ -11,6 +11,11 @@ const ENTRIES_MAX_TOKENS = 1_800
 const SINGLE_TIMEOUT_MS = 90_000
 const BATCH_TIMEOUT_MS = 60_000
 const BLOCK_BATCH = 2
+const BATCH_GAP_MS = 250
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
 interface CardSkeleton {
   name: string
@@ -238,6 +243,7 @@ async function aiOrganizeFromBlocks(
   const entries: BookEntryRow[] = []
   const batchTotal = Math.ceil(blocks.length / BLOCK_BATCH)
   for (let i = 0; i < blocks.length; i += BLOCK_BATCH) {
+    if (i > 0) await pause(BATCH_GAP_MS)
     const batch = blocks.slice(i, i + BLOCK_BATCH)
     try {
       entries.push(...(await aiPolishBlocks(batch, skeleton.name, fileName, Math.floor(i / BLOCK_BATCH) + 1, batchTotal)))
@@ -279,6 +285,7 @@ export async function aiOrganizeDocument(
   }
   const entries: BookEntryRow[] = []
   for (let i = 0; i < chunks.length; i += 1) {
+    if (i > 0) await pause(BATCH_GAP_MS)
     onProgress?.(`AI 整理第 ${i + 1}/${chunks.length} 段…`)
     try {
       entries.push(...(await aiChunkEntries(chunks[i], fileName, skeleton.name, i + 1, chunks.length)))

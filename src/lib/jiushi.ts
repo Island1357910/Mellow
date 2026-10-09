@@ -95,7 +95,7 @@ function tagJiushiDraft(draft: CardDraft): CardDraft {
 export async function importJiushiCardFile(file: File, identity: Identity): Promise<Character[]> {
   const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
   let avatar = ''
-  const raw = await resolveImportJson(file, 'character')
+  const { card: raw } = await resolveImportJson(file, 'character')
   const drafts = parseCharacterCards(raw).map(tagJiushiDraft)
   if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
   const characters: Character[] = []

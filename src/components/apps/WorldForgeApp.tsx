@@ -33,7 +33,7 @@ export function WorldForgeApp(props: {
     setNote('AI 正在阅读并整理大世界卡…')
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
-        const raw = await resolveImportJson(file, 'world', (msg) => setNote(msg))
+        const { card: raw } = await resolveImportJson(file, 'world', (msg) => setNote(msg))
         const forged = await forgeWorldFromCard(raw)
         setResult(forged)
         setNote(

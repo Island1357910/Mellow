@@ -4,7 +4,7 @@ import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, writeCharacter } from '../../domain/importing.ts'
 import { BUILD_ID } from '../../lib/buildInfo.ts'
 import { cardImportAccept } from '../../lib/cardTextImport.ts'
-import { ensureFreshClient } from '../../lib/upgrade.ts'
+import { deferTask, snapshotFile } from '../../lib/fileSnapshot.ts'
 import { createNearbyContact, findNearbyContact, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
@@ -197,23 +197,26 @@ export function MessagesApp(props: { onBack: () => void }) {
           accept={cardImportAccept()}
           className="hidden"
           onChange={(event) => {
-            const file = event.target.files?.[0]
+            const picked = event.target.files?.[0]
             event.target.value = ''
-            if (!file) return
-            void (async () => {
-              await ensureFreshClient()
-              setNotice(`准备导入（${BUILD_ID.slice(0, 7)}）…`)
-              try {
-                const rows = await importCardFile(file, identity, (msg) => setNotice(msg))
-                await load(identity)
-                await refreshInbox()
-                touchData()
-                setNotice(`已导入 ${rows.map((item) => item.name).join('、')}`)
-              } catch (error: unknown) {
+            if (!picked) return
+            setNotice('正在读取文件…')
+            void snapshotFile(picked)
+              .then((file) =>
+                deferTask(async () => {
+                  setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
+                  const { characters, via } = await importCardFile(file, identity, (msg) => setNotice(msg))
+                  await load(identity)
+                  await refreshInbox()
+                  touchData()
+                  const names = characters.map((item) => item.name).join('、')
+                  setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
+                }),
+              )
+              .catch((error: unknown) => {
                 const msg = error instanceof Error ? error.message : '没放进来'
-                setNotice(msg.includes('Failed to fetch') ? 'AI 请求失败，请刷新页面后重试或换更快的模型' : msg)
-              }
-            })()
+                setNotice(msg.includes('Failed to fetch') ? '读文件失败，请先把 docx 另存到手机本地再导入' : msg)
+              })
           }}
         />
         <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
