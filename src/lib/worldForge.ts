@@ -395,7 +395,7 @@ export async function applyForgeResult(identity: Identity, result: ForgeResult):
       tags: Array.from(new Set([...item.draft.tags, '世界搭建'])),
       scenario: item.draft.scenario || result.worldTitle,
     }
-    const character = await characterFromDraft(identity.namespace, draft)
+    const character = await characterFromDraft(identity.namespace, draft, '', { allowProactive: false })
     await importCharacterRegex(identity.namespace, character)
     characters.push(character)
   }

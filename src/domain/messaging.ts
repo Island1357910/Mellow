@@ -54,10 +54,21 @@ async function touchChat(namespace: string, stale: Chat, lastMessage: string, un
   return next
 }
 
-export async function ensureDirectChat(namespace: string, character: Character): Promise<Chat> {
+export async function ensureDirectChat(
+  namespace: string,
+  character: Character,
+  options?: { allowProactive?: boolean },
+): Promise<Chat> {
   const chats = await storage.listChats(namespace)
   const existing = chats.find((chat) => chat.kind === 'dm' && chat.memberIds.length === 1 && chat.memberIds[0] === character.id)
-  if (existing) return existing
+  if (existing) {
+    if (options?.allowProactive === false && existing.allowProactive !== false) {
+      const patched = { ...existing, allowProactive: false, updatedAt: Date.now() }
+      await storage.putChat(namespace, patched)
+      return patched
+    }
+    return existing
+  }
   const chat: Chat = {
     id: uid('chat'),
     kind: 'dm',
@@ -67,6 +78,7 @@ export async function ensureDirectChat(namespace: string, character: Character):
     lastMessageAt: Date.now(),
     unread: 0,
     presetId: null,
+    allowProactive: options?.allowProactive === false ? false : undefined,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
