@@ -110,10 +110,19 @@ function textFromWordXml(xml: string): string {
   return flat
 }
 
-/** 从二进制里兜底扫描 XML 片段（兼容部分非标准 docx） */
+/** 从二进制里兜底扫描 XML 片段（兼容部分非标准 docx / 解压失败） */
 function scanWtFromBinary(bytes: Uint8Array): string {
   const raw = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  return textFromWordXml(raw)
+  const fromXml = textFromWordXml(raw)
+  if (fromXml.trim().length > 10) return fromXml
+  const docStart = raw.indexOf('<w:document')
+  if (docStart >= 0) {
+    const docEnd = raw.indexOf('</w:document>', docStart)
+    const slice = docEnd > docStart ? raw.slice(docStart, docEnd + 13) : raw.slice(docStart, docStart + 500_000)
+    const fromDoc = textFromWordXml(slice)
+    if (fromDoc.trim().length > 10) return fromDoc
+  }
+  return fromXml
 }
 
 export async function readDocxBytes(bytes: Uint8Array): Promise<string> {

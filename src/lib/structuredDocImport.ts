@@ -30,7 +30,8 @@ function stripCodeFences(text: string): string {
 function collectBlocks(text: string): DocBlock[] {
   const cleaned = stripCodeFences(text)
   const blocks: DocBlock[] = []
-  const re = /<([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)\b([^>]*)>([\s\S]*?)<\/\1>/g
+  // 不用 \b：JS 的 \b 不认中文，`<标签 …>` 会匹配失败
+  const re = /<([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)(\s[^>]*)?>([\s\S]*?)<\/\1>/g
   for (const match of cleaned.matchAll(re)) {
     const tag = match[1].toLowerCase()
     const attrs = match[2]
@@ -67,6 +68,45 @@ function extractPersonality(persona: string, traits: string): string {
   const personaPart = persona.match(/性格底色[：:]\s*([\s\S]*?)(?:\n[^\n]+[：:]|$)/)?.[1]?.trim()
   if (personaPart) return personaPart
   return traits.slice(0, 1200).trim()
+}
+
+function nameFromFileName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '').replace(/\(\d+\)$/, '').trim() || '未命名'
+}
+
+/** 纯文本兜底：不调用 AI，整篇写入 character_book。 */
+export function plainTextCardJson(text: string, fileName: string): unknown {
+  const name = nameFromFileName(fileName)
+  const body = text.trim()
+  return {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: {
+      name,
+      description: body.slice(0, 4000),
+      personality: '',
+      scenario: '',
+      first_mes: '',
+      mes_example: '',
+      creator_notes: '',
+      tags: ['文档导入'],
+      character_book: {
+        name,
+        entries: [
+          {
+            id: 1,
+            keys: [name],
+            content: body,
+            comment: '原文',
+            constant: true,
+            enabled: true,
+            order: 100,
+          },
+        ],
+      },
+      extensions: { plainTextImport: true },
+    },
+  }
 }
 
 /** 识别 XML 标签式角色设定文档，本地转成 SillyTavern JSON，无需 AI。 */

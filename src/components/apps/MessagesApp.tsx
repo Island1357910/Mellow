@@ -206,7 +206,10 @@ export function MessagesApp(props: { onBack: () => void }) {
                 touchData()
                 setNotice(`已导入 ${rows.map((item) => item.name).join('、')}`)
               })
-              .catch((error: unknown) => setNotice(error instanceof Error ? error.message : '没放进来'))
+              .catch((error: unknown) => {
+                const msg = error instanceof Error ? error.message : '没放进来'
+                setNotice(msg.includes('Failed to fetch') ? '导入失败：请强制刷新页面后重试，或改导入同目录下的 .json 文件' : msg)
+              })
           }}
         />
         <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
