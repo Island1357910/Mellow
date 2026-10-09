@@ -1,3 +1,5 @@
+import { readFileBytes } from './fileSnapshot.ts'
+
 function readU32(data: Uint8Array, offset: number): number {
   return (
     (data[offset] ?? 0)
@@ -134,5 +136,5 @@ export async function readDocxBytes(bytes: Uint8Array): Promise<string> {
 }
 
 export async function readDocxFile(file: File): Promise<string> {
-  return readDocxBytes(new Uint8Array(await file.arrayBuffer()))
+  return readDocxBytes(await readFileBytes(file))
 }

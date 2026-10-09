@@ -200,23 +200,29 @@ export function MessagesApp(props: { onBack: () => void }) {
             const picked = event.target.files?.[0]
             event.target.value = ''
             if (!picked) return
-            setNotice('正在读取文件…')
-            void snapshotFile(picked)
-              .then((file) =>
-                deferTask(async () => {
-                  setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
-                  const { characters, via } = await importCardFile(file, identity, (msg) => setNotice(msg))
-                  await load(identity)
-                  await refreshInbox()
-                  touchData()
-                  const names = characters.map((item) => item.name).join('、')
-                  setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
-                }),
-              )
-              .catch((error: unknown) => {
-                const msg = error instanceof Error ? error.message : '没放进来'
-                setNotice(msg.includes('Failed to fetch') ? '读文件失败，请先把 docx 另存到手机本地再导入' : msg)
-              })
+            void deferTask(async () => {
+              setNotice('正在读取文件…')
+              let file = picked
+              try {
+                file = await snapshotFile(picked)
+              } catch {
+                // QQ/云端文件可能无法快照，仍用原 File 走 FileReader 兜底
+              }
+              setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
+              const { characters, via } = await importCardFile(file, identity, (msg) => setNotice(msg))
+              await load(identity)
+              await refreshInbox()
+              touchData()
+              const names = characters.map((item) => item.name).join('、')
+              setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
+            }).catch((error: unknown) => {
+              const msg = error instanceof Error ? error.message : '没放进来'
+              if (msg.includes('Failed to fetch') || msg.includes('读不出来') || msg.includes('文件')) {
+                setNotice('手机读不到该 docx。请：① 用文件管理器把 docx 存到「下载」再选；② 或导入 .json（同目录沈予安.json）')
+                return
+              }
+              setNotice(msg)
+            })
           }}
         />
         <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
