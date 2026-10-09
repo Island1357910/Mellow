@@ -24,6 +24,10 @@ export default defineConfig({
           source: JSON.stringify({ buildId, version: pkg.version }),
         })
       },
+      transformIndexHtml(html) {
+        const boot = `<meta name="mellow-build-id" content="${buildId}" /><script>(function(){var e=document.querySelector('meta[name="mellow-build-id"]')?.content;if(!e)return;var b=(document.querySelector("base")?.href||"/");fetch(b+"version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(v){if(v&&v.buildId&&v.buildId!==e&&!sessionStorage.getItem("mellow-boot-reload")){sessionStorage.setItem("mellow-boot-reload","1");location.reload()}}).catch(function(){})})();</script>`
+        return html.replace('</head>', `${boot}</head>`)
+      },
     },
   ],
   server: {

@@ -1,0 +1,110 @@
+{
+  "_id": "lanyuzhou",
+  "id": "lanyuzhou",
+  "name": "蓝与舟",
+  "summary": "核心身份： 名称：蓝与舟 性别：男 年龄：26 标签：都市青年，破镜重圆的前任，嘴硬心软的犬系恋人 背景： 出身：普通城市家庭，父母都是那种\"话",
+  "tags": [
+    "官方"
+  ],
+  "author": "半糖",
+  "version": "1.0.0",
+  "coverFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/lanyuzhou/character.png",
+  "jsonFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/lanyuzhou/card.json",
+  "pngFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/lanyuzhou/character.png",
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "蓝与舟左耳那枚「想耍帅又怕疼」的饰品是什么？（不要答耳洞）",
+      "answers": [
+        "金属夹式耳饰",
+        "夹式耳饰",
+        "耳夹",
+        "金属耳夹",
+        "夹式耳环"
+      ]
+    },
+    {
+      "id": "q2",
+      "prompt": "蓝与舟被派去出差、与 {{user}} 重逢的北方城市叫什么？",
+      "answers": [
+        "北岭"
+      ]
+    },
+    {
+      "id": "q3",
+      "prompt": "蓝与舟的故乡、有梧桐街和老城甜品店的南方城市叫什么？",
+      "answers": [
+        "南城"
+      ]
+    },
+    {
+      "id": "q4",
+      "prompt": "蓝与舟不敢打耳洞，官方理由是什么？（两个字）",
+      "answers": [
+        "怕疼",
+        "怕痛"
+      ]
+    },
+    {
+      "id": "q5",
+      "prompt": "蓝与舟在北岭旧书店与 {{user}} 意外重逢后，把「断情绝爱」封条维持了大约多少年？",
+      "answers": [
+        "6",
+        "6年",
+        "六",
+        "六年",
+        "7",
+        "7年",
+        "七年",
+        "六七",
+        "六七年"
+      ]
+    },
+    {
+      "id": "q6",
+      "prompt": "蓝与舟的发色是什么蓝？（如：浅冰蓝）",
+      "answers": [
+        "浅冰蓝",
+        "冰蓝",
+        "浅冰蓝色",
+        "冰蓝色",
+        "浅蓝"
+      ]
+    },
+    {
+      "id": "q7",
+      "prompt": "蓝与舟在北岭被静电反复「教做人」，他吐槽这是哪里的物理攻击？（答城市名）",
+      "answers": [
+        "北岭"
+      ]
+    },
+    {
+      "id": "q8",
+      "prompt": "父母二婚后，蓝与舟在阳台上说现在和 {{user}} 是什么关系？（三个字）",
+      "answers": [
+        "一家人",
+        "合法的一家人"
+      ]
+    },
+    {
+      "id": "q9",
+      "prompt": "蓝与舟在南城大学附近买下、提前打扫布置用来「金屋藏娇」的公寓在几楼？",
+      "answers": [
+        "12",
+        "12楼",
+        "十二",
+        "十二楼",
+        "12层",
+        "十二层"
+      ]
+    },
+    {
+      "id": "q10",
+      "prompt": "蓝与舟的 MBTI 类型是？（四个字母）",
+      "answers": [
+        "ISFP",
+        "isfp"
+      ]
+    }
+  ]
+}

@@ -41,9 +41,14 @@ function isPngLike(file: File): boolean {
   return lower.endsWith('.png') || file.type === 'image/png'
 }
 
-async function textToCardJson(text: string, mode: 'auto' | 'character' | 'world', fileName: string): Promise<unknown> {
+async function textToCardJson(
+  text: string,
+  mode: 'auto' | 'character' | 'world',
+  fileName: string,
+  onProgress?: (message: string) => void,
+): Promise<unknown> {
   try {
-    return await aiOrganizeDocument(text, mode, fileName)
+    return await aiOrganizeDocument(text, mode, fileName, onProgress)
   } catch (error) {
     const local = tryParseStructuredDoc(text) ?? plainTextCardJson(text, fileName)
     if (local) return local
@@ -70,6 +75,7 @@ function wrapImportError(error: unknown): Error {
 export async function resolveImportJson(
   file: File,
   mode: 'auto' | 'character' | 'world' = 'auto',
+  onProgress?: (message: string) => void,
 ): Promise<unknown> {
   if (isPngLike(file)) {
     const bytes = new Uint8Array(await file.arrayBuffer())
@@ -102,13 +108,13 @@ export async function resolveImportJson(
   if (isTextLike(file)) {
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('文件是空的')
-    return textToCardJson(text, mode, file.name)
+    return textToCardJson(text, mode, file.name, onProgress)
   }
   try {
     return JSON.parse(await file.text()) as unknown
   } catch {
     const text = await readDocumentText(file)
     if (!text.trim()) throw new Error('认不出文件格式')
-    return textToCardJson(text, mode, file.name)
+    return textToCardJson(text, mode, file.name, onProgress)
   }
 }

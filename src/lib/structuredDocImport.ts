@@ -10,7 +10,7 @@ const STRUCTURED_TAGS = new Set([
   'interaction_and_relationships',
 ])
 
-interface DocBlock {
+export interface DocBlock {
   tag: string
   attrs: string
   content: string
@@ -27,7 +27,7 @@ function stripCodeFences(text: string): string {
   return text.replace(/```(?:xml)?/gi, '').replace(/```/g, '')
 }
 
-function collectBlocks(text: string): DocBlock[] {
+export function collectDocBlocks(text: string): DocBlock[] {
   const cleaned = stripCodeFences(text)
   const blocks: DocBlock[] = []
   // 不用 \b：JS 的 \b 不认中文，`<标签 …>` 会匹配失败
@@ -111,7 +111,7 @@ export function plainTextCardJson(text: string, fileName: string): unknown {
 
 /** 识别 XML 标签式角色设定文档，本地转成 SillyTavern JSON，无需 AI。 */
 export function tryParseStructuredDoc(text: string): unknown | null {
-  const blocks = collectBlocks(text)
+  const blocks = collectDocBlocks(text)
   if (blocks.length < 2) return null
 
   const named = blocks.filter((item) => item.subject)

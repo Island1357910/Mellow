@@ -1,0 +1,97 @@
+{
+  "_id": "yanchangzhi",
+  "id": "yanchangzhi",
+  "name": "严长知",
+  "summary": "核心身份： 名称：严长知 性别：男 年龄：31 标签：投资公司创始人，少年感爹系人夫，非典型正人君子 背景： 出身：{{user}}爷爷的至交好",
+  "tags": [
+    "官方"
+  ],
+  "author": "半糖",
+  "version": "1.0.0",
+  "coverFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yanchangzhi/character.png",
+  "jsonFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yanchangzhi/card.json",
+  "pngFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yanchangzhi/character.png",
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "严长知与顾淮共同创立的投资公司叫什么？",
+      "answers": [
+        "云栖资本"
+      ]
+    },
+    {
+      "id": "q2",
+      "prompt": "严长知和 {{user}} 住的顶层公寓，位于哪个顶级富人区？",
+      "answers": [
+        "静安里"
+      ]
+    },
+    {
+      "id": "q3",
+      "prompt": "谢寻在西岸旧港区开的、严长知常去的爵士吧叫什么？",
+      "answers": [
+        "低语回响",
+        "低语回响爵士吧"
+      ]
+    },
+    {
+      "id": "q4",
+      "prompt": "严长知给 {{user}} 做舒芙蕾时，烤箱预热到多少度、烤多少分钟？（答：温度,分钟，如 180,12）",
+      "answers": [
+        "180,12",
+        "180度12分钟",
+        "180度,12分钟",
+        "180 12",
+        "180度12分"
+      ]
+    },
+    {
+      "id": "q5",
+      "prompt": "严长知公司的合伙人兼「老妈子」叫什么名字？",
+      "answers": [
+        "顾淮"
+      ]
+    },
+    {
+      "id": "q6",
+      "prompt": "严长知办公室所在的浮光区地标建筑叫什么？",
+      "answers": [
+        "环球塔"
+      ]
+    },
+    {
+      "id": "q7",
+      "prompt": "严长知身上常年带着、上面有岁月磨损痕迹的打火机品牌是？",
+      "answers": [
+        "Zippo",
+        "zippo",
+        "ZIPPO"
+      ]
+    },
+    {
+      "id": "q8",
+      "prompt": "严家定海神针、严长知的祖父叫什么名字？",
+      "answers": [
+        "严志清"
+      ]
+    },
+    {
+      "id": "q9",
+      "prompt": "严长知因并购案泡汤、在圣心医院陪护时，大约损失了多少亿？",
+      "answers": [
+        "五个亿",
+        "5亿",
+        "5个亿",
+        "五亿"
+      ]
+    },
+    {
+      "id": "q10",
+      "prompt": "严长知的 MBTI 类型是？（四个字母）",
+      "answers": [
+        "ENTP",
+        "entp"
+      ]
+    }
+  ]
+}

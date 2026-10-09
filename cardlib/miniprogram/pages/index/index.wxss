@@ -1,0 +1,50 @@
+.page {
+  padding: 24rpx;
+}
+
+.row {
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.cover {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffe3ee;
+  font-size: 40rpx;
+}
+
+.info {
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.summary {
+  margin-top: 8rpx;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.error-box {
+  color: #8a4a52;
+  font-size: 24rpx;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}

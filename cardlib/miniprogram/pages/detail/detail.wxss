@@ -1,0 +1,70 @@
+.page {
+  padding: 24rpx;
+}
+
+.hero {
+  width: 100%;
+  height: 280rpx;
+  border-radius: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.body {
+  margin-top: 16rpx;
+  line-height: 1.6;
+}
+
+.section-title {
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.prompt {
+  background: #fff7fa;
+  border-radius: 20rpx;
+  padding: 20rpx;
+  line-height: 1.6;
+  margin-bottom: 16rpx;
+}
+
+input {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+}
+
+.error {
+  color: #c45;
+  font-size: 24rpx;
+  margin-bottom: 12rpx;
+}
+
+.actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.success {
+  color: #2a7;
+  margin-bottom: 20rpx;
+}
+
+.mt {
+  margin-top: 16rpx;
+}
+
+.tip {
+  margin-top: 20rpx;
+  line-height: 1.5;
+}

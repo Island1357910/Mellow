@@ -1,0 +1,45 @@
+page {
+  background: #fdfbf7;
+  color: #3a3a3a;
+  font-size: 28rpx;
+}
+
+.card {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 100, 0.08);
+}
+
+.btn-primary {
+  background: #ffb5c5;
+  color: #3a3a3a;
+  border-radius: 999rpx;
+  padding: 20rpx 32rpx;
+  text-align: center;
+  font-weight: 500;
+}
+
+.btn-secondary {
+  background: #fff;
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 999rpx;
+  padding: 20rpx 32rpx;
+  text-align: center;
+}
+
+.muted {
+  color: #8a7a82;
+  font-size: 24rpx;
+}
+
+.tag {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999rpx;
+  padding: 4rpx 16rpx;
+  font-size: 22rpx;
+  margin-right: 8rpx;
+  margin-top: 8rpx;
+}

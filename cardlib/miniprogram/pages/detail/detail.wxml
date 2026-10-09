@@ -1,0 +1,31 @@
+<view class="page" wx:if="{{card}}">
+  <image wx:if="{{card.coverUrl}}" class="hero" src="{{card.coverUrl}}" mode="aspectFill" />
+  <view class="card">
+    <view class="title">{{card.name}}</view>
+    <view class="muted">{{card.author}}</view>
+    <view class="body">{{card.summary}}</view>
+    <view>
+      <text wx:for="{{card.tags}}" wx:key="*this" class="tag">{{item}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{!unlocked}}" class="card">
+    <view class="section-title">答对一题才能下载</view>
+    <view wx:if="{{question}}" class="prompt">{{question.prompt}}</view>
+    <input placeholder="输入答案" value="{{answer}}" bindinput="onAnswerInput" />
+    <view wx:if="{{error}}" class="error">{{error}}</view>
+    <view class="actions">
+      <button class="btn-secondary" bindtap="rerollQuestion" disabled="{{busy}}">换一题</button>
+      <button class="btn-primary" bindtap="submitAnswer" disabled="{{busy}}">提交</button>
+    </view>
+  </view>
+
+  <view wx:else class="card">
+    <view class="success">答对了，可以下载。</view>
+    <button class="btn-primary" bindtap="downloadJson">下载 JSON（酒馆格式）</button>
+    <button class="btn-primary mt" bindtap="downloadPng">下载 PNG 卡面</button>
+    <view class="muted tip">下载后可在 SillyTavern 或 mymellow.top 导入使用。</view>
+  </view>
+</view>
+
+<view wx:elif="{{error}}" class="page card muted">{{error}}</view>

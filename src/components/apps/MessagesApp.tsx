@@ -2,7 +2,9 @@ import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, writeCharacter } from '../../domain/importing.ts'
+import { BUILD_ID } from '../../lib/buildInfo.ts'
 import { cardImportAccept } from '../../lib/cardTextImport.ts'
+import { ensureFreshClient } from '../../lib/upgrade.ts'
 import { createNearbyContact, findNearbyContact, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
@@ -198,15 +200,20 @@ export function MessagesApp(props: { onBack: () => void }) {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (!file) return
-            setNotice('AI 正在阅读并整理文档…')
-            void importCardFile(file, identity)
-              .then(async (rows) => {
+            void (async () => {
+              await ensureFreshClient()
+              setNotice(`准备导入（${BUILD_ID.slice(0, 7)}）…`)
+              try {
+                const rows = await importCardFile(file, identity, (msg) => setNotice(msg))
                 await load(identity)
                 await refreshInbox()
                 touchData()
                 setNotice(`已导入 ${rows.map((item) => item.name).join('、')}`)
-              })
-              .catch((error: unknown) => setNotice(error instanceof Error ? error.message : '没放进来'))
+              } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : '没放进来'
+                setNotice(msg.includes('Failed to fetch') ? 'AI 请求失败，请刷新页面后重试或换更快的模型' : msg)
+              }
+            })()
           }}
         />
         <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">

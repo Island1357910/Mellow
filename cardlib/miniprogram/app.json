@@ -1,0 +1,11 @@
+{
+  "pages": ["pages/index/index", "pages/detail/detail"],
+  "window": {
+    "navigationBarTitleText": "半糖 · 卡库",
+    "navigationBarBackgroundColor": "#FDFBF7",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#FDFBF7"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

@@ -1,0 +1,34 @@
+半糖卡库 · 把 7 张卡放进小程序（云开发）
+
+一、打开云开发 → 存储
+  为每个角色建文件夹并上传 2 个文件：
+
+  cards/fangtang/card.json      ← upload-out/fangtang/card.json
+  cards/fangtang/character.png  ← upload-out/fangtang/character.png
+
+  cards/yinzhean/...
+  cards/yanchangzhi/...
+  cards/xulanqing/...
+  cards/luhuaiyuan/...
+  cards/lanyuzhou/...
+  cards/xiaoman/...
+
+  每个角色文件夹里只有 card.json 和 character.png 两个文件。
+
+二、复制 File ID
+  存储里点开 card.json → 复制 File ID → 填到 db-record.json 的 jsonFileId
+  点开 character.png → 复制 File ID → 填到 pngFileId
+  （cover 可选，列表用 PNG 当封面可不填 coverFileId）
+
+三、云开发 → 数据库 → cards 集合
+  每个角色：点「添加记录」→ 粘贴 upload-out/角色id/db-record.json 的内容
+  （记得把 jsonFileId、pngFileId 改成上一步复制的 cloud://...）
+
+  7 条记录的 _id 分别是：
+  fangtang  yinzhean  yanchangzhi  xulanqing  luhuaiyuan  lanyuzhou  xiaoman
+
+四、微信开发者工具 → 编译
+  列表应出现 7 个角色。
+
+角色中文名：
+  方唐 殷折安 严长知 徐兰青 路怀远 蓝与舟 小满

@@ -61,10 +61,14 @@ export async function characterFromDraft(
   return character
 }
 
-export async function importCardFile(file: File, identity: Identity): Promise<Character[]> {
+export async function importCardFile(
+  file: File,
+  identity: Identity,
+  onProgress?: (message: string) => void,
+): Promise<Character[]> {
   const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
   let avatar = ''
-  const raw = await resolveImportJson(file, 'character')
+  const raw = await resolveImportJson(file, 'character', onProgress)
   const drafts = parseCharacterCards(raw)
   if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
