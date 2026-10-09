@@ -53,8 +53,12 @@ function blockByTag(blocks: DocBlock[], tag: string): DocBlock | undefined {
 
 function extractFirstMes(traits: string, interaction: string): string {
   for (const source of [traits, interaction]) {
-    const hot = source.match(/热恋期[^"\n]*[""「『'"]([^""」』'"]+)[""」』'"]/)
-    if (hot?.[1]) return hot[1].trim()
+    const line = source.split('\n').find((row) => /热恋期/.test(row))
+    if (!line) continue
+    const hot = line.match(/热恋期[：:]\s*(.+)/)
+    if (!hot?.[1]) continue
+    const quote = hot[1].replace(/^[\s"'「『]+|[\s"'」』。]+$/g, '').trim()
+    if (quote) return quote
   }
   return ''
 }
