@@ -74,7 +74,7 @@ function entryEnabled(entry: { enabled?: boolean; disable?: boolean }): boolean 
   return entry.enabled !== false
 }
 
-/** 把角色卡里的 character_book 与设定提示词，转成世界书条目。 */
+/** 把角色卡全文（人设、开场、世界书、提示词）转成世界书条目，不截断。 */
 export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
   const now = Date.now()
   const charId = character.id
@@ -95,6 +95,13 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
     const title = entryTitle(entry)
     rows.push(stamp(title, entry.content, keysToString(entry.keys), entryEnabled(entry)))
   }
+  if (character.description.trim()) rows.push(stamp('简介', character.description, character.name))
+  if (character.personality.trim()) rows.push(stamp('性格', character.personality, character.name))
+  if (character.scenario.trim()) rows.push(stamp('情境', character.scenario, character.name))
+  if (character.firstMes.trim()) rows.push(stamp('开场白', character.firstMes, character.name))
+  if (character.mesExample.trim()) rows.push(stamp('对话样例', character.mesExample, character.name))
+  const greetings = character.alternateGreetings.map((item) => item.trim()).filter(Boolean)
+  if (greetings.length) rows.push(stamp('其他开场', greetings.join('\n\n'), character.name))
   if (character.systemPrompt.trim()) {
     rows.push(stamp('系统提示', character.systemPrompt))
   }

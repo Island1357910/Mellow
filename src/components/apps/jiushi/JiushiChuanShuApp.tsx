@@ -1,4 +1,3 @@
-import { ChevronLeft } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../../engine/aiJobs.ts'
 import {
@@ -13,7 +12,7 @@ import { touchImmersive } from '../../../lib/smsGuard.ts'
 import { storage } from '../../../storage/StorageService.ts'
 import { useMellow } from '../../../store/useMellow.ts'
 import type { Character, Identity } from '../../../types/index.ts'
-import { PillNote } from '../../ui/primitives.tsx'
+import { JiushiNote, JiushiScreen } from './JiushiShell.tsx'
 
 export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }) {
   const dataRevision = useMellow((state) => state.dataRevision)
@@ -71,24 +70,26 @@ export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }
 
   if (!chars.length) {
     return (
-      <div className="flex h-full flex-col bg-[#F5F0E6] px-4 pt-14">
-        <button type="button" className="mb-4 self-start rounded-full bg-white/85 px-3 py-1.5 text-xs" onClick={props.onBack}>← 返回</button>
-        <PillNote tone="lilac">尚无旧世人物，请先到「人物」纳入。</PillNote>
-      </div>
+      <JiushiScreen title="传书" subtitle="短笺往来" onBack={props.onBack}>
+        <JiushiNote>尚无旧世人物，请先到「人物」纳入。</JiushiNote>
+      </JiushiScreen>
     )
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-[#F5F0E6]">
-      <header className="flex items-center gap-2 px-3 pb-2 pt-10">
-        <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85" onClick={props.onBack}>
-          <ChevronLeft size={18} />
-        </button>
+    <div className="relative flex h-full min-h-0 flex-col">
+      <header className="jiushi-screen-head">
+        <button type="button" aria-label="返回" className="jiushi-back" onClick={props.onBack}>←</button>
+        <div className="jiushi-screen-title">
+          <h1>传书</h1>
+          <p>与 {person?.name ?? '…'} 短笺往来</p>
+        </div>
         <select
           value={charId}
           onChange={(event) => setCharId(event.target.value)}
-          className="soft-select min-w-0 flex-1 text-sm"
-          style={{ fontFamily: '"Songti SC", "Noto Serif SC", serif' }}
+          className="soft-select max-w-[5.5rem] shrink-0 text-xs"
+          style={{ fontFamily: 'var(--js-serif)' }}
+          aria-label="选择收信人"
         >
           {chars.map((item) => (
             <option key={item.id} value={item.id}>{item.name}</option>
@@ -98,31 +99,27 @@ export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }
 
       <div className="scroll min-h-0 flex-1 space-y-3 px-4 pb-4">
         {(thread?.lines ?? []).map((row) => (
-          <div
-            key={row.at}
-            className={`max-w-[90%] rounded-[20px] px-3 py-2 text-sm leading-6 ${row.role === 'user' ? 'ml-auto bg-[#E8DCC8]' : 'bg-white/92'}`}
-            style={{ fontFamily: '"Songti SC", "Noto Serif SC", serif' }}
-          >
+          <div key={row.at} className={row.role === 'user' ? 'jiushi-msg-user' : 'jiushi-msg-theirs'}>
             {row.content}
           </div>
         ))}
-        {!thread?.lines.length ? <PillNote tone="lilac">尚无传书，写第一笺吧</PillNote> : null}
+        {!thread?.lines.length ? <JiushiNote compact>尚无传书，写第一笺吧</JiushiNote> : null}
       </div>
 
-      <div className="flex items-end gap-2 px-4 pb-4 pt-2">
+      <div className="flex items-end gap-2 border-t px-4 pb-4 pt-3" style={{ borderColor: 'var(--js-border-light)' }}>
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           rows={2}
           placeholder="落笔…"
           className="soft-input min-h-11 flex-1 resize-none leading-6"
-          style={{ fontFamily: '"Songti SC", "Noto Serif SC", serif' }}
+          style={{ fontFamily: 'var(--js-serif)' }}
         />
-        <button type="button" className="chip chip-mint shrink-0 py-2.5" onClick={() => void send()} disabled={!draft.trim() || busy}>
+        <button type="button" className="jiushi-btn jiushi-btn-primary shrink-0 px-4 py-2.5" onClick={() => void send()} disabled={!draft.trim() || busy}>
           {busy ? '候笺…' : '寄出'}
         </button>
       </div>
-      {note ? <p className="pointer-events-none absolute bottom-16 left-0 right-0 text-center text-xs">{note}</p> : null}
+      {note ? <p className="pointer-events-none absolute bottom-16 left-0 right-0 text-center text-xs" style={{ color: 'var(--js-ink-muted)' }}>{note}</p> : null}
     </div>
   )
 }

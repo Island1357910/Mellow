@@ -45,7 +45,6 @@ Page({
     if (!q) return this.data.cards
     return this.data.cards.filter((item) => (
       item.name.toLowerCase().includes(q)
-      || item.summary.toLowerCase().includes(q)
       || (item.tags || []).some((tag) => tag.toLowerCase().includes(q))
     ))
   },

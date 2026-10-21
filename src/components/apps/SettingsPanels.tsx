@@ -516,7 +516,7 @@ export function IconPanel() {
               <input type="file" accept="image/*" className="hidden" onChange={(event) => {
                 const file = event.target.files?.[0]
                 event.target.value = ''
-                if (!file || file.size > 400_000) return
+                if (!file) return
                 const reader = new FileReader()
                 reader.onload = () => setIcon(app.id, String(reader.result ?? ''))
                 reader.readAsDataURL(file)

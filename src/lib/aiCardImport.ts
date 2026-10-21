@@ -263,7 +263,12 @@ export async function aiOrganizeDocument(
 ): Promise<unknown> {
   await ensureAiReady()
   const clip = text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT)}\n…（后文已截）` : text
-  const blocks = collectDocBlocks(clip)
+  let blocks: DocBlock[] = []
+  try {
+    blocks = collectDocBlocks(clip)
+  } catch {
+    blocks = []
+  }
 
   if (blocks.length >= 2) {
     onProgress?.(`AI 整理中（${blocks.length} 段）…`)

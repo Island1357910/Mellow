@@ -19,7 +19,7 @@ exports.main = async (event, context) => {
     const card = doc.data
     if (!card) return { ok: false, message: '卡片不存在' }
 
-    const fileIds = [card.jsonFileId, card.pngFileId].filter(Boolean)
+    const fileIds = [card.jsonFileId, card.pngFileId, card.txtFileId].filter(Boolean)
     if (!fileIds.length) return { ok: false, message: '还没有上传文件' }
 
     const { fileList } = await cloud.getTempFileURL({ fileList: fileIds })
@@ -32,6 +32,7 @@ exports.main = async (event, context) => {
       files: {
         jsonUrl: card.jsonFileId ? byId[card.jsonFileId] : '',
         pngUrl: card.pngFileId ? byId[card.pngFileId] : '',
+        txtUrl: card.txtFileId ? byId[card.txtFileId] : '',
       },
     }
   } catch (error) {

@@ -57,13 +57,13 @@ function formatOnline(ms: number): string {
   return `${hours} 小时 ${minutes % 60} 分`
 }
 
-function pickImage(limit: number, onData: (value: string) => void) {
+function pickImage(onData: (value: string) => void) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*'
   input.onchange = () => {
     const file = input.files?.[0]
-    if (!file || file.size > limit) return
+    if (!file) return
     const reader = new FileReader()
     reader.onload = () => onData(String(reader.result ?? ''))
     reader.readAsDataURL(file)
@@ -195,7 +195,7 @@ export function MomentsPage(props: {
           </header>
           <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="这一刻的想法" className="min-h-32 w-full flex-1 resize-none bg-transparent px-4 text-sm leading-6 outline-none" />
           <div className="px-4 pb-16">
-            <button type="button" className="rounded-2xl bg-white px-3 py-2 text-xs" onClick={() => pickImage(800_000, setImage)}>{image ? '换一张图' : '加一张图'}</button>
+            <button type="button" className="rounded-2xl bg-white px-3 py-2 text-xs" onClick={() => pickImage(setImage)}>{image ? '换一张图' : '加一张图'}</button>
             {image ? <img src={image} alt="" className="mt-2 h-24 rounded-xl object-cover" /> : null}
           </div>
         </div>
@@ -562,8 +562,8 @@ export function MeTab(props: {
           <button type="button" className="chip chip-solid" onClick={() => void props.onSave(profile).then(() => setEditing(false))}>保存</button>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" className="chip chip-lilac" onClick={() => pickImage(1_200_000, (avatar) => setProfile({ ...profile, avatar }))}>更换头像</button>
-          <button type="button" className="chip chip-sky" onClick={() => pickImage(1_200_000, (cover) => setProfile({ ...profile, cover }))}>更换主页背景</button>
+          <button type="button" className="chip chip-lilac" onClick={() => pickImage((avatar) => setProfile({ ...profile, avatar }))}>更换头像</button>
+          <button type="button" className="chip chip-sky" onClick={() => pickImage((cover) => setProfile({ ...profile, cover }))}>更换主页背景</button>
         </div>
         <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>昵称<input value={profile.nickname} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-sm" /></label>
         <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>签名<input value={profile.signature} onChange={(event) => setProfile({ ...profile, signature: event.target.value })} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-sm" /></label>

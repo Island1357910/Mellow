@@ -18,7 +18,7 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'market', name: '市场', blurb: '装应用', tint: '#F0D48A', dock: false, fixed: true, home: true },
   { id: 'chengfeng', name: '乘风', blurb: '小游戏', tint: '#F2B48A', dock: false, fixed: true, home: true },
   { id: 'worldbook', name: '世界书', blurb: '这个身份的设定', tint: '#E7B7C9', dock: false, fixed: true, home: true },
-  { id: 'map', name: '地图', blurb: '走走看看', tint: '#9ED9C4', dock: false, fixed: true, home: true },
+  { id: 'map', name: '地图', blurb: '地点和人', tint: '#9ED9C4', dock: false, fixed: true, home: true },
   { id: 'settings', name: '设置', blurb: '接口与外观', tint: '#A9CDE8', dock: true, fixed: true, home: true },
   { id: 'search', name: '搜索', blurb: '地址栏', tint: '#E7E0D8', dock: false, fixed: true, home: false },
   { id: 'diary', name: '日记', blurb: '自己的一页', tint: '#E8D4B0', dock: false, fixed: false, home: true },

@@ -4,14 +4,14 @@ import App from './App.tsx'
 import { ensureFreshClient, watchForRemoteUpgrade } from './lib/upgrade.ts'
 import './index.css'
 
-async function start() {
-  await ensureFreshClient()
-  watchForRemoteUpgrade()
+function start() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
     </StrictMode>,
   )
+  void ensureFreshClient()
+  watchForRemoteUpgrade()
 }
 
-void start()
+start()

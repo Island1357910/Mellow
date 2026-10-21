@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion'
-import { Gift, Mic, MicOff, PhoneOff, Truck, Volume2, Wallet, X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Gift, Mic, MicOff, PhoneOff, SendHorizontal, Truck, Volume2, Wallet, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { GIFT_COUNTS, REAL_GIFTS, VIRTUAL_GIFTS, type GiftItem } from '../../data/gifts.ts'
+import { createCallSession, finishCallSession, playCallVoice, runCallTurn, type CallSession, type CallTurn } from '../../domain/callSession.ts'
 import { parseCard } from '../../engine/prompt.ts'
 import { initialOf } from '../../lib/format.ts'
 import { addCoins, readCoins } from '../../lib/wallet.ts'
-import type { Character, ChatMessage } from '../../types/index.ts'
+import { useMellow } from '../../store/useMellow.ts'
+import type { AppSettings, Character, Chat, ChatMessage, Identity, Preset } from '../../types/index.ts'
 
 const dim = { color: 'var(--m-text-secondary)' }
 
@@ -236,11 +238,49 @@ function clock(seconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-export function CallScreen(props: { title: string; person: Character | undefined; group: boolean; onEnd: (content: string) => void }) {
+function callSpeaker(chat: Chat, people: Character[], messages: ChatMessage[], turns: CallTurn[]): Character | undefined {
+  if (chat.kind === 'dm') return people[0]
+  const lastAssistant = [...turns].reverse().find((item) => item.role === 'assistant' && item.charId)
+  if (lastAssistant?.charId) {
+    const index = people.findIndex((item) => item.id === lastAssistant.charId)
+    return people[(index + 1) % people.length] ?? people[0]
+  }
+  const last = [...messages].reverse().find((item) => item.role === 'assistant' && item.charId)
+  const index = people.findIndex((item) => item.id === last?.charId)
+  return people[(index + 1) % people.length] ?? people[0]
+}
+
+export function CallScreen(props: {
+  title: string
+  person: Character | undefined
+  group: boolean
+  identity: Identity
+  chat: Chat
+  people: Character[]
+  messages: ChatMessage[]
+  presets: Preset[]
+  settings: AppSettings
+  activePresetId: string
+  fourthWall: boolean
+  voiceEnabled: boolean
+  onEnd: (content: string) => void
+}) {
+  const beginReply = useMellow((state) => state.beginReply)
+  const endReply = useMellow((state) => state.endReply)
+  const sessionRef = useRef<CallSession>(createCallSession())
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [connected, setConnected] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [muted, setMuted] = useState(false)
-  const [speaker, setSpeaker] = useState(false)
+  const [speaker, setSpeaker] = useState(true)
+  const [turns, setTurns] = useState<CallTurn[]>([])
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const [error, setError] = useState('')
+  const [ending, setEnding] = useState(false)
+
   useEffect(() => {
     const timer = window.setTimeout(() => setConnected(true), 2200)
     return () => window.clearTimeout(timer)
@@ -250,23 +290,167 @@ export function CallScreen(props: { title: string; person: Character | undefined
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000)
     return () => window.clearInterval(timer)
   }, [connected])
-  const hangUp = () => props.onEnd(connected ? `${props.group ? '群语音通话' : '语音通话'} · 通话时长 ${clock(seconds)}` : `${props.group ? '群语音通话' : '语音通话'} · 已取消`)
+  useEffect(() => {
+    const node = scrollRef.current
+    if (node) node.scrollTop = node.scrollHeight
+  }, [turns, busy, connected])
+
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setSpeaking(false)
+  }
+
+  useEffect(() => () => stopAudio(), [])
+
+  const sendLine = async () => {
+    const text = draft.trim()
+    if (!text || busy || !connected || ending) return
+    setDraft('')
+    setError('')
+    setBusy(true)
+    beginReply(props.chat.id)
+    const speakerChar = callSpeaker(props.chat, props.people, props.messages, sessionRef.current.turns)
+    if (!speakerChar) {
+      setError('找不到通话对象')
+      setBusy(false)
+      endReply()
+      return
+    }
+    setTurns([...sessionRef.current.turns, { role: 'user', text }])
+    const result = await runCallTurn({
+      namespace: props.identity.namespace,
+      identity: props.identity,
+      character: speakerChar,
+      chat: props.chat,
+      presets: props.presets,
+      activePresetId: props.activePresetId,
+      fourthWall: props.fourthWall,
+      session: sessionRef.current,
+      userText: text,
+      smsHistory: props.messages,
+    })
+    if (result.error) {
+      setTurns([...sessionRef.current.turns])
+      if (result.error !== 'BUSY') setError(result.error)
+      setBusy(false)
+      endReply()
+      return
+    }
+    setTurns([...sessionRef.current.turns])
+    setBusy(false)
+    endReply()
+    if (result.assistant && props.voiceEnabled && speaker && !muted) {
+      setSpeaking(true)
+      try {
+        const url = await playCallVoice({ settings: props.settings.minimax, character: speakerChar, text: result.assistant.text })
+        if (url) {
+          stopAudio()
+          const audio = new Audio(url)
+          audioRef.current = audio
+          audio.onended = () => setSpeaking(false)
+          await audio.play()
+        } else {
+          setSpeaking(false)
+        }
+      } catch {
+        setSpeaking(false)
+      }
+    }
+  }
+
+  const hangUp = () => {
+    if (ending) return
+    setEnding(true)
+    stopAudio()
+    void (async () => {
+      const content = await finishCallSession({
+        namespace: props.identity.namespace,
+        chatId: props.chat.id,
+        session: sessionRef.current,
+        seconds,
+        group: props.group,
+        identity: props.identity,
+        character: props.person ?? props.people[0]!,
+        cancelled: !connected,
+      })
+      props.onEnd(content)
+    })()
+  }
+
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col items-center justify-between bg-[linear-gradient(170deg,#3a3242,#5b4a63_55%,#c98ea2)] px-6 pb-16 pt-24 text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex flex-col items-center">
+    <motion.div className="absolute inset-0 z-50 flex min-h-0 flex-col bg-[linear-gradient(170deg,#3a3242,#5b4a63_55%,#c98ea2)] text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className={`flex shrink-0 flex-col items-center px-6 ${connected ? 'pb-3 pt-16' : 'pb-6 pt-24'}`}>
         <div className="relative">
           {!connected ? <motion.span className="absolute inset-0 rounded-full bg-white/25" animate={{ scale: [1, 1.5], opacity: [0.6, 0] }} transition={{ repeat: Infinity, duration: 1.4 }} /> : null}
-          <div className="relative overflow-hidden rounded-full ring-4 ring-white/20"><Face person={props.person} size={96} /></div>
+          <div className="relative overflow-hidden rounded-full ring-4 ring-white/20"><Face person={props.person} size={connected ? 72 : 96} /></div>
         </div>
-        <p className="mt-5 text-xl font-semibold">{props.title}</p>
-        <p className="mt-1 text-sm opacity-75">{connected ? clock(seconds) : '正在等待对方接听…'}</p>
+        <p className={`font-semibold ${connected ? 'mt-3 text-lg' : 'mt-5 text-xl'}`}>{props.title}</p>
+        <p className="mt-1 text-sm opacity-75">
+          {connected ? `${clock(seconds)}${props.voiceEnabled ? ' · 对方语音已开' : ' · 仅文字通话'}` : '正在等待对方接听…'}
+        </p>
       </div>
-      <div className="grid w-full max-w-xs grid-cols-3 items-end gap-4 text-center text-[11px]">
+
+      {connected ? (
+        <div ref={scrollRef} className="min-h-0 flex-1 scroll px-4 pb-3">
+          {turns.length === 0 ? (
+            <p className="py-8 text-center text-sm opacity-60">通话已接通，打字开始聊吧</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {turns.map((turn, index) => (
+                <div key={`${index}-${turn.role}`} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${turn.role === 'user' ? 'ml-auto bg-white/18' : 'mr-auto bg-black/20'}`}>
+                  {turn.role === 'assistant' && props.group && turn.charName ? <p className="mb-0.5 text-[10px] opacity-70">{turn.charName}</p> : null}
+                  {turn.text}
+                </div>
+              ))}
+              {busy ? <p className="mr-auto rounded-2xl bg-black/15 px-3 py-2 text-sm opacity-75">对方正在说话…</p> : null}
+              {speaking ? <p className="mr-auto text-xs opacity-70">🔊 播放中</p> : null}
+            </div>
+          )}
+          {error ? <p className="mt-2 text-center text-xs text-[#ffd4dc]">{error}</p> : null}
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1" />
+      )}
+
+      {connected ? (
+        <div className="shrink-0 px-4 pb-2 pt-1">
+          <div className="flex items-center gap-2 rounded-full bg-white/12 pl-3 pr-1 ring-1 ring-white/10">
+            <input
+              value={draft}
+              maxLength={500}
+              placeholder="输入要说的话…"
+              disabled={busy || ending}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  event.preventDefault()
+                  void sendLine()
+                }
+              }}
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-white/45"
+            />
+            <button
+              type="button"
+              aria-label="发送"
+              disabled={busy || ending || !draft.trim()}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20 disabled:opacity-40"
+              onClick={() => void sendLine()}
+            >
+              <SendHorizontal size={16} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid shrink-0 w-full max-w-xs grid-cols-3 items-end gap-4 self-center px-6 pb-16 pt-3 text-center text-[11px]">
         <button type="button" aria-pressed={muted} className="flex flex-col items-center gap-2" onClick={() => setMuted((value) => !value)}>
           <span className="grid h-14 w-14 place-items-center rounded-full" style={{ background: muted ? '#fff' : 'rgba(255,255,255,0.18)', color: muted ? '#3a3242' : '#fff' }}>{muted ? <MicOff size={22} /> : <Mic size={22} />}</span>
           {muted ? '已静音' : '麦克风'}
         </button>
-        <button type="button" aria-label="挂断" className="flex flex-col items-center gap-2" onClick={hangUp}>
+        <button type="button" aria-label="挂断" className="flex flex-col items-center gap-2" disabled={ending} onClick={hangUp}>
           <span className="grid h-16 w-16 place-items-center rounded-full bg-[#F2556B] shadow-[0_10px_24px_rgba(242,85,107,0.45)]"><PhoneOff size={26} /></span>
           挂断
         </button>

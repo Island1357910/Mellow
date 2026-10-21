@@ -240,7 +240,7 @@ export function PhotoFrame(props: { image: string; wash: string; tilt?: number; 
         onChange={(event) => {
           const file = event.target.files?.[0]
           event.target.value = ''
-          if (!file || file.size > 1_200_000) return
+          if (!file) return
           const reader = new FileReader()
           reader.onload = () => props.onPick(String(reader.result ?? ''))
           reader.readAsDataURL(file)

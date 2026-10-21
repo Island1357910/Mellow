@@ -19,6 +19,11 @@
   line-height: 1.6;
 }
 
+.formats {
+  margin-top: 16rpx;
+  line-height: 1.5;
+}
+
 .section-title {
   font-weight: 600;
   margin-bottom: 16rpx;

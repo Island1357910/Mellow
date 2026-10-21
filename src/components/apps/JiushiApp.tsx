@@ -7,7 +7,7 @@ export function JiushiApp(props: { onBack: () => void }) {
   const phone = identities.find((item) => item.id === activeIdentityId)
   if (!phone) return null
   return (
-    <div className="sms-shell relative h-full min-h-0 bg-[#EDE4D3] p-2">
+    <div className="relative h-full min-h-0 bg-[#2c2419]/20 p-2">
       <JiushiPhoneShell phone={phone} onExit={props.onBack} />
     </div>
   )

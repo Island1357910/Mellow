@@ -1,0 +1,442 @@
+/* 旧世 · 古风主题（scoped under .jiushi-phone） */
+
+.jiushi-phone {
+  --js-paper: #f4ede0;
+  --js-paper-deep: #ebe0cc;
+  --js-silk: #faf6ee;
+  --js-ink: #2c2419;
+  --js-ink-soft: #5c4f3f;
+  --js-ink-muted: #8a7968;
+  --js-cinnabar: #9b3b3b;
+  --js-cinnabar-soft: rgba(155, 59, 59, 0.12);
+  --js-jade: #4a5d52;
+  --js-jade-soft: rgba(74, 93, 82, 0.14);
+  --js-gold: #b8956a;
+  --js-gold-soft: rgba(184, 149, 106, 0.22);
+  --js-border: rgba(107, 83, 68, 0.28);
+  --js-border-light: rgba(107, 83, 68, 0.14);
+  --js-shadow: 0 10px 28px rgba(44, 36, 25, 0.1);
+  --js-serif: "ZCOOL XiaoWei", "Noto Serif SC", "Songti SC", "STSong", serif;
+  --js-sans: "PingFang SC", "Microsoft YaHei", sans-serif;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--js-ink);
+  font-family: var(--js-sans);
+  background: var(--js-paper);
+  border-radius: 28px;
+  border: 3px solid #6b5344;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 0 48px rgba(107, 83, 68, 0.08),
+    0 16px 40px rgba(44, 36, 25, 0.12);
+}
+
+.jiushi-paper {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 31px,
+      rgba(107, 83, 68, 0.05) 32px
+    ),
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(184, 149, 106, 0.18), transparent 52%),
+    radial-gradient(circle at 88% 92%, rgba(74, 93, 82, 0.08), transparent 38%);
+}
+
+.jiushi-frame {
+  pointer-events: none;
+  position: absolute;
+  inset: 10px;
+  z-index: 0;
+  border: 1px solid var(--js-border-light);
+  border-radius: 22px;
+}
+
+.jiushi-frame::before,
+.jiushi-frame::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: var(--js-gold);
+  border-style: solid;
+  opacity: 0.55;
+}
+
+.jiushi-frame::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+  border-radius: 8px 0 0 0;
+}
+
+.jiushi-frame::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 2px 2px 0;
+  border-radius: 0 0 8px 0;
+}
+
+.jiushi-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.jiushi-header {
+  padding: 2.5rem 1.25rem 0.75rem;
+  text-align: center;
+}
+
+.jiushi-header-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.45em;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-header-title {
+  margin-top: 0.35rem;
+  font-family: var(--js-serif);
+  font-size: 1.45rem;
+  letter-spacing: 0.12em;
+  color: var(--js-ink);
+}
+
+.jiushi-header-sub {
+  margin-top: 0.35rem;
+  font-size: 11px;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-seal-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  margin: 0.5rem auto 0;
+  max-width: 14rem;
+  font-size: 10px;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-seal-line::before,
+.jiushi-seal-line::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--js-border), transparent);
+}
+
+.jiushi-app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.jiushi-app-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 0.35rem 0.7rem;
+  border-radius: 18px;
+  border: 1px solid var(--js-border-light);
+  background: linear-gradient(165deg, rgba(255, 252, 245, 0.96), rgba(235, 224, 204, 0.88));
+  box-shadow: var(--js-shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.jiushi-app-tile:active {
+  transform: scale(0.97);
+}
+
+.jiushi-app-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--js-border-light);
+  background: radial-gradient(circle at 35% 28%, #fffef9, var(--js-paper-deep));
+  font-size: 1.15rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.jiushi-app-tile-name {
+  font-family: var(--js-serif);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.jiushi-app-tile-blurb {
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-note {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  border: 1px dashed var(--js-border);
+  background: rgba(250, 246, 238, 0.72);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--js-ink-soft);
+  text-align: center;
+}
+
+.jiushi-note-compact {
+  display: inline-block;
+  margin-top: 0.65rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--js-border-light);
+  background: var(--js-jade-soft);
+  font-size: 11px;
+  color: var(--js-jade);
+}
+
+.jiushi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid var(--js-border);
+  background: linear-gradient(180deg, #faf6ee, #ebe0cc);
+  color: var(--js-ink);
+  box-shadow: 0 4px 12px rgba(44, 36, 25, 0.08);
+  transition: transform 0.15s ease;
+}
+
+.jiushi-btn:active {
+  transform: scale(0.97);
+}
+
+.jiushi-btn-primary {
+  border-color: rgba(155, 59, 59, 0.35);
+  background: linear-gradient(180deg, #c04a4a, #9b3b3b);
+  color: #fff8f0;
+  box-shadow: 0 8px 18px rgba(155, 59, 59, 0.28);
+}
+
+.jiushi-btn-ghost {
+  background: rgba(255, 252, 245, 0.55);
+  border-color: var(--js-border-light);
+  color: var(--js-ink-soft);
+}
+
+.jiushi-btn-block {
+  width: 100%;
+}
+
+.jiushi-card {
+  border-radius: 18px;
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.92);
+  box-shadow: var(--js-shadow);
+}
+
+.jiushi-screen-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 2.75rem 1rem 0.85rem;
+}
+
+.jiushi-back {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.88);
+  color: var(--js-ink);
+}
+
+.jiushi-screen-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.jiushi-screen-title h1 {
+  font-family: var(--js-serif);
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+}
+
+.jiushi-screen-title p {
+  margin-top: 0.15rem;
+  font-size: 11px;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-field label span:first-child {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 11px;
+  color: var(--js-ink-muted);
+}
+
+.jiushi-field input,
+.jiushi-field textarea,
+.jiushi-phone .soft-input,
+.jiushi-phone .soft-select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.95);
+  color: var(--js-ink);
+  font-family: var(--js-serif);
+}
+
+.jiushi-toggle {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--js-border-light);
+  padding: 0.85rem 1rem;
+  text-align: left;
+  background: rgba(255, 252, 245, 0.75);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.jiushi-toggle.is-on {
+  border-color: rgba(155, 59, 59, 0.35);
+  background: var(--js-cinnabar-soft);
+}
+
+.jiushi-msg-user {
+  margin-left: auto;
+  max-width: 88%;
+  border-radius: 16px 16px 4px 16px;
+  border: 1px solid var(--js-gold-soft);
+  background: linear-gradient(135deg, #f0e6d0, #e8dcc8);
+  padding: 0.55rem 0.75rem;
+  font-family: var(--js-serif);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.jiushi-msg-theirs {
+  max-width: 90%;
+  border-radius: 16px 16px 16px 4px;
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.94);
+  padding: 0.55rem 0.75rem;
+  font-family: var(--js-serif);
+  font-size: 14px;
+  line-height: 1.65;
+  box-shadow: 0 4px 14px rgba(44, 36, 25, 0.06);
+}
+
+.jiushi-roster-item {
+  padding: 0.85rem 1rem;
+}
+
+.jiushi-roster-item p:first-child {
+  font-family: var(--js-serif);
+  font-size: 14px;
+}
+
+.jiushi-footer {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 0.85rem;
+}
+
+/* 旧世内嵌 sms-shell 去多巴胺化 */
+.jiushi-phone .sms-shell,
+.jiushi-phone .candy-shell {
+  background: var(--js-paper) !important;
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -5%, rgba(184, 149, 106, 0.14), transparent 50%),
+    repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(107, 83, 68, 0.04) 32px) !important;
+  color: var(--js-ink);
+}
+
+.jiushi-phone .menu-card {
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.94);
+  box-shadow: var(--js-shadow);
+}
+
+.jiushi-phone .chip,
+.jiushi-phone .chip-lilac,
+.jiushi-phone .chip-mint,
+.jiushi-phone .chip-sky,
+.jiushi-phone .chip-peach,
+.jiushi-phone .chip-butter {
+  border: 1px solid var(--js-border-light);
+  background: linear-gradient(180deg, #faf6ee, #ebe0cc) !important;
+  color: var(--js-ink);
+  box-shadow: 0 3px 10px rgba(44, 36, 25, 0.06);
+}
+
+.jiushi-phone .chip-solid {
+  border-color: rgba(155, 59, 59, 0.35);
+  background: linear-gradient(180deg, #c04a4a, #9b3b3b) !important;
+  color: #fff8f0;
+}
+
+.jiushi-phone .chip-danger {
+  background: rgba(155, 59, 59, 0.1) !important;
+  color: var(--js-cinnabar);
+}
+
+.jiushi-phone header .rounded-full.bg-white\/85,
+.jiushi-phone header .rounded-full.bg-white\/80 {
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.92) !important;
+}
+
+.jiushi-phone h1,
+.jiushi-phone .text-\[22px\].font-semibold {
+  font-family: var(--js-serif);
+  letter-spacing: 0.06em;
+}
+
+.jiushi-phone .rounded-\[24px\].bg-white\/88,
+.jiushi-phone .rounded-\[20px\].bg-white\/90,
+.jiushi-phone .rounded-\[22px\].bg-white\/95 {
+  border: 1px solid var(--js-border-light);
+  background: rgba(255, 252, 245, 0.94) !important;
+}
+
+.jiushi-phone .bg-\[\#E6DDF8\],
+.jiushi-phone .bg-\[\#F7F3FD\] {
+  background: var(--js-jade-soft) !important;
+}
+
+.jiushi-phone .rounded-full.bg-\[\#E6DDF8\] {
+  background: var(--js-gold-soft) !important;
+  color: var(--js-ink-soft);
+}
+
+.jiushi-phone .style-\[background\:linear-gradient\(120deg\,\#B9A3E3\,\#F3A8BA\)\] {
+  background: linear-gradient(120deg, #9b3b3b, #6b5344) !important;
+}
+
+.jiushi-phone button[style*="linear-gradient(120deg,#B9A3E3"] {
+  background: linear-gradient(120deg, #9b3b3b, #6b5344) !important;
+  box-shadow: 0 8px 18px rgba(155, 59, 59, 0.25) !important;
+}

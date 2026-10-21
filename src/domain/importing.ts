@@ -70,7 +70,7 @@ export async function importCardFile(
   let avatar = ''
   const { card: raw, via } = await resolveImportJson(file, 'character', onProgress)
   const drafts = parseCharacterCards(raw)
-  if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
+  if (isPng) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
   for (const draft of drafts) {
     characters.push(await characterFromDraft(identity.namespace, draft, avatar))

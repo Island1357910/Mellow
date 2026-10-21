@@ -18,7 +18,8 @@ export interface DocBlock {
   title: string
 }
 
-function parseAttr(attrs: string, name: string): string {
+function parseAttr(attrs: string | undefined, name: string): string {
+  if (!attrs) return ''
   const match = attrs.match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i'))
   return match?.[1]?.trim() ?? ''
 }
@@ -34,8 +35,8 @@ export function collectDocBlocks(text: string): DocBlock[] {
   const re = /<([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)(\s[^>]*)?>([\s\S]*?)<\/\1>/g
   for (const match of cleaned.matchAll(re)) {
     const tag = match[1].toLowerCase()
-    const attrs = match[2]
-    const content = match[3].trim()
+    const attrs = match[2] ?? ''
+    const content = (match[3] ?? '').trim()
     if (!content) continue
     blocks.push({
       tag,

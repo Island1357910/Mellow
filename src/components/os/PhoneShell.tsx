@@ -308,21 +308,23 @@ function HomeBar() {
   const setControl = useMellow((state) => state.setControl)
   const startY = useRef<number | null>(null)
   return (
-    <div
-      className="absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3"
-      onPointerDown={(event) => {
-        startY.current = event.clientY
-      }}
-      onPointerUp={(event) => {
-        if (startY.current === null) return
-        const delta = event.clientY - startY.current
-        startY.current = null
-        if (delta < -28) setControl(true)
-        else if (Math.abs(delta) < 12 && controlOpen) setControl(false)
-        else if (Math.abs(delta) < 12 && activeApp) closeApp()
-      }}
-    >
-      <div className="h-1.5 w-28 rounded-full bg-black/25" />
+    <div className="pointer-events-none absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3">
+      <div
+        className="pointer-events-auto grid h-8 w-32 place-items-center"
+        onPointerDown={(event) => {
+          startY.current = event.clientY
+        }}
+        onPointerUp={(event) => {
+          if (startY.current === null) return
+          const delta = event.clientY - startY.current
+          startY.current = null
+          if (delta < -28) setControl(true)
+          else if (Math.abs(delta) < 12 && controlOpen) setControl(false)
+          else if (Math.abs(delta) < 12 && activeApp) closeApp()
+        }}
+      >
+        <div className="h-1.5 w-28 rounded-full bg-black/25" />
+      </div>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { BUILD_ID } from './buildInfo.ts'
 
 const STORED_BUILD_KEY = 'mellow_build_id'
-const RELOAD_ONCE_KEY = 'mellow_reload_once'
+const RELOAD_ONCE_KEY = 'mellow-boot-reload'
 
 function versionUrl(): string {
   const base = import.meta.env.BASE_URL || '/'

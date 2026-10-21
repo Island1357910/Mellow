@@ -127,7 +127,7 @@ export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: st
               <div className="mt-3 space-y-2">
                 {needsSync ? (
                   <PillNote tone="mint" compact>
-                    角色卡里还有 {cardSources.length} 条设定还没进世界书（character_book、系统提示、历史后指令）。新导入的角色会自动写入；这个可以手动同步。
+                    角色卡里还有 {cardSources.length} 条设定还没进世界书（简介、性格、情境、开场、世界书和提示词都会写入）。新导入的角色会自动写入；这个可以手动同步。
                   </PillNote>
                 ) : null}
                 <button

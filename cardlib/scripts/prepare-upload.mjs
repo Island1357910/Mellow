@@ -39,6 +39,51 @@ function encodeTextChunk(key, text) {
   return out
 }
 
+function getCardData(card) {
+  return card?.data && typeof card.data === 'object' ? card.data : card
+}
+
+function cardJsonToTxt(card) {
+  const d = getCardData(card)
+  const lines = []
+  const push = (title, body) => {
+    const text = String(body ?? '').trim()
+    if (!text) return
+    lines.push(`\n## ${title}\n\n${text}`)
+  }
+
+  lines.push(`# ${d.name || '未命名'}`)
+  push('角色设定', d.description)
+  push('性格', d.personality)
+  push('场景', d.scenario)
+  push('开场白', d.first_mes)
+  push('对话示例', d.mes_example)
+  push('系统提示', d.system_prompt)
+  push('后续指令', d.post_history_instructions)
+  push('创作说明', d.creator_notes)
+
+  const greetings = (d.alternate_greetings || []).filter(Boolean)
+  if (greetings.length) {
+    lines.push('\n## 备选开场\n')
+    greetings.forEach((item, index) => {
+      lines.push(`\n### 开场 ${index + 1}\n\n${String(item).trim()}`)
+    })
+  }
+
+  const entries = d.character_book?.entries || []
+  if (entries.length) {
+    lines.push('\n## 世界书\n')
+    entries.forEach((entry, index) => {
+      const title = entry.comment || entry.name || `条目 ${index + 1}`
+      lines.push(`\n### ${title}\n`)
+      if (entry.keys?.length) lines.push(`关键词：${entry.keys.join('、')}\n`)
+      if (entry.content) lines.push(String(entry.content).trim())
+    })
+  }
+
+  return `${lines.join('\n').trim()}\n`
+}
+
 function buildTavernPng(cardJson, coverPath) {
   if (coverPath && existsSync(coverPath)) {
     const pngBytes = readFileSync(coverPath)
@@ -88,6 +133,8 @@ function prepareOne(dirName) {
   mkdirSync(outDir, { recursive: true })
 
   writeFileSync(join(outDir, 'card.json'), `${JSON.stringify(card, null, 2)}\n`)
+  const txtSrc = join(dir, 'card.txt')
+  writeFileSync(join(outDir, 'card.txt'), existsSync(txtSrc) ? readFileSync(txtSrc) : cardJsonToTxt(card))
   const pngPath = ['card.png', 'cover.png'].map((name) => join(dir, name)).find((path) => existsSync(path))
   writeFileSync(join(outDir, 'character.png'), buildTavernPng(card, pngPath))
 
@@ -105,6 +152,7 @@ function prepareOne(dirName) {
     coverFileId: '',
     jsonFileId: '',
     pngFileId: '',
+    txtFileId: '',
     questions: questions.map((item, index) => ({
       id: item.id || `q${index + 1}`,
       prompt: item.prompt,

@@ -42,7 +42,13 @@ function isPngLike(file: File): boolean {
 }
 
 function localFallbackCard(text: string, fileName: string, reason?: string): unknown {
-  const card = tryParseStructuredDoc(text) ?? plainTextCardJson(text, fileName)
+  let structured: unknown = null
+  try {
+    structured = tryParseStructuredDoc(text)
+  } catch {
+    structured = null
+  }
+  const card = structured ?? plainTextCardJson(text, fileName)
   if (!card || typeof card !== 'object') return card
   const row = card as { data?: Record<string, unknown> }
   if (row.data) {

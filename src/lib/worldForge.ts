@@ -339,7 +339,7 @@ async function aiForge(raw: unknown): Promise<ForgeResult> {
       ? `${source.slice(0, AI_FORGE_SOURCE_LIMIT)}\n…（后文已截）`
       : source
   const text = await askJson(
-    `你是大世界卡拆分器。输入可能是一张 SillyTavern 卡、或多角色世界观 JSON。
+    `你是大世界卡拆分器。输入可能是手写的世界观、大纲、一张 SillyTavern 卡，或多角色世界观 JSON。
 请拆成：
 1) 世界总设定条目（有多少写多少，含时代、地理、势力、规则等，保留原文细节）
 2) 可单独游玩的 NPC 角色卡（有多少写多少），每人必须有完整 name、description、personality、scenario、firstMes、systemPrompt
@@ -367,6 +367,21 @@ function dropWorldHostCharacter(result: ForgeResult): ForgeResult {
     ...result,
     characters: result.characters.filter((item) => item.draft.name.trim() !== host),
   }
+}
+
+/** 手写正文或粘贴的 JSON，整理成世界书 + 角色。 */
+export async function forgeWorldFromProse(text: string): Promise<ForgeResult> {
+  const trimmed = text.trim()
+  if (trimmed.length < 8) throw new Error('再多写一点，AI 才好搭建')
+  const head = trimmed[0]
+  if (head === '{' || head === '[') {
+    try {
+      return forgeWorldFromCard(JSON.parse(trimmed) as unknown)
+    } catch {
+      // 不是合法 JSON，按正文搭建
+    }
+  }
+  return forgeWorldFromCard(trimmed)
 }
 
 export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {

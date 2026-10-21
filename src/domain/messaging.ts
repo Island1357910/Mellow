@@ -288,11 +288,11 @@ export async function replyInChat(input: {
       preset,
       history,
       fourthWall: input.fourthWall,
+      priority: storyBridge,
       note: [
         replyNote(input.chat),
         input.triggerNote ?? '',
         input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
-        storyBridge,
         input.triggerNote ? '' : glance,
         explain,
         life,
@@ -384,12 +384,14 @@ export async function deliverSms(input: {
     const explain =
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
+    const storyBridge = await storyBridgeForSms(input.namespace, input.character)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
       preset,
       history,
       fourthWall: input.fourthWall,
+      priority: storyBridge,
       note: [glance, explain, life].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()

@@ -106,7 +106,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
     }
   }, [dataRevision, namespace, save?.id])
 
-  if (!phone || !config || !ready) return <div className="sms-shell h-full" />
+  if (!phone || !config || !ready) return <div className={`${props.mode === 'jiushi' ? 'sms-shell' : 'sms-shell'} h-full`} />
   const theme = THEME[props.mode]
   const patchConfig = (patch: Partial<StoryConfig>) => {
     const next = { ...config, ...patch }
@@ -257,8 +257,11 @@ function StoryView(props: {
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
+    const follow = el.scrollHeight - el.scrollTop - el.clientHeight < 28
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+    const next = Math.min(el.scrollHeight, 96)
+    el.style.height = `${next}px`
+    if (follow) el.scrollTop = el.scrollHeight
   }, [draft])
 
   const run = async (base: StorySave, nudge?: string) => {
@@ -340,7 +343,9 @@ function StoryView(props: {
   }
 
   const backdrop = reading.backgroundImage ? `center / cover no-repeat url(${reading.backgroundImage})` : reading.background || undefined
-  const candy = { '--candy': props.theme.candy[0], '--candy-2': props.theme.candy[1], '--candy-3': props.theme.candy[2] } as CSSProperties
+  const candy = props.mode === 'jiushi'
+    ? ({} as CSSProperties)
+    : ({ '--candy': props.theme.candy[0], '--candy-2': props.theme.candy[1], '--candy-3': props.theme.candy[2] } as CSSProperties)
   const subtitle = busy
     ? '正在写…'
     : note || (props.mode === 'offline'
@@ -376,10 +381,14 @@ function StoryView(props: {
       <div ref={scrollRef} className={sc('scroll', 'scroll min-h-0 flex-1 space-y-3 px-4 pb-3 pt-1')}>
         {save.lines.length === 0 ? (
           <div className={sc('empty', 'mx-auto mt-10 max-w-[18rem] rounded-[26px] bg-white/85 p-5 text-center shadow-[0_10px_24px_rgba(120,80,100,0.07)]')}>
-            <p className="text-2xl">{props.mode === 'offline' ? '🚪' : '📖'}</p>
-            <p className="mt-2 text-sm font-medium">{props.mode === 'offline' ? '推开门，走进去' : '这条线还没开始'}</p>
+            <p className="text-2xl">{props.mode === 'offline' ? '🚪' : props.mode === 'jiushi' ? '📜' : '📖'}</p>
+            <p className="mt-2 text-sm font-medium">{props.mode === 'offline' ? '推开门，走进去' : props.mode === 'jiushi' ? '幕启，待君落笔' : '这条线还没开始'}</p>
             <p className="mt-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-              {props.mode === 'offline' ? '写下你在哪、想做什么、要找谁。提到谁，谁的设定就会连上。' : `从第一句开始写你和 ${props.lead?.name ?? 'TA'} 的番外。`}
+              {props.mode === 'offline'
+                ? '写下你在哪、想做什么、要找谁。提到谁，谁的设定就会连上。'
+                : props.mode === 'jiushi'
+                  ? `从此处起笔，写你与 ${props.lead?.name ?? 'TA'} 在此世的长篇。`
+                  : `从第一句开始写你和 ${props.lead?.name ?? 'TA'} 的番外。`}
             </p>
           </div>
         ) : null}
@@ -391,7 +400,7 @@ function StoryView(props: {
             <article key={item.id} className={mine ? sc('msg', 'is-mine flex flex-col items-end') : sc('msg', 'is-theirs flex flex-col items-start')}>
               {isEditing ? (
                 <div className="w-full rounded-[22px] bg-white/95 p-3 shadow-[0_8px_18px_rgba(120,80,100,0.08)]">
-                  <textarea value={editing.text} rows={6} onChange={(event) => setEditing({ id: item.id, text: event.target.value })} className="soft-input resize-none text-sm leading-6" />
+                  <textarea value={editing.text} rows={6} onChange={(event) => setEditing({ id: item.id, text: event.target.value })} className="soft-input composer-input resize-none text-sm leading-6" />
                   <div className="mt-2 flex justify-end gap-2">
                     <button type="button" className="chip" onClick={() => setEditing(null)}>取消</button>
                     <button type="button" className="chip chip-solid" onClick={() => void commitEdit()}>保存</button>
@@ -531,7 +540,7 @@ function HtmlFrame(props: { mode: StoryMode; html: string; reading: ReadingStyle
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { mellowFrame?: string; h?: number } | null
-      if (data && data.mellowFrame === id && typeof data.h === 'number') setHeight(Math.min(2400, Math.max(24, Math.ceil(data.h))))
+      if (data && data.mellowFrame === id && typeof data.h === 'number') setHeight(Math.max(24, Math.ceil(data.h)))
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
@@ -542,7 +551,7 @@ function HtmlFrame(props: { mode: StoryMode; html: string; reading: ReadingStyle
       sandbox="allow-scripts"
       srcDoc={doc}
       className={storyCssClass(props.mode, 'html-frame', 'block w-full overflow-hidden border-0')}
-      style={{ height, minHeight: 24, maxHeight: 2400, display: 'block', verticalAlign: 'top', background: 'transparent' }}
+      style={{ height, minHeight: 24, display: 'block', verticalAlign: 'top', background: 'transparent' }}
     />
   )
 }
@@ -568,7 +577,9 @@ function SideLobby(props: {
   const [warn, setWarn] = useState('')
   const lead = props.chars.find((item) => item.id === charId)
   const withBooks = props.chars.filter((item) => item.characterBook)
-  const candy = { '--candy': '#C9B6E8', '--candy-2': '#F8D0DC', '--candy-3': '#D7E7F8' } as CSSProperties
+  const candy = ancient
+    ? ({} as CSSProperties)
+    : ({ '--candy': '#C9B6E8', '--candy-2': '#F8D0DC', '--candy-3': '#D7E7F8' } as CSSProperties)
   const create = async () => {
     if (!lead) {
       setWarn('先选一个角色')
@@ -601,20 +612,24 @@ function SideLobby(props: {
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}><ChevronLeft size={18} /></button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-[22px] font-semibold tracking-tight">{ancient ? '旧世 · 入幕' : '番外'}</h1>
-          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{ancient ? '穿书后的主线演绎，与 modern 短信分开' : '每一档都是独立的世界线，不影响主线手机'}</p>
+          <h1 className="text-[22px] font-semibold tracking-tight">{ancient ? '入幕' : '番外'}</h1>
+          <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{ancient ? '话本长篇 · 穿书后的主线演绎' : '每一档都是独立的世界线，不影响主线手机'}</p>
         </div>
-        <button type="button" className="chip chip-lilac" onClick={() => setCreating((value) => !value)}><Plus size={13} />{creating ? '收起' : '新建'}</button>
+        <button type="button" className={ancient ? 'jiushi-btn' : 'chip chip-lilac'} onClick={() => setCreating((value) => !value)}><Plus size={13} />{creating ? '收起' : '新建'}</button>
       </header>
       <div className="scroll min-h-0 flex-1 px-4 pb-16 pt-2">
         {creating ? (
           <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="menu-card mb-4 space-y-4">
             <div>
               <p className="mb-2 text-xs" style={{ color: 'var(--m-text-secondary)' }}>这一档的主角</p>
-              {props.chars.length === 0 ? <PillNote tone="lilac" compact>{ancient ? '还没有旧世角色，请先在旧世主页导入古风卡' : '还没有角色，先去创作或短信里导入'}</PillNote> : null}
+              {props.chars.length === 0 ? (
+                ancient
+                  ? <p className="jiushi-note-compact">还没有旧世角色，请先在「人物」纳入古风卡</p>
+                  : <PillNote tone="lilac" compact>还没有角色，先去创作或短信里导入</PillNote>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {props.chars.map((person) => (
-                  <button key={person.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs" style={{ background: charId === person.id ? '#E6DDF8' : 'white', boxShadow: charId === person.id ? 'inset 0 0 0 1.5px #B9A3E3' : 'none' }} onClick={() => setCharId(person.id)}>
+                  <button key={person.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs" style={{ background: charId === person.id ? (ancient ? 'rgba(184,149,106,0.22)' : '#E6DDF8') : 'white', boxShadow: charId === person.id ? (ancient ? 'inset 0 0 0 1.5px rgba(107,83,68,0.35)' : 'inset 0 0 0 1.5px #B9A3E3') : 'none' }} onClick={() => setCharId(person.id)}>
                     <Face person={person} size={24} />
                     {person.name}
                   </button>
@@ -625,11 +640,11 @@ function SideLobby(props: {
               存档名
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder={lead ? `${lead.name} 的番外` : '比如：如果那年没有分开'} className="soft-input mt-1" />
             </label>
-            <div className="rounded-[20px] bg-[#F7F3FD] p-3">
-              <p className="text-xs font-medium">这一档里的我</p>
+            <div className={`rounded-[20px] p-3 ${ancient ? 'jiushi-card' : 'bg-[#F7F3FD]'}`}>
+              <p className="text-xs font-medium">{ancient ? '此世中的我' : '这一档里的我'}</p>
               <p className="mt-0.5 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>只在这一档生效，可以和主线身份完全不同</p>
               <input value={personaName} onChange={(event) => setPersonaName(event.target.value)} placeholder="名字" className="soft-input mt-2" />
-              <textarea value={persona} rows={3} onChange={(event) => setPersona(event.target.value)} placeholder="身份、性格、和 TA 的关系……" className="soft-input mt-2 resize-none leading-6" />
+              <textarea value={persona} rows={3} onChange={(event) => setPersona(event.target.value)} placeholder="身份、性格、和 TA 的关系……" className="soft-input composer-input mt-2 resize-none leading-6" />
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -655,7 +670,7 @@ function SideLobby(props: {
               </div>
             </div>
             {warn ? <p className="text-xs text-[#b0505c]">{warn}</p> : null}
-            <button type="button" className="w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.3)]" style={{ background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void create()}>开始这条番外</button>
+            <button type="button" className={ancient ? 'jiushi-btn jiushi-btn-primary jiushi-btn-block py-3 text-sm font-semibold' : 'w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.3)]'} style={ancient ? undefined : { background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void create()}>{ancient ? '开卷入幕' : '开始这条番外'}</button>
           </motion.section>
         ) : null}
         <p className="mb-2 px-1 text-xs font-medium" style={{ color: 'var(--m-text-secondary)' }}>存档 · {props.saves.length}</p>
@@ -669,7 +684,7 @@ function SideLobby(props: {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{row.name}</span>
-                      <span className="shrink-0 rounded-full bg-[#E6DDF8] px-2 py-0.5 text-[10px]">{row.count} 段</span>
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px]" style={{ background: ancient ? 'rgba(184,149,106,0.22)' : '#E6DDF8' }}>{row.count} 段</span>
                     </span>
                     <span className="mt-0.5 block truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{row.preview || '还没开始'}</span>
                   </span>
@@ -681,7 +696,11 @@ function SideLobby(props: {
             )
           })}
         </ul>
-        {props.saves.length === 0 && !creating ? <PillNote tone="lilac">还没有番外，点右上角新建</PillNote> : null}
+        {props.saves.length === 0 && !creating ? (
+          ancient
+            ? <p className="jiushi-note mt-6">还没有话本，点右上角「新建」开卷</p>
+            : <PillNote tone="lilac">还没有番外，点右上角新建</PillNote>
+        ) : null}
       </div>
     </div>
   )

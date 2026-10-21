@@ -1,6 +1,24 @@
+const FORMAT_LABELS = {
+  json: 'JSON（酒馆格式）',
+  png: 'PNG 卡面',
+  txt: 'TXT（纯文本设定）',
+}
+
 function pickQuestion(questions) {
   if (!questions || !questions.length) return null
   return questions[Math.floor(Math.random() * questions.length)]
+}
+
+function formatHint(formats) {
+  if (!formats || !formats.length) return '暂无下载文件'
+  return formats.map((item) => FORMAT_LABELS[item] || item.toUpperCase()).join(' · ')
+}
+
+function downloadButtons(formats) {
+  return (formats || []).map((format) => ({
+    format,
+    label: FORMAT_LABELS[format] || format.toUpperCase(),
+  }))
 }
 
 Page({
@@ -13,6 +31,8 @@ Page({
     unlocked: false,
     token: '',
     downloads: null,
+    formatHint: '',
+    downloadButtons: [],
   },
 
   onLoad(options) {
@@ -32,6 +52,8 @@ Page({
       this.setData({
         card: result.card,
         question,
+        formatHint: formatHint(result.card.formats),
+        downloadButtons: downloadButtons(result.card.formats),
         busy: false,
       })
     } catch (error) {
@@ -68,14 +90,23 @@ Page({
       })
       if (!result?.ok) throw new Error(result?.message || '答案不对')
       this.setData({ unlocked: true, token: result.token, busy: false })
+      this.prefetchDownloads()
     } catch (error) {
       this.setData({ busy: false, error: error.message || '验证失败' })
     }
   },
 
+  async prefetchDownloads() {
+    try {
+      await this.fetchDownloads()
+    } catch {
+      // 预取失败不阻塞，点下载时再试
+    }
+  },
+
   async fetchDownloads() {
     const { token } = this.data
-    if (!token) return
+    if (!token) return null
     this.setData({ busy: true, error: '' })
     try {
       const { result } = await wx.cloud.callFunction({
@@ -91,48 +122,57 @@ Page({
     }
   },
 
-  async downloadJson() {
-    let files = this.data.downloads
-    if (!files) files = await this.fetchDownloads()
-    if (!files?.jsonUrl) {
-      wx.showToast({ title: '没有 JSON', icon: 'none' })
-      return
-    }
-    wx.showLoading({ title: '下载中' })
-    wx.downloadFile({
-      url: files.jsonUrl,
+  async ensureDownloads() {
+    if (this.data.downloads) return this.data.downloads
+    return this.fetchDownloads()
+  },
+
+  saveDownloadedFile(tempFilePath, label) {
+    wx.saveFile({
+      tempFilePath,
       success(res) {
-        wx.openDocument({
-          filePath: res.tempFilePath,
-          fileType: 'json',
-          showMenu: true,
-          fail() {
-            wx.saveFile({
-              tempFilePath: res.tempFilePath,
-              success() { wx.showToast({ title: '已保存' }) },
-            })
-          },
+        wx.showModal({
+          title: '已保存',
+          content: `${label} 已保存到本地。可在微信「我 → 设置 → 通用 → 存储空间 → 缓存」或文件管理中查看。`,
+          showCancel: false,
         })
       },
-      complete() { wx.hideLoading() },
+      fail() {
+        wx.showToast({ title: '保存失败', icon: 'none' })
+      },
     })
   },
 
-  async downloadPng() {
-    let files = this.data.downloads
-    if (!files) files = await this.fetchDownloads()
-    if (!files?.pngUrl) {
-      wx.showToast({ title: '没有 PNG', icon: 'none' })
+  async downloadFormat(event) {
+    const format = event.currentTarget.dataset.format
+    const files = await this.ensureDownloads()
+    const urlKey = `${format}Url`
+    const url = files?.[urlKey]
+    if (!url) {
+      wx.showToast({ title: `没有 ${format.toUpperCase()}`, icon: 'none' })
       return
     }
+
     wx.showLoading({ title: '下载中' })
     wx.downloadFile({
-      url: files.pngUrl,
-      success(res) {
-        wx.saveImageToPhotosAlbum({
+      url,
+      success: (res) => {
+        if (format === 'png') {
+          wx.saveImageToPhotosAlbum({
+            filePath: res.tempFilePath,
+            success() { wx.showToast({ title: '已存相册' }) },
+            fail() { wx.showToast({ title: '请授权相册', icon: 'none' }) },
+          })
+          return
+        }
+
+        wx.openDocument({
           filePath: res.tempFilePath,
-          success() { wx.showToast({ title: '已存相册' }) },
-          fail() { wx.showToast({ title: '请授权相册', icon: 'none' }) },
+          fileType: format === 'json' ? 'json' : 'txt',
+          showMenu: true,
+          fail: () => {
+            this.saveDownloadedFile(res.tempFilePath, FORMAT_LABELS[format] || format.toUpperCase())
+          },
         })
       },
       complete() { wx.hideLoading() },

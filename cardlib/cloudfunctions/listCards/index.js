@@ -7,15 +7,23 @@ function publicQuestions(questions) {
   return (questions || []).map((item) => ({ id: item.id, prompt: item.prompt }))
 }
 
+function availableFormats(card) {
+  const formats = []
+  if (card.jsonFileId) formats.push('json')
+  if (card.pngFileId) formats.push('png')
+  if (card.txtFileId) formats.push('txt')
+  return formats
+}
+
 async function withCover(card) {
   const out = {
     id: card._id || card.id,
     name: card.name,
-    summary: card.summary || '',
     tags: card.tags || [],
     author: card.author || '半糖',
     version: card.version || '1.0.0',
     questions: publicQuestions(card.questions),
+    formats: availableFormats(card),
     coverUrl: '',
   }
   if (card.coverFileId) {

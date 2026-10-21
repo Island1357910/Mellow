@@ -13,7 +13,6 @@
       <view wx:else class="cover placeholder">🎴</view>
       <view class="info">
         <view class="title">{{item.name}}</view>
-        <view class="muted summary">{{item.summary}}</view>
         <view>
           <text wx:for="{{item.tags}}" wx:key="*this" class="tag">{{item}}</text>
         </view>

@@ -440,6 +440,15 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
           title={title}
           person={chat.kind === 'dm' ? primary : undefined}
           group={chat.kind === 'group'}
+          identity={props.identity}
+          chat={chat}
+          people={people}
+          messages={messages}
+          presets={presets}
+          settings={settings}
+          activePresetId={modePresetId(settings, 'sms')}
+          fourthWall={settings.fourthWall}
+          voiceEnabled={Boolean(chat.voiceEnabled && settings.minimax.ready)}
           onEnd={(content) => {
             setCalling(false)
             void send(content, 'call')
@@ -492,7 +501,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
       input.accept = 'image/*'
       input.onchange = () => {
         const file = input.files?.[0]
-        if (!file || file.size > 900_000) return
+        if (!file) return
         const reader = new FileReader()
         reader.onload = () => void send(String(reader.result ?? ''), 'image')
         reader.readAsDataURL(file)
@@ -847,7 +856,7 @@ function ChatMenu(props: {
                   <p className="text-xs" style={dim}>头衔与管理员</p>
                   <label className="chip chip-lilac">
                     群头像
-                    <input type="file" accept="image/*" className="hidden" onChange={(event) => readImage(event.target.files?.[0], 1_200_000, (groupAvatar) => props.onPatch({ groupAvatar }))} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(event) => readImage(event.target.files?.[0], (groupAvatar) => props.onPatch({ groupAvatar }))} />
                   </label>
                 </div>
                 {props.people.map((person) => {
@@ -942,7 +951,7 @@ function ChatMenu(props: {
                 <label className="chip chip-sky py-2">
                   <Image size={13} />
                   上传背景图
-                  <input type="file" accept="image/*" className="hidden" onChange={(event) => readImage(event.target.files?.[0], 2_500_000, (backgroundImage) => props.onPatch({ backgroundImage }))} />
+                  <input type="file" accept="image/*" className="hidden" onChange={(event) => readImage(event.target.files?.[0], (backgroundImage) => props.onPatch({ backgroundImage }))} />
                 </label>
                 <button type="button" className="chip py-2" disabled={!props.chat.backgroundImage} onClick={() => props.onPatch({ backgroundImage: '' })}>移除背景图</button>
               </div>
@@ -1021,8 +1030,8 @@ function ChatMenu(props: {
   )
 }
 
-function readImage(file: File | undefined, limit: number, onData: (data: string) => void) {
-  if (!file || file.size > limit) return
+function readImage(file: File | undefined, onData: (data: string) => void) {
+  if (!file) return
   const reader = new FileReader()
   reader.onload = () => onData(String(reader.result ?? ''))
   reader.readAsDataURL(file)

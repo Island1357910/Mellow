@@ -2,7 +2,7 @@ import { ChevronRight, Hammer, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { cardImportAccept, resolveImportJson } from '../../lib/cardTextImport.ts'
-import { applyForgeResult, forgeWorldFromCard, type ForgeResult } from '../../lib/worldForge.ts'
+import { applyForgeResult, forgeWorldFromCard, forgeWorldFromProse, type ForgeResult } from '../../lib/worldForge.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
@@ -17,6 +17,7 @@ export function WorldForgeApp(props: {
   const phone = identities.find((item) => item.id === activeIdentityId)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [rawName, setRawName] = useState('')
+  const [prose, setProse] = useState('')
   const [result, setResult] = useState<ForgeResult | null>(null)
   const [note, setNote] = useState('')
   const [applied, setApplied] = useState(false)
@@ -47,6 +48,28 @@ export function WorldForgeApp(props: {
     })
   }
 
+  const forgeText = () => {
+    const text = prose.trim()
+    if (!text || busy) return
+    setRawName('手写设定')
+    setResult(null)
+    setApplied(false)
+    setNote('AI 正在根据你写的内容搭建世界…')
+    runAiJob(jobKey(jobNs, 'worldforge'), async () => {
+      try {
+        const forged = await forgeWorldFromProse(text)
+        setResult(forged)
+        setNote(
+          forged.local
+            ? `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定（部分角色保留原文）`
+            : `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定，确认后可导入`,
+        )
+      } catch (error) {
+        setNote(error instanceof Error ? error.message : '搭建失败')
+      }
+    })
+  }
+
   const apply = async () => {
     if (!result) return
     setNote('正在写入世界书与角色…')
@@ -72,20 +95,31 @@ export function WorldForgeApp(props: {
     <div className="sms-shell relative h-full min-h-0">
       <Screen
         title={props.jiushi ? '世界搭建' : '世界搭建'}
-        subtitle={props.jiushi ? '旧世 · 大世界入境' : '大世界卡 → 多人 + 世界书'}
+        subtitle={props.jiushi ? '旧世 · 手写或导入' : '手写或导入 → 多人 + 世界书'}
         onBack={props.onBack}
       >
         <div className="mb-4 rounded-[24px] p-4" style={{ background: props.jiushi ? 'linear-gradient(135deg,#F5F0E6,#EDE4D3)' : 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
-          <p className="text-sm leading-6">导入大世界卡或文档（JSON / txt / doc / docx）：</p>
+          <p className="text-sm leading-6">手写一段世界观，或导入文件（JSON / txt / doc / docx）。AI 会拆成世界书和角色。</p>
           <ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
-            <li>· 文本文档经 AI 整理成 JSON 再拆分</li>
+            <li>· 直接打字也行，不必先做成 JSON</li>
             <li>· 全部世界书条目写入世界观总条目</li>
             <li>· 全部 NPC {props.jiushi ? '纳入旧世人物，不进现代短信' : '拆成可短信角色'}</li>
           </ul>
         </div>
 
+        <textarea
+          value={prose}
+          rows={7}
+          onChange={(event) => setProse(event.target.value)}
+          placeholder="比如：雨城，三年不许说出自己的名字。城里有书店老板、夜班医生、一个总是迟到的人……"
+          className="soft-input resize-none leading-6"
+        />
+        <button type="button" className="chip chip-solid mt-2 w-full py-2.5" disabled={busy || prose.trim().length < 8} onClick={forgeText}>
+          {busy && rawName === '手写设定' ? '正在搭建…' : '用这段文字生成'}
+        </button>
+
         <input ref={fileRef} type="file" accept={cardImportAccept()} className="hidden" onChange={(event) => void pickFile(event.target.files?.[0])} />
-        <button type="button" className="chip chip-sky flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
+        <button type="button" className="chip chip-sky mt-2 flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
           <Upload size={14} />{busy ? '正在整理…' : '选择大世界文件'}
         </button>
 

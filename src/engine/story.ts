@@ -603,7 +603,7 @@ export function buildStoryPrompt(input: {
     )
   }
   if (input.world?.trim()) systems.push(input.world.trim())
-  if (input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
+  if (input.smsBridge?.trim() && mode !== 'offline') systems.push(input.smsBridge.trim())
   if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
   systems.push(
     fill(mode === 'jiushi' ? JIUSHI_RULE : mode === 'side' ? SIDE_RULE : OFFLINE_RULE, charName, userName),
@@ -636,6 +636,7 @@ export function buildStoryPrompt(input: {
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
+  if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
 
   const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
   const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? cardRegex(lead) : focusChars(chars, save).flatMap(cardRegex)) : [])]
@@ -644,6 +645,13 @@ export function buildStoryPrompt(input: {
     messages.push({ role: item.role, content: applyRegex(item.content, rules, 'prompt', item.role) })
   }
   if (input.nudge) messages.push({ role: 'user', content: input.nudge })
+  if (mode === 'offline' && input.smsBridge?.trim()) {
+    const last = messages[messages.length - 1]
+    if (last?.role === 'user') {
+      last.content = `${last.content}\n\n（不要写进正文：关系和情绪以手机短信里已经发生的结果为准，不允许把更早的线下记录当成最重要的依据。玩家刚刚这一下如果是新的，要接住，但不要延续已经在短信里结束的争吵、冷战或翻旧账。）`
+    }
+    messages.push({ role: 'system', content: input.smsBridge.trim() })
+  }
   return messages
 }
 
@@ -711,12 +719,14 @@ export async function generateStoryReply(input: {
   charsMax: number
 }): Promise<string> {
   const range = storyCharRange(input.charsMin, input.charsMax)
-  let content = await generate(input.messages, input.preset)
+  const budget = Math.min(16_384, Math.max(8192, Math.ceil(range.max * 1.8)))
+  let content = await generate(input.messages, input.preset, budget)
   let len = plainStoryLength(content)
   if (len >= range.lo && len <= range.hi) return content
 
+  const roundsCap = Math.min(8, Math.max(3, Math.ceil(range.min / 2500)))
   let rounds = 0
-  while (len < range.lo && rounds < 3) {
+  while (len < range.lo && rounds < roundsCap) {
     rounds += 1
     const need = Math.max(120, range.min - len)
     const tail = await generate(
@@ -729,6 +739,7 @@ export async function generateStoryReply(input: {
         },
       ],
       input.preset,
+      Math.min(budget, Math.max(2048, Math.ceil(need * 2))),
     )
     content = `${content.trimEnd()}\n${tail.trim()}`
     len = plainStoryLength(content)
@@ -765,5 +776,5 @@ export function htmlBody(text: string): string {
 }
 
 export function frameDoc(id: string, html: string, reading: ReadingStyle, color: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important;line-height:0}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){var h=Math.min(measure(),2400);parent.postMessage({mellowFrame:id,h:h},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important;line-height:0}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){parent.postMessage({mellowFrame:id,h:measure()},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
 }

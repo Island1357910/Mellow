@@ -1,6 +1,6 @@
 # 半糖 · 角色卡库（微信小程序 + 云开发 · 个人主体）
 
-玩家在微信里浏览角色 → 随机答一题 → 服务端验题 → 临时链接下载 JSON / PNG。  
+玩家在微信里浏览角色 → 随机答一题 → 服务端验题 → 临时链接下载 JSON / PNG / TXT（有什么下什么）。  
 **答案只存在云数据库，不下发到小程序包。**
 
 ---
@@ -69,6 +69,7 @@ cards/xiaoman/
   meta.json       名字、简介、标签
   card.json       SillyTavern V2 角色卡
   questions.json  6～10 题，含 answers（仅用于上传，不会进小程序）
+  card.txt        可选；不写则脚本从 card.json 自动生成
   cover.jpg       可选
   card.png        可选 PNG 底图
 ```
@@ -82,7 +83,7 @@ node scripts/prepare-upload.mjs
 
 会在 `cardlib/upload-out/角色id/` 生成：
 
-- `card.json`、`character.png`（酒馆 PNG）  
+- `card.json`、`character.png`（酒馆 PNG）、`card.txt`（纯文本设定）  
 - `db-record.json`（含答案，**只给你导入云数据库用**）  
 - `manifest-public.json`（不含答案，可核对）
 
@@ -93,16 +94,18 @@ node scripts/prepare-upload.mjs
 ```
 cards/xiaoman/cover.jpg
 cards/xiaoman/card.json
-cards/xiaoman/card.png
+cards/xiaoman/character.png
+cards/xiaoman/card.txt
 ```
 
-记下每个文件的 **File ID**（形如 `cloud://xxx/cards/xiaoman/card.json`）。
+记下每个文件的 **File ID**（形如 `cloud://xxx/cards/xiaoman/card.json`）。  
+没有上传的格式，`db-record.json` 里对应 `*FileId` 留空即可。
 
 ### 4. 写入云数据库 `cards` 集合
 
 把 `db-record.json` 里的字段粘贴进一条记录，**务必填好**：
 
-- `jsonFileId`、`pngFileId`、`coverFileId`  
+- `jsonFileId`、`pngFileId`、`txtFileId`、`coverFileId`  
 - `questions[].answers` 只在数据库里，不要发到前端
 
 文档 `_id` 建议与 `id` 一致，例如 `xiaoman`。
@@ -122,7 +125,7 @@ cards/xiaoman/card.png
 ## 五、和半糖 Mellow 的关系
 
 - **卡库小程序**：个人维护的配套下载工具（非企业官方账号）  
-- **Mellow**（mymellow.top）：用户把 JSON/PNG **导入本地** 使用  
+- **Mellow**（mymellow.top）：用户把 JSON/PNG/TXT **导入本地** 使用  
 
 小程序不提供 AI 对话，只做角色卡下载，审核压力相对小。
 

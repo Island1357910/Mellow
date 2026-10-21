@@ -1,0 +1,73 @@
+半糖卡库 · 新增 7 张卡上传清单
+
+已在本地整理好，源文件 → 卡库 id 对应如下：
+
+  殷枕崖.png              → yinzhenya   （JSON + PNG + TXT）
+  欢迎来到星露谷.json     → stardewvalley（JSON + PNG + TXT）
+  沈予安.txt              → shenyuan    （JSON + PNG + TXT）
+  宋淮.txt                → songhuai    （JSON + PNG + TXT）
+  墨非（网黄小狗）.txt    → mofei       （JSON + PNG + TXT）
+  温屿（温柔学长）.txt    → wenyu       （JSON + PNG + TXT）
+  程默（低精力社畜）.txt  → chengmo     （JSON + PNG + TXT）
+
+本地目录：cardlib/cards/<id>/
+待上传目录：cardlib/upload-out/<id>/
+
+
+一、云存储（每个 id 建文件夹）
+
+  示例 cards/shenyuan/ 下传 3 个文件：
+    card.json        ← upload-out/shenyuan/card.json
+    character.png    ← upload-out/shenyuan/character.png
+    card.txt         ← upload-out/shenyuan/card.txt
+
+  7 个文件夹都要建：
+    cards/yinzhenya/
+    cards/stardewvalley/
+    cards/shenyuan/
+    cards/songhuai/
+    cards/mofei/
+    cards/wenyu/
+    cards/chengmo/
+
+  yinzhenya 的 character.png 来自原 PNG，其余 6 张是脚本生成的酒馆 PNG。
+
+
+二、复制 File ID 到 db-record.json
+
+  每个 upload-out/<id>/db-record.json 里填：
+    jsonFileId  ← card.json 的 File ID
+    pngFileId   ← character.png 的 File ID
+    txtFileId   ← card.txt 的 File ID
+    coverFileId ← 可选；不填则列表无封面图（可之后补传 cover.png）
+
+
+三、云数据库 cards 集合 · 添加 7 条记录
+
+  每条：添加记录 → 粘贴 db-record.json 全文 → 保存
+  _id 必须与 id 一致（见上表）
+
+  注意：旧 7 张（fangtang 等）不用动，这是新增 7 条。
+
+
+四、云函数（若还没部署过 txt 版本）
+
+  重新上传并部署：
+    listCards
+    getCardDownload
+
+
+五、微信开发者工具
+
+  编译 → 列表应共 14 张卡
+  点进新卡 → 看「可下载：JSON · PNG · TXT」
+  答对题 → 三个下载按钮都应出现
+
+
+六、以后再加卡（本地命令）
+
+  cd cardlib
+  node scripts/import-cards.mjs "你的文件路径.png|.json|.txt"
+  node scripts/prepare-upload.mjs
+
+  然后在 card-import-utils.mjs 的 ID_MAP / CUSTOM_QUESTIONS 里补 id 和题目（可选）。

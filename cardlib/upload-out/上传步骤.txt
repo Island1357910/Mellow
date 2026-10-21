@@ -1,10 +1,13 @@
-半糖卡库 · 把 7 张卡放进小程序（云开发）
+半糖卡库 · 把角色卡放进小程序（云开发）
+
+【新增 7 张】详见同目录《新增7张卡-上传步骤.txt》
 
 一、打开云开发 → 存储
-  为每个角色建文件夹并上传 2 个文件：
+  为每个角色建文件夹并上传文件（有什么传什么）：
 
   cards/fangtang/card.json      ← upload-out/fangtang/card.json
   cards/fangtang/character.png  ← upload-out/fangtang/character.png
+  cards/fangtang/card.txt       ← upload-out/fangtang/card.txt
 
   cards/yinzhean/...
   cards/yanchangzhi/...
@@ -13,22 +16,31 @@
   cards/lanyuzhou/...
   cards/xiaoman/...
 
-  每个角色文件夹里只有 card.json 和 character.png 两个文件。
+  每个角色至少要有 1 种可下载格式（JSON / PNG / TXT 任选其一或多种）。
+  建议三种都传：JSON 给酒馆，PNG 给酒馆/相册，TXT 给 mymellow.top 粘贴导入。
 
 二、复制 File ID
-  存储里点开 card.json → 复制 File ID → 填到 db-record.json 的 jsonFileId
-  点开 character.png → 复制 File ID → 填到 pngFileId
+  存储里点开对应文件 → 复制 File ID → 填到 db-record.json：
+  - card.json      → jsonFileId
+  - character.png  → pngFileId
+  - card.txt       → txtFileId
   （cover 可选，列表用 PNG 当封面可不填 coverFileId）
+
+  没有上传的文件，对应 File ID 留空即可，小程序只会显示有的下载按钮。
 
 三、云开发 → 数据库 → cards 集合
   每个角色：点「添加记录」→ 粘贴 upload-out/角色id/db-record.json 的内容
-  （记得把 jsonFileId、pngFileId 改成上一步复制的 cloud://...）
+  （记得把 jsonFileId、pngFileId、txtFileId 改成上一步复制的 cloud://...）
 
-  7 条记录的 _id 分别是：
+  全部 14 条记录的 _id：
   fangtang  yinzhean  yanchangzhi  xulanqing  luhuaiyuan  lanyuzhou  xiaoman
+  yinzhenya  stardewvalley  shenyuan  songhuai  mofei  wenyu  chengmo
 
-四、微信开发者工具 → 编译
-  列表应出现 7 个角色。
+四、微信开发者工具 → 重新部署云函数
+  右键上传：listCards、getCardDownload（verifyAnswer 不用改）
+
+五、编译预览
+  列表应出现 7 个角色；详情页会显示「可下载：…」；答对题后只出现有的格式按钮。
 
 角色中文名：
   方唐 殷折安 严长知 徐兰青 路怀远 蓝与舟 小满

@@ -1,0 +1,55 @@
+{
+  "_id": "stardewvalley",
+  "id": "stardewvalley",
+  "name": "欢迎来到星露谷",
+  "summary": "星露谷农场开局。鹈鹕镇、四季耕种、技能成长与状态栏玩法。",
+  "tags": [
+    "模拟",
+    "星露谷",
+    "农场"
+  ],
+  "author": "半糖",
+  "version": "1.0.0",
+  "coverFileId": "",
+  "jsonFileId": "",
+  "pngFileId": "",
+  "txtFileId": "",
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "故事发生在哪个小镇？（三个字）",
+      "answers": [
+        "鹈鹕镇"
+      ]
+    },
+    {
+      "id": "q2",
+      "prompt": "开局是哪一个季节？（两个字）",
+      "answers": [
+        "春季",
+        "春天"
+      ]
+    },
+    {
+      "id": "q3",
+      "prompt": "开局身上有多少金币？（三个数字）",
+      "answers": [
+        "500"
+      ]
+    },
+    {
+      "id": "q4",
+      "prompt": "镇长叫什么名字？（三个字）",
+      "answers": [
+        "刘易斯"
+      ]
+    },
+    {
+      "id": "q5",
+      "prompt": "这张卡/play 的名字里包含哪个游戏？（三个字）",
+      "answers": [
+        "星露谷"
+      ]
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import { importJiushiCardFile, isJiushiCharacter } from '../../../lib/jiushi.ts'
 import { storage } from '../../../storage/StorageService.ts'
 import { useMellow } from '../../../store/useMellow.ts'
 import type { Character, Identity } from '../../../types/index.ts'
-import { PillNote, Screen } from '../../ui/primitives.tsx'
+import { JiushiNote, JiushiScreen } from './JiushiShell.tsx'
 
 export function JiushiRosterApp(props: { phone: Identity; onBack: () => void }) {
   const touchData = useMellow((state) => state.touchData)
@@ -36,24 +36,26 @@ export function JiushiRosterApp(props: { phone: Identity; onBack: () => void }) 
   }
 
   return (
-    <Screen title="人物" subtitle="纳入旧世" onBack={props.onBack}>
-      <div className="mb-3 rounded-[22px] p-3 text-xs leading-5" style={{ background: '#F5F0E6', color: 'var(--m-text-secondary)' }}>
-        支持 JSON、PNG、txt、doc/docx。文本文档会经 AI 整理成角色卡 JSON 再纳入，不会进现代短信。
+    <JiushiScreen title="人物" subtitle="纳入旧世" onBack={props.onBack}>
+      <div className="jiushi-card mb-3 p-3 text-xs leading-6" style={{ color: 'var(--js-ink-soft)' }}>
+        支持 JSON、PNG、txt、doc/docx。文本文档经 AI 整理成角色卡后纳入此世，不会进现代短信。
       </div>
       <input ref={fileRef} type="file" accept={cardImportAccept()} className="hidden" onChange={(event) => void importCard(event.target.files?.[0])} />
-      <button type="button" className="chip chip-sky flex w-full items-center justify-center gap-1 py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
+      <button type="button" className="jiushi-btn jiushi-btn-block py-2.5" onClick={() => fileRef.current?.click()} disabled={busy}>
         <Upload size={14} />{busy ? '正在整理…' : '导入古风卡 / 文档'}
       </button>
-      {note ? <p className="mt-2 text-center text-xs">{note}</p> : null}
+      {note ? <p className="mt-2 text-center text-xs" style={{ color: 'var(--js-ink-muted)' }}>{note}</p> : null}
       <div className="mt-4 space-y-2">
         {chars.map((person) => (
-          <div key={person.id} className="rounded-[20px] bg-white/90 px-4 py-3">
-            <p className="text-sm font-medium">{person.name}</p>
-            <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>{person.description || person.personality}</p>
+          <div key={person.id} className="jiushi-card jiushi-roster-item">
+            <p>{person.name}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: 'var(--js-ink-muted)' }}>
+              {person.description || person.personality || '暂无简介'}
+            </p>
           </div>
         ))}
-        {!chars.length ? <PillNote tone="lilac">还没有旧世人物</PillNote> : null}
+        {!chars.length ? <JiushiNote compact>还没有旧世人物</JiushiNote> : null}
       </div>
-    </Screen>
+    </JiushiScreen>
   )
 }

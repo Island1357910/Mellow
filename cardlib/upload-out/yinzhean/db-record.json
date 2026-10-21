@@ -8,9 +8,10 @@
   ],
   "author": "半糖",
   "version": "1.0.0",
-  "coverFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yinzhean/character.png",
-  "jsonFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yinzhean/card.json",
-  "pngFileId": "cloud://cloudbase-d5g6mjfztabda8167.636c-cloudbase-d5g6mjfztabda8167-1502040064/cards/yinzhean/character.png",
+  "coverFileId": "",
+  "jsonFileId": "",
+  "pngFileId": "",
+  "txtFileId": "",
   "questions": [
     {
       "id": "q1",

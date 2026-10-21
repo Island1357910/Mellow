@@ -97,7 +97,7 @@ export async function importJiushiCardFile(file: File, identity: Identity): Prom
   let avatar = ''
   const { card: raw } = await resolveImportJson(file, 'character')
   const drafts = parseCharacterCards(raw).map(tagJiushiDraft)
-  if (isPng && file.size < 1_500_000) avatar = await fileToDataUrl(file)
+  if (isPng) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
   for (const draft of drafts) {
     const character = await characterFromDraft(identity.namespace, draft, avatar, { skipChat: true })

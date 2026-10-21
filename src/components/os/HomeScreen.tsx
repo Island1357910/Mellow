@@ -35,7 +35,7 @@ export function HomeScreen() {
   const dock = page2.filter((app) => app.dock).concat(page3.filter((app) => app.dock))
   const pageCount = page3.length > 0 ? 3 : 2
   const pagerRef = useRef<HTMLDivElement | null>(null)
-  const dragRef = useRef<{ x: number; y: number; id: number; active: boolean } | null>(null)
+  const dragRef = useRef<{ x: number; y: number; id: number; active: boolean; t: number } | null>(null)
   const suppressClick = useRef(false)
   const [index, setIndex] = useState(0)
   const [dragX, setDragX] = useState(0)
@@ -104,8 +104,8 @@ export function HomeScreen() {
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || identitySheet || browser || pad !== null || playerSheet) return
     const target = event.target
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
-    dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false }
+    if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) return
+    dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, t: performance.now() }
   }
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -114,7 +114,7 @@ export function HomeScreen() {
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     if (!drag.active) {
-      if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy)) return
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.05) return
       drag.active = true
       setSettling(false)
       try {
@@ -125,7 +125,7 @@ export function HomeScreen() {
     }
     const atStart = page <= 0 && dx > 0
     const atEnd = page >= pageCount - 1 && dx < 0
-    const next = atStart || atEnd ? dx * 0.28 : dx
+    const next = atStart || atEnd ? dx * 0.35 : dx
     setDragX(next)
   }
 
@@ -141,10 +141,13 @@ export function HomeScreen() {
     if (!drag.active) return
     suppressClick.current = true
     const dx = event.clientX - drag.x
+    const dy = event.clientY - drag.y
+    const speed = dx / Math.max(16, performance.now() - drag.t)
+    const flick = Math.abs(dx) >= 16 && Math.abs(dx) > Math.abs(dy) && Math.abs(speed) >= 0.42
     setSettling(true)
     setDragX(0)
-    if (dx <= -56) setIndex((current) => Math.min(pageCount - 1, current + 1))
-    else if (dx >= 56) setIndex((current) => Math.max(0, current - 1))
+    if (dx <= -28 || (flick && dx < 0)) setIndex((current) => Math.min(pageCount - 1, current + 1))
+    else if (dx >= 28 || (flick && dx > 0)) setIndex((current) => Math.max(0, current - 1))
   }
 
   return (
@@ -169,7 +172,7 @@ export function HomeScreen() {
       >
       <section className="home-page relative z-10">
         <div className="launcher-col flex h-full min-h-full flex-col">
-          <button type="button" aria-label={phone?.name ?? '切换身份'} onClick={() => setIdentitySheet(true)} className="mb-2 w-fit origin-left scale-90">
+          <button type="button" data-no-swipe aria-label={phone?.name ?? '切换身份'} onClick={() => setIdentitySheet(true)} className="mb-2 w-fit origin-left scale-90">
             <Face value={phone?.avatar ?? '🙂'} />
           </button>
           <div className="grid grid-cols-[1.12fr_0.88fr] items-start gap-3">
@@ -369,6 +372,7 @@ function SearchBar(props: { onSearch: (query: string) => void }) {
   const [query, setQuery] = useState('')
   return (
     <form
+      data-no-swipe
       className="flex items-center gap-2 rounded-full bg-white/80 px-4 py-3 shadow-[0_8px_20px_rgba(90,70,80,0.05)]"
       onSubmit={(event) => {
         event.preventDefault()
@@ -418,7 +422,7 @@ function Page2Fill(props: { namespace: string; decors: DecorCard[]; onDecor: (id
 
 function AppButton(props: { app: PhoneApp; badge: number; compact?: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={props.onClick} className="flex flex-col items-center gap-1.5">
+    <button type="button" onClick={props.onClick} className="app-launch flex flex-col items-center gap-1.5">
       <span className="relative">
         <AppGlyph id={props.app.id} tint={props.app.tint} size={props.compact ? 48 : 52} />
         {props.badge > 0 ? (

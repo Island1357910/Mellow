@@ -90,7 +90,24 @@ button {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  touch-action: pan-y;
+  touch-action: none;
+}
+
+.device button,
+.device .app-launch {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-pager button,
+.home-pager .app-launch {
+  touch-action: none;
+}
+
+.home-pager input,
+.home-pager textarea,
+.home-pager select {
+  touch-action: manipulation;
 }
 
 .home-track {
@@ -1133,7 +1150,16 @@ button {
 .scroll {
   overflow: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   scrollbar-width: none;
+}
+
+.scroll button,
+.scroll a,
+.scroll label,
+.scroll summary {
+  touch-action: pan-y;
 }
 
 .scroll::-webkit-scrollbar {
@@ -1211,7 +1237,11 @@ button {
 
 .composer-input {
   resize: none;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   scrollbar-width: none;
 }
 

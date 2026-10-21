@@ -43,7 +43,7 @@ function SwitchRow(props: { label: string; hint?: string; on: boolean; onClick: 
   )
 }
 
-function Num(props: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
+function Num(props: { label: string; value: number; min: number; max?: number; step?: number; onChange: (value: number) => void }) {
   return (
     <label className="text-[11px]" style={dim}>
       {props.label}
@@ -54,7 +54,12 @@ function Num(props: { label: string; value: number; min: number; max: number; st
         step={props.step ?? 1}
         value={props.value}
         className="soft-input mt-1 px-2 py-1.5 text-center"
-        onChange={(event) => props.onChange(Math.max(props.min, Math.min(props.max, Number(event.target.value) || props.min)))}
+        onChange={(event) => {
+          const raw = Number(event.target.value)
+          const base = Number.isFinite(raw) ? raw : props.min
+          const floored = Math.max(props.min, base)
+          props.onChange(props.max == null ? floored : Math.min(props.max, floored))
+        }}
       />
     </label>
   )
@@ -185,7 +190,7 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
             <Image size={13} />上传背景图
             <input type="file" accept="image/*" className="hidden" onChange={(event) => {
               const file = event.target.files?.[0]
-              if (!file || file.size > 2_500_000) return
+              if (!file) return
               const reader = new FileReader()
               reader.onload = () => set({ backgroundImage: String(reader.result ?? '') })
               reader.readAsDataURL(file)
@@ -302,9 +307,10 @@ function MemoryTab(props: TabProps) {
           <Num label="最近几轮保留原文" value={config.keepRounds} min={1} max={100} onChange={(keepRounds) => props.onConfig({ keepRounds })} />
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <Num label="正文字数下限" value={config.replyCharsMin} min={50} max={3000} step={10} onChange={(replyCharsMin) => props.onConfig({ replyCharsMin, replyCharsMax: Math.max(replyCharsMin, config.replyCharsMax) })} />
-          <Num label="正文字数上限" value={config.replyCharsMax} min={50} max={3000} step={10} onChange={(replyCharsMax) => props.onConfig({ replyCharsMax, replyCharsMin: Math.min(replyCharsMax, config.replyCharsMin) })} />
+          <Num label="正文字数下限" value={config.replyCharsMin} min={50} step={10} onChange={(replyCharsMin) => props.onConfig({ replyCharsMin, replyCharsMax: Math.max(replyCharsMin, config.replyCharsMax) })} />
+          <Num label="正文字数上限" value={config.replyCharsMax} min={50} step={10} onChange={(replyCharsMax) => props.onConfig({ replyCharsMax, replyCharsMin: Math.min(replyCharsMax, config.replyCharsMin) })} />
         </div>
+        <p className="mt-2 text-[11px] leading-5" style={dim}>字数不设上限，按你填的范围写。很长的回复会分成几段续写。</p>
         <p className="mt-3 text-[11px] leading-5" style={dim}>超出 {config.keepRounds} 轮的旧剧情，只把摘要发给模型。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段之后的原文，共 {save.lines.length - rawFrom} 段。</p>
       </Block>
       <Block title="自动总结">
