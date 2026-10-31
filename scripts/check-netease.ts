@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { createDecipheriv } from 'node:crypto'
-import { accountAction, cleanCookie, sessionFromHeaders, weapi } from '../services/mellow-music-cloud/lib/neteaseAccount.ts'
+import { accountAction, cleanCookie, sessionFromHeaders, weapi } from '../src/lib/neteaseProtocol.ts'
 import { accountSupported, forgetNeteaseAccount, neteaseAccountCall, readNeteaseAccount, saveNeteaseAccount } from '../src/lib/neteaseAccount.ts'
 
 const originalRandom = crypto.getRandomValues.bind(crypto)
