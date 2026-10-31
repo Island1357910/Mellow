@@ -171,9 +171,9 @@ button {
 
 .page2-board {
   flex: 1 1 auto;
-  align-content: start;
+  align-content: space-evenly;
   margin-top: 0;
-  padding-top: 0.75rem;
+  padding-top: 0.35rem;
 }
 
 @media (max-height: 620px) {
