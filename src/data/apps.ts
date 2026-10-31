@@ -7,7 +7,7 @@ export interface PhoneApp {
   fixed: boolean
   /** 出现在主页图标网格里。搜索栏是应用，但不是这种图标。 */
   home: boolean
-  /** 新应用直接放第三页，不挤进第二页。 */
+  /** 排在常用应用之后；第二页有空位时仍会补入。 */
   late?: boolean
 }
 
@@ -42,16 +42,17 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'worldforge', name: '世界搭建', blurb: '拆大世界卡', tint: '#B8C9D4', dock: false, fixed: false, home: true, late: true },
 ]
 
-/** 第二页图标再多就放不下，多出来的和新应用去第三页。 */
+/** 第二页四列三行，排满后再进入第三页。 */
 export const HOME_PAGE_CAP = 12
 
 export function homePages(installed: string[]): { page2: PhoneApp[]; page3: PhoneApp[] } {
   const apps = homeApps(installed)
   const primary = apps.filter((app) => !app.late)
   const extra = apps.filter((app) => app.late)
+  const ordered = [...primary, ...extra]
   return {
-    page2: primary.slice(0, HOME_PAGE_CAP),
-    page3: [...primary.slice(HOME_PAGE_CAP), ...extra],
+    page2: ordered.slice(0, HOME_PAGE_CAP),
+    page3: ordered.slice(HOME_PAGE_CAP),
   }
 }
 

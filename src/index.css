@@ -144,7 +144,8 @@ button {
   flex-direction: column;
   justify-content: flex-start;
   overflow: hidden;
-  padding-bottom: 15.15rem;
+  padding-top: clamp(2.75rem, 8dvh, 4.25rem);
+  padding-bottom: 14rem;
 }
 
 .page2-stage {
@@ -153,18 +154,24 @@ button {
   grid-template-columns: 1.82fr 0.78fr;
   gap: 0.7rem;
   width: 100%;
-  min-height: 7.25rem;
+  min-height: 4rem;
   max-height: 12.4rem;
 }
 
 .launcher-board {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-content: end;
   justify-items: center;
   gap: 0.65rem 0.15rem;
   margin-top: auto;
   padding-top: 0.85rem;
+}
+
+@media (max-height: 620px) {
+  .launcher-apps .page2-stage { min-height: 3.5rem; }
+  .launcher-apps .launcher-board { row-gap: 0.4rem; padding-top: 0.5rem; }
 }
 
 .chip {
