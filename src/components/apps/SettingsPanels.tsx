@@ -485,15 +485,6 @@ export function BackupPanel() {
   )
 }
 
-export function HomeLayoutPanel() {
-  return (
-    <SoftCard>
-      <SectionTitle tone="peach">主页</SectionTitle>
-      <PillNote tone="peach" compact>主页上有便签、心情、打卡、待办和相框，相框点一下就能放图片</PillNote>
-    </SoftCard>
-  )
-}
-
 export function IconPanel() {
   const settings = useMellow((state) => state.settings)
   const patchSettings = useMellow((state) => state.patchSettings)

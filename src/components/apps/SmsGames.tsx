@@ -128,12 +128,12 @@ function Lobby(props: { best: Record<string, number>; onPick: (id: GameId) => vo
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
               <span className="text-[15px]">{game.name}</span>
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px]" style={{ color: game.deep }}>{game.tag}</span>
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px]" style={{ color: `var(--m-detail-ink, ${game.deep})` }}>{game.tag}</span>
             </span>
             <span className="mt-1 block text-[11px] leading-4" style={{ color: 'var(--m-text-secondary)' }}>{game.intro}</span>
             <span className="mt-2 flex items-center gap-2 text-[11px]">
               <Stars value={starsOf(props.best[game.id] ?? 0, game.cap)} size={12} color={game.deep} />
-              <span style={{ color: game.deep }}>最好 {props.best[game.id] ?? 0}</span>
+              <span style={{ color: `var(--m-detail-ink, ${game.deep})` }}>最好 {props.best[game.id] ?? 0}</span>
             </span>
           </span>
           <span className="shrink-0 rounded-full px-3 py-1.5 text-xs text-white" style={{ background: game.deep }}>开始</span>
@@ -174,7 +174,7 @@ function Hud(props: { info: GameInfo; label: string; step: number; total: number
       <div className="flex items-center gap-2 text-xs">
         <span className="rounded-full px-2 py-0.5 text-white" style={{ background: props.info.deep }}>{props.label} {Math.min(props.step + 1, props.total)}/{props.total}</span>
         {props.extra}
-        <span className="ml-auto flex items-center gap-1 text-sm" style={{ color: props.info.deep }}><Star size={14} fill={props.info.deep} />{props.score}</span>
+        <span className="ml-auto flex items-center gap-1 text-sm" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}><Star size={14} fill={props.info.deep} />{props.score}</span>
       </div>
       <div className="mt-2 flex gap-1">
         {Array.from({ length: props.total }, (_, index) => (
@@ -258,7 +258,7 @@ function Result(props: RunProps & { score: number; lines: Array<[string, string]
             </motion.span>
           ))}
         </div>
-        <p className="mt-2 text-4xl" style={{ color: props.info.deep }}>{props.score}</p>
+        <p className="mt-2 text-4xl" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}>{props.score}</p>
         {record ? <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8 }} className="mt-2 inline-block rounded-full bg-[#F5B83D] px-3 py-1 text-xs text-white">新纪录！</motion.span> : <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>最好成绩 {before}</p>}
         <div className="mt-4 grid grid-cols-3 gap-2">
           {props.lines.map(([label, value]) => (
@@ -280,7 +280,7 @@ function Result(props: RunProps & { score: number; lines: Array<[string, string]
             <li key={`${row.name}-${index}`} className="flex items-center gap-2 rounded-[14px] px-2 py-1.5 text-sm" style={{ background: row.self ? props.info.tint : 'transparent' }}>
               <span className="w-6 text-center text-xs">{medals[index] ?? index + 1}</span>
               <span className="min-w-0 flex-1 truncate">{row.name}</span>
-              <span className="tabular-nums" style={{ color: row.self ? props.info.deep : undefined }}>{row.score}</span>
+              <span className="tabular-nums" style={{ color: row.self ? `var(--m-detail-ink, ${props.info.deep})` : undefined }}>{row.score}</span>
             </li>
           ))}
         </ol>
@@ -608,7 +608,7 @@ function CafeRun(props: RunProps) {
             <span className="text-[40px] leading-none">{GUESTS[(state.step * 3 + (state.queue[state.step] ?? 0)) % GUESTS.length]}</span>
             <div className="flex-1">
               <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>客人点单</p>
-              <p className="text-lg" style={{ color: props.info.deep }}>一杯{order.name}</p>
+              <p className="text-lg" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}>一杯{order.name}</p>
             </div>
             <button type="button" className="chip chip-mint" onClick={() => setBook(!book)}>{book ? '收起' : '配方'}</button>
           </div>

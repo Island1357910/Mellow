@@ -4,7 +4,7 @@ import { storage } from '../src/storage/StorageService.ts'
 
 const snap = await storage.boot()
 if (snap.identities.length !== 1) throw new Error(`身份数量不对：${snap.identities.length}`)
-if (snap.presets.length !== 8) throw new Error(`预设数量不对：${snap.presets.length}`)
+if (snap.presets.length < 8) throw new Error(`缺少基础预设：${snap.presets.length}`)
 if (!snap.themes.some((theme) => theme.id === 'theme_macaron')) throw new Error('缺少马卡龙主题')
 
 const identity = snap.identities[0]

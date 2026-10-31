@@ -1,4 +1,4 @@
-import { Heart, MessageCircle } from 'lucide-react'
+import { Heart, MessageCircle, Search, UserPlus, Check, Bookmark, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { modePresetId } from '../../lib/defaults.ts'
@@ -32,9 +32,14 @@ export function StarApp(props: { onBack: () => void }) {
   const phone = usePhone()
   const presets = useMellow((state) => state.presets)
   const settings = useMellow((state) => state.settings)
-  const starVoice = presets.find((item) => item.id === modePresetId(settings, 'star'))?.data.prompts.find((item) => item.enabled)?.content ?? ''
+  const starVoice = presets.find((item) => item.id === modePresetId(settings, 'star'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''
   const [posts, setPosts] = useState<FeedPost[]>([])
-  const [tab, setTab] = useState<'all' | 'follow' | 'mine'>('all')
+  const [tab, setTab] = useState<'all' | 'follow' | 'saved' | 'mine'>('all')
+  const [query, setQuery] = useState('')
+  const [follows, setFollows] = useState<string[]>([])
+  const [bookmarks, setBookmarks] = useState<string[]>([])
+  const [blogger, setBlogger] = useState<string | null>(null)
+  const [socialReady, setSocialReady] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [writing, setWriting] = useState(false)
   const [draft, setDraft] = useState('')
@@ -47,7 +52,7 @@ export function StarApp(props: { onBack: () => void }) {
     if (!phone) return
     let stop = false
     void (async () => {
-      const chars = await storage.listCharacters(phone.namespace)
+      const chars = await storage.listModernCharacters(phone.namespace)
       const brief = chars.map((item) => ({
         id: item.id,
         name: item.name,
@@ -86,12 +91,34 @@ export function StarApp(props: { onBack: () => void }) {
     }
   }, [phone, dataRevision])
 
+  useEffect(() => {
+    let alive = true
+    setSocialReady(false); setFollows([]); setBookmarks([]); setBlogger(null); setQuery('')
+    if (phone) void Promise.all([storage.getBag<string[]>(phone.namespace, 'star_follows'), storage.getBag<string[]>(phone.namespace, 'star_bookmarks')]).then(([following, saved]) => {
+      if (alive) {setFollows(following ?? []); setBookmarks(saved ?? []); setSocialReady(true)}
+    })
+    return () => { alive = false }
+  }, [phone?.namespace])
+
   if (!phone) return null
   const persist = (next: FeedPost[]) => {
     setPosts(next)
     void saveFeed(phone.namespace, next)
   }
-  const visible = posts.filter((item) => (tab === 'mine' ? item.mine : tab === 'follow' ? Boolean(item.charId) : true))
+  const visible = posts.filter(item => (blogger ? item.handle === blogger : tab === 'mine' ? item.mine : tab === 'follow' ? follows.includes(item.handle) : tab === 'saved' ? bookmarks.includes(item.id) : true) && (!query.trim() || [item.text,item.author,item.handle].join(' ').toLowerCase().includes(query.trim().toLowerCase())))
+  const bloggers = Array.from(new Map(posts.filter(p => !p.mine).map(p => [p.handle, p])).values())
+  const profile = blogger ? bloggers.find(p => p.handle === blogger) : null
+  const toggleFollow = (handle: string) => {
+    if (!socialReady) return
+    const next = follows.includes(handle) ? follows.filter(h=>h!==handle) : [...follows,handle]
+    setFollows(next); void storage.setBag(phone.namespace,'star_follows',next)
+  }
+  const bookmark = (id: string) => {
+    if (!socialReady) return
+    const next=bookmarks.includes(id)?bookmarks.filter(i=>i!==id):[...bookmarks,id]
+    setBookmarks(next);void storage.setBag(phone.namespace,'star_bookmarks',next)
+  }
+  const followButton = (handle: string) => <button type="button" className="chip star-follow" aria-pressed={follows.includes(handle)} disabled={!socialReady} onClick={()=>toggleFollow(handle)}>{follows.includes(handle)?<Check size={13}/>:<UserPlus size={13}/>} {follows.includes(handle)?'已关注':'关注'}</button>
   const opened = posts.find((item) => item.id === openId) ?? null
   const commentBusy = opened ? isAiJobRunning(jobKey(phone.namespace, 'star', `reply-${opened.id}`)) : false
 
@@ -137,7 +164,7 @@ export function StarApp(props: { onBack: () => void }) {
     const key = jobKey(phone.namespace, 'star', 'refresh')
     const started = runAiJob(key, async () => {
       try {
-        const chars = await storage.listCharacters(phone.namespace)
+        const chars = await storage.listModernCharacters(phone.namespace)
         const next = await refreshStarFeedAi(phone.namespace, chars.map((item) => ({
           id: item.id,
           name: item.name,
@@ -165,14 +192,15 @@ export function StarApp(props: { onBack: () => void }) {
       setWriting(false)
       return
     }
+    if (blogger) { setBlogger(null); return }
     props.onBack()
   }
 
   return (
-    <div className="sms-shell h-full min-h-0" style={candyStyle('#F0B7A8', '#F8D0DC', '#F8E6C0')}>
+    <div className="sms-shell star-shell h-full min-h-0" style={candyStyle('#F0B7A8', '#F8D0DC', '#F8E6C0')}>
       <Screen
         title={opened ? opened.author : writing ? '写一条' : '星博'}
-        subtitle={opened ? `@${opened.handle}` : '很多人的生活'}
+        subtitle={opened ? `@${opened.handle}` : `关注 ${follows.length} 位博主 · 发现生活的新鲜事`}
         onBack={back}
         right={opened || writing ? null : <button type="button" className="chip chip-solid" onClick={() => setWriting(true)}>写</button>}
       >
@@ -184,7 +212,7 @@ export function StarApp(props: { onBack: () => void }) {
         ) : null}
         {opened ? (
           <article className="menu-card">
-            <p className="whitespace-pre-wrap text-sm leading-6">{opened.text}</p>
+            <div className="mb-4 flex items-center justify-between gap-2"><button className="text-sm font-semibold" onClick={()=>{setBlogger(opened.handle);setOpenId(null)}}>@{opened.handle}</button>{!opened.mine&&followButton(opened.handle)}</div><p className="whitespace-pre-wrap text-sm leading-7">{opened.text}</p>
             <p className="mt-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{when(opened.at)}</p>
             <div className="mt-3 flex gap-2">
               <button type="button" className="chip" style={opened.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(opened.id)}><Heart size={12} /> {opened.likes}</button>
@@ -203,29 +231,32 @@ export function StarApp(props: { onBack: () => void }) {
         ) : null}
         {!opened && !writing ? (
           <>
-            <div className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white/70 p-1 text-xs">
-              {([['all', '广场'], ['follow', '关注'], ['mine', '我']] as const).map(([id, label]) => (
-                <button key={id} type="button" className="rounded-full py-1.5" style={{ background: tab === id ? '#F0B7A8' : 'transparent' }} onClick={() => setTab(id)}>{label}</button>
+            <label className="star-search mb-3 flex items-center gap-2 rounded-2xl border border-current/10 px-3 py-2"><Search size={17}/><input aria-label="搜索星博" className="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none" placeholder="搜索内容、话题、博主" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button className="text-xs" onClick={()=>setQuery('')}>清除</button>}</label>
+            {profile ? <section className="menu-card mb-3"><div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">{profile.author}</h2><p className="mt-1 text-xs">@{profile.handle} · {posts.filter(p=>p.handle===profile.handle).length} 条动态</p></div>{followButton(profile.handle)}</div><button className="chip mt-3" onClick={()=>setBlogger(null)}>返回信息流</button></section> : <div className="mb-3 flex gap-2 overflow-x-auto text-xs"><span className="flex shrink-0 items-center gap-1"><TrendingUp size={14}/>热门话题</span>{['今日碎片','城市夜话','生活'].map(topic=><button key={topic} className="shrink-0" onClick={()=>{setTab('all');setQuery(topic)}}>#{topic}#</button>)}</div>}
+            <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/70 p-1 text-xs">
+              {([['all', '推荐'], ['follow', '关注'], ['saved', '收藏'], ['mine', '我']] as const).map(([id, label]) => (
+                <button key={id} type="button" className="rounded-full py-1.5" style={{ background: tab === id ? '#F0B7A8' : 'transparent' }} aria-pressed={tab===id} onClick={() => {setTab(id);setBlogger(null)}}>{label}</button>
               ))}
             </div>
             <button type="button" className="chip mb-3" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? '正在看…' : '刷一刷'}</button>
             {note ? <PillNote tone="pink" compact>{note}</PillNote> : null}
+            <div className="mb-3 flex items-center justify-between text-xs"><span>{query ? '当前信息流搜索结果' : tab === 'follow' ? '已关注博主的动态' : tab === 'saved' ? '收藏的动态' : '最新动态'} · {visible.length} 条</span></div>
+            {tab === 'follow' && !blogger && !query && <section className="menu-card mb-3"><h3 className="mb-3 text-xs font-semibold">发现博主</h3><div className="space-y-3">{bloggers.slice(0,6).map(person=><div key={person.handle} className="flex items-center justify-between gap-2"><button className="min-w-0 truncate text-sm" onClick={()=>setBlogger(person.handle)}>{person.author} <span className="text-xs opacity-70">@{person.handle}</span></button>{followButton(person.handle)}</div>)}</div></section>}
             <div className="space-y-2">
-              {visible.length === 0 ? <PillNote tone="pink">这里还安静</PillNote> : visible.map((item) => (
-                <article key={item.id} className="menu-card">
-                  <button type="button" className="block w-full text-left" onClick={() => setOpenId(item.id)}>
-                    <span className="flex items-center gap-2">
-                      <span className="grid h-9 w-9 place-items-center rounded-full bg-[#F8D0DC] text-sm">{item.author.slice(0, 1)}</span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{item.author}</span>
-                        <span className="block text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>@{item.handle} · {when(item.at)}</span>
-                      </span>
-                    </span>
-                    <span className="mt-2 block text-sm leading-6">{item.text}</span>
-                  </button>
-                  <div className="mt-2 flex gap-2">
+              {visible.length === 0 ? <PillNote tone="pink">{query?'没有找到匹配的内容或博主':tab==='follow'?'关注博主后，这里会出现他们的动态':tab==='saved'?'收藏喜欢的动态，留着以后再看':'这里还安静'}</PillNote> : visible.map((item) => (
+                <article key={item.id} className="menu-card star-post">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <button className="flex min-w-0 items-center gap-2 text-left" onClick={()=>setBlogger(item.handle)}>
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F8D0DC] text-sm">{item.author.slice(0,1)}</span>
+                      <span className="min-w-0"><span className="block truncate text-sm font-semibold">{item.author}</span><span className="block truncate text-[11px]" style={{color:'var(--m-text-secondary)'}}>@{item.handle} · {when(item.at)}</span></span>
+                    </button>
+                    {!item.mine&&followButton(item.handle)}
+                  </div>
+                  <button type="button" className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-7" onClick={()=>setOpenId(item.id)}>{item.text}</button>
+                  <div className="star-actions mt-3 grid grid-cols-3 gap-2 border-t border-current/10 pt-3">
                     <button type="button" className="chip" style={item.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(item.id)}><Heart size={12} /> {item.likes}</button>
-                    <button type="button" className="chip" onClick={() => setOpenId(item.id)}><MessageCircle size={12} /> {item.comments.length}</button>
+                    <button type="button" className="chip" onClick={() => setOpenId(item.id)}><MessageCircle size={14} /> {item.comments.length}</button>
+                    <button className="chip" aria-pressed={bookmarks.includes(item.id)} onClick={()=>bookmark(item.id)}><Bookmark size={14} fill={bookmarks.includes(item.id)?'currentColor':'none'}/>{bookmarks.includes(item.id)?'已收藏':'收藏'}</button>
                   </div>
                 </article>
               ))}

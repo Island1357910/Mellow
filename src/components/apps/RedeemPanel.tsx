@@ -1,0 +1,18 @@
+import { Gift, Apple } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { codeReward, redeemCode, restoreRedeemTheme, type RedeemState } from '../../lib/redeem.ts'
+import { readCoins } from '../../lib/wallet.ts'
+import { storage } from '../../storage/StorageService.ts'
+import { APPLE_THEME } from '../../theme/apple.ts'
+import { useMellow } from '../../store/useMellow.ts'
+export function RedeemPanel(){
+  const phone=useMellow(s=>s.identities.find(i=>i.id===s.activeIdentityId))
+  const [code,setCode]=useState(''),[note,setNote]=useState(''),[coins,setCoins]=useState(0),[claims,setClaims]=useState<RedeemState>({claims:{}}),[pending,setPending]=useState(false)
+  const busy=useRef(false)
+  useEffect(()=>{if(!phone)return;let alive=true;void restoreRedeemTheme(phone.namespace).then(()=>Promise.all([readCoins(phone.namespace),storage.getBag<RedeemState>(phone.namespace,'redeem_codes_v1'),useMellow.getState().reloadLibraries()])).then(([balance,records])=>{if(alive){setCoins(balance);setClaims(records??{claims:{}})}}).catch(e=>{if(alive)setNote(String(e))});return()=>{alive=false}},[phone?.namespace])
+  const redeem=async()=>{if(!phone||busy.current||!code.trim())return;busy.current=true;setPending(true);setNote('');try{const reward=codeReward(code,Date.now());const result=await redeemCode(phone.namespace,code);setCoins(result.coins);setClaims(result.state);await useMellow.getState().reloadLibraries();setNote(`兑换成功：+${reward.coins} 枚${reward.themeId?'，已获得红苹果爱恋主题':''}`);setCode('')}catch(e){setNote(e instanceof Error?e.message:'兑换未完成，请重试')}finally{busy.current=false;setPending(false)}}
+  return <section className="space-y-3"><div className="menu-card"><h2 className="flex items-center gap-2 font-semibold"><Gift size={19}/>兑换礼物</h2><p className="my-3 text-xs">当前身份余额 {coins} 枚 · 每个兑换码每个身份限领一次</p><form className="flex gap-2" onSubmit={e=>{e.preventDefault();void redeem()}}><input className="soft-input min-w-0" aria-label="兑换码" placeholder="输入兑换码" value={code} onChange={e=>setCode(e.target.value)}/><button className="chip chip-solid shrink-0" disabled={pending||!code.trim()}>{pending?'兑换中…':'兑换'}</button></form>{note&&<p className="mt-3 text-sm leading-6" role="status">{note}</p>}</div>
+  <article className="menu-card"><h3 className="font-semibold">开群纪念 · 红苹果爱恋</h3><div data-holiday-preserve className="my-3 rounded-2xl p-4" style={{background:'#FFF4DF',color:'#482A2C'}}><Apple size={34} color="#BC384B"/><p className="mt-2 font-semibold">红苹果色 × 果肉粉黄 × 苹果叶绿</p><div className="mt-3 flex gap-2">{['#BC384B','#EFC2B4','#F5D89A','#688B45'].map(c=><span key={c} className="h-6 w-6 rounded-full" style={{background:c}}/>)}</div></div><p className="text-xs leading-6">兑换期：2026 年 11 月 1 日 00:00 至 11 月 8 日 00:00 前（北京时间）。奖励 3000 枚与纪念主题。领取后永久保留。</p>{claims.claims.opening_apple_2026&&<button className="chip chip-solid mt-3" onClick={()=>void useMellow.getState().patchSettings({themeId:APPLE_THEME.id})}>应用红苹果爱恋</button>}</article>
+  <article className="menu-card"><h3 className="font-semibold">和你一起的万圣节</h3><p className="mt-2 text-xs leading-6">奖励 2000 枚。兑换期：2026 年 10 月 31 日 00:00 至 11 月 3 日 00:00 前（北京时间），限时三天。</p></article>
+  <div className="menu-card text-xs"><h3 className="mb-2 font-semibold">领取记录</h3>{Object.entries(claims.claims).length?Object.entries(claims.claims).map(([id,r])=><p key={id} className="py-2">{id==='opening_apple_2026'?'开群纪念':'和你一起的万圣节'} · +{r.coins} 枚 · {new Date(r.at).toLocaleString('zh-CN')}</p>):<p>还没有领取记录</p>}</div></section>
+}

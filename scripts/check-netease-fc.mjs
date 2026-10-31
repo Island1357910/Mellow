@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict'
+const { handler } = await import('../artifacts/netease-fc-package/index.mjs')
+const origin = 'https://mymellow.top'
+const request = (body, method = 'POST', extra = {}) => Buffer.from(JSON.stringify({ rawPath: '/api/account', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body), requestContext: { http: { method, sourceIp: '127.0.0.1' } }, ...extra }))
+assert.equal((await handler(request({}, 'OPTIONS'))).statusCode, 204)
+assert.equal((await handler(request({}, 'OPTIONS', { headers: { Origin: 'http://mymellow.top' } }))).statusCode, 403)
+assert.equal((await handler(request({}, 'POST', { rawPath: '/steal' }))).statusCode, 404)
+assert.equal((await handler(request({}, 'DELETE'))).statusCode, 405)
+assert.equal((await handler(request({ action: 'proxy', url: 'https://other.test' }))).statusCode, 400)
+assert.equal((await handler(request({ action: 'playlists' }))).statusCode, 401)
+assert.equal((await handler(request({}, 'POST', { body: '{invalid' }))).statusCode, 400)
+assert.equal((await handler(request({}, 'POST', { body: 'x'.repeat(8193) }))).statusCode, 413)
+const health = await handler(request({}, 'GET', { rawPath: '/health', headers: {} }))
+assert.equal(health.statusCode, 200)
+if (process.argv.includes('--live')) {
+  const loginResponse = await handler(request({ action: 'qr_start' }))
+  assert.equal(loginResponse.statusCode, 200, loginResponse.body)
+  assert.equal(loginResponse.headers['Access-Control-Allow-Origin'], origin)
+  const login = JSON.parse(loginResponse.body)
+  assert.ok(login.key)
+  assert.equal(new URL(login.url).origin, 'https://music.163.com')
+  const check = await handler(request({ action: 'qr_check', key: login.key }, 'POST', { isBase64Encoded: true, body: Buffer.from(JSON.stringify({ action: 'qr_check', key: login.key })).toString('base64') }))
+  assert.equal(check.statusCode, 200)
+  assert.equal(JSON.parse(check.body).state, 'waiting')
+  console.log('FC-compatible handler live check: real NetEase QR key and waiting state, no Sites dependency; not yet deployed to Alibaba Cloud')
+}
+console.log('FC wrapper checks passed: event mapping, CORS, methods, paths, action allowlist, malformed/oversized input, missing session, health')

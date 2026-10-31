@@ -1,18 +1,12 @@
-import type { ReactNode } from 'react'
+import { Feather, ScrollText, BookOpen, Mountain, UserRound, Settings, type LucideIcon } from 'lucide-react'
+import type { CSSProperties, ReactNode } from 'react'
 import './jiushi.css'
 
-const APP_GLYPH: Record<string, string> = {
-  chuanshu: '🪶',
-  rumu: '📜',
-  worldbook: '📚',
-  worldforge: '🏯',
-  roster: '👤',
-  setup: '⚙️',
-}
+const APP_GLYPH: Record<string, LucideIcon> = {chuanshu:Feather,rumu:ScrollText,worldbook:BookOpen,worldforge:Mountain,roster:UserRound,setup:Settings}
 
-export function JiushiShell(props: { children: ReactNode; className?: string }) {
+export function JiushiShell(props: { children: ReactNode; className?: string; fontStyle?: string; fontSize?: number }) {
   return (
-    <div className={`jiushi-phone ${props.className ?? ''}`.trim()}>
+    <div className={`jiushi-phone ${props.className ?? ''}`.trim()} data-reading-font={props.fontStyle??'modern'} style={{'--js-reader-size':`${props.fontSize??16}px`} as CSSProperties}>
       <div className="jiushi-paper" aria-hidden />
       <div className="jiushi-frame" aria-hidden />
       <div className="jiushi-body">{props.children}</div>
@@ -27,10 +21,10 @@ export function JiushiAppTile(props: {
   blurb: string
   onClick: () => void
 }) {
-  const icon = props.glyph ?? (props.appId ? APP_GLYPH[props.appId] : '卷')
+  const Icon = (props.appId ? APP_GLYPH[props.appId] : undefined) ?? ScrollText
   return (
     <button type="button" className="jiushi-app-tile" data-no-swipe onClick={props.onClick}>
-      <span className="jiushi-app-tile-icon">{icon}</span>
+      <span className="jiushi-app-tile-icon">{props.glyph??<Icon size={24} strokeWidth={1.35}/>}</span>
       <span className="jiushi-app-tile-name">{props.name}</span>
       <span className="jiushi-app-tile-blurb">{props.blurb}</span>
     </button>

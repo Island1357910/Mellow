@@ -1,3 +1,5 @@
+import { AppleWidgetMotifs } from './AppleMotifs.tsx'
+import { HalloweenGlyph } from './HalloweenMotifs.tsx'
 import { Check, ImagePlus, Plus, Smile, X } from 'lucide-react'
 import { useState } from 'react'
 import { uid } from '../../lib/id.ts'
@@ -43,13 +45,14 @@ function useBag<T>(namespace: string, key: string, fallback: T) {
   return [value, save] as const
 }
 
-const shell = 'relative h-full min-h-0 overflow-hidden rounded-[26px] shadow-[0_8px_18px_rgba(90,70,80,0.06)]'
+const shell = 'home-widget relative h-full min-h-0 overflow-hidden rounded-[26px] shadow-[0_8px_18px_rgba(90,70,80,0.06)]'
 
 export function MemoWidget(props: { namespace: string; className?: string }) {
   const [memo, setMemo] = useBag(props.namespace, 'memo', '')
   const [editing, setEditing] = useState(false)
   return (
-    <div className={`${shell} flex flex-col bg-[#FFF8E6] p-3 ${props.className ?? ''}`}>
+    <div className={`${shell} memo-widget flex flex-col bg-[#FFF8E6] p-3 ${props.className ?? ''}`}>
+      <Blossoms />
       <div className="flex items-center justify-between">
         <span className="rounded-full bg-[#F8E6C0] px-2 py-0.5 text-[10px] font-medium">便签</span>
         {editing ? (
@@ -92,7 +95,7 @@ export function MoodWidget(props: { namespace: string; className?: string }) {
   return (
     <button
       type="button"
-      className={`${shell} flex flex-col items-center justify-center gap-1 transition-transform active:scale-[0.97] ${props.className ?? ''}`}
+      className={`${shell} mood-widget flex flex-col items-center justify-center gap-1 transition-transform active:scale-[0.97] ${props.className ?? ''}`}
       style={{ background: mood?.tint ?? '#FBF4EF' }}
       onClick={() => setRow({ day: today, mood: (index + 1) % MOODS.length })}
     >
@@ -108,7 +111,7 @@ export function StampWidget(props: { namespace: string; className?: string }) {
   const [stamps, setStamps] = useBag<string[]>(props.namespace, 'stamps', [])
   const count = week.days.filter((day) => stamps.includes(day)).length
   return (
-    <div className={`${shell} flex flex-col gap-3 bg-white/85 px-3 py-3 ${props.className ?? ''}`}>
+    <div className={`${shell} stamp-widget flex flex-col gap-3 bg-white/85 px-3 py-3 ${props.className ?? ''}`}>
       <div className="flex items-center gap-2">
         <span className="shrink-0 rounded-full bg-[#D5F0E4] px-2 py-0.5 text-[10px] font-medium">本周打卡</span>
         <span className="min-w-0 flex-1 truncate text-center text-[12px] font-semibold">{count === 0 ? '今天也来盖个章' : count === 7 ? '整周都没落下' : `已坚持 ${count} 天`}</span>
@@ -128,12 +131,12 @@ export function StampWidget(props: { namespace: string; className?: string }) {
               onClick={() => setStamps(on ? stamps.filter((item) => item !== day) : [...stamps.filter((item) => week.days.includes(item)), day])}
             >
               <span
-                className="grid aspect-square w-full max-w-7 place-items-center rounded-full transition-colors"
+                data-stamped={on} data-today={isToday} className="stamp-dot grid aspect-square w-full max-w-7 place-items-center rounded-full transition-colors"
                 style={{ background: on ? '#9ED9C4' : '#F4F0EC', boxShadow: isToday ? '0 0 0 1.5px #F3A8BA' : 'none' }}
               >
                 {on ? <Check size={12} strokeWidth={3} className="text-white" /> : null}
               </span>
-              <span className="text-[9px]" style={{ color: isToday ? '#d0708a' : 'rgba(58,58,58,0.5)' }}>{WEEK[offset]}</span>
+              <span className="stamp-label text-[9px]" style={{ color: isToday ? '#d0708a' : 'rgba(58,58,58,0.5)' }}>{WEEK[offset]}</span>
             </button>
           )
         })}
@@ -153,7 +156,7 @@ export function TodoWidget(props: { namespace: string; className?: string }) {
     setDraft('')
   }
   return (
-    <div className={`${shell} flex flex-col bg-white/85 px-3.5 py-3 ${props.className ?? ''}`}>
+    <div className={`${shell} todo-widget flex flex-col bg-white/85 px-3.5 py-3 ${props.className ?? ''}`}>
       <Blossoms />
       <div className="relative flex items-center justify-between">
         <span className="text-[12px] font-semibold">今日待办</span>
@@ -211,18 +214,22 @@ function Flower(props: { size: number; color: string; className: string; rotate:
 
 function Blossoms() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.22]">
+    <>
+    <AppleWidgetMotifs />
+    <div className="everyday-blossoms pointer-events-none absolute inset-0 overflow-hidden opacity-[0.22]">
       <Flower size={58} color="#F3A8BA" rotate={12} className="absolute -bottom-3 -right-2" />
       <Flower size={30} color="#C9B6E8" rotate={-18} className="absolute bottom-10 right-12" />
       <Flower size={20} color="#F3A8BA" rotate={30} className="absolute bottom-3 right-[4.6rem]" />
       <Flower size={16} color="#9ED9C4" rotate={0} className="absolute bottom-16 right-3" />
     </div>
+    <div className="halloween-widget-motifs" aria-hidden="true"><HalloweenGlyph kind="pumpkin" size={54} className="absolute bottom-0 right-1 text-[#e8a15e]" style={{transform:'rotate(-12deg)'}}/><HalloweenGlyph kind="ghost" size={33} className="absolute bottom-11 right-12 text-[#e6dcc9]" style={{transform:'rotate(15deg)'}}/><HalloweenGlyph kind="bat" size={26} className="absolute bottom-6 right-20 text-[#baa0ce]"/><HalloweenGlyph kind="web" size={68} className="absolute right-0 top-0 text-[#b9a2c7]" style={{transform:'rotate(90deg)'}}/></div>
+    </>
   )
 }
 
 export function PhotoFrame(props: { image: string; wash: string; tilt?: number; className?: string; onPick: (image: string) => void }) {
   return (
-    <label className={`${shell} block cursor-pointer ${props.className ?? ''}`} style={{ background: props.image ? '#fff' : props.wash }}>
+    <label className={`${shell} photo-frame block cursor-pointer ${props.className ?? ''}`} style={{ background: props.image ? '#fff' : props.wash }}>
       {props.image ? (
         <img src={props.image} alt="" className="h-full w-full object-cover" style={props.tilt ? { transform: `rotate(${props.tilt}deg) scale(1.15)` } : undefined} />
       ) : (

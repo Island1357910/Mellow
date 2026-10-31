@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ['codex/android-apk-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci
+      - name: Verify and build bundled app
+        run: |
+          npm run check:release
+          npm run check:upgrade
+          npm run check:earnings
+          npm run check:sms
+          npm run check:together
+          npm run check:mcp
+          npm run check:netease
+          npm run check:direct
+          npm run check:connections
+          npm run build
+          npx cap sync android
+        env:
+          BASE_PATH: /
+          BUILD_ID: android-1.0.7-${{ github.run_number }}
+      - name: Build unsigned APK for local signing
+        run: |
+          set -euo pipefail
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon assembleRelease
+      - name: Inspect APK and collect official signing tool
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/Mellow-1.0.7-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" release/apksigner.jar
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 release/Mellow-1.0.7-unsigned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release/Mellow-1.0.7-unsigned.apk > release/package-info.txt
+          cat release/package-info.txt
+          unzip -l release/Mellow-1.0.7-unsigned.apk | grep 'assets/public/index.html'
+          cd release
+          sha256sum Mellow-1.0.7-unsigned.apk apksigner.jar > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mellow-1.0.7-unsigned
+          path: release/

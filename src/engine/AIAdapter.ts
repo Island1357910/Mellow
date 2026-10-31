@@ -1,4 +1,4 @@
-import type { AIRequest, AIResponse, ApiConfig } from '../types/index.ts'
+import type { AIMessage, AIRequest, AIResponse, ApiConfig } from '../types/index.ts'
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
 const DEFAULT_MAX_TOKENS = 8192
@@ -36,18 +36,77 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+function invalidParam(message: string): boolean {
+  return /参数无效|参数错误|参数有误|invalid parameter|invalid_request|max_tokens|max_completion_tokens/i.test(message)
+}
+
+function errorDetail(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (!value || typeof value !== 'object') return ''
+  const row = value as { message?: string; code?: string; param?: string; type?: string }
+  const message = typeof row.message === 'string' ? row.message.trim() : ''
+  const extra = [row.param, row.code, row.type].filter((item) => typeof item === 'string' && item.trim() && item !== message)
+  if (!message) return extra.join(' · ')
+  return extra.length ? `${message}（${extra.join(' · ')}）` : message
+}
+
 async function readError(response: Response): Promise<string> {
   const text = await response.text()
   if (!text) return `接口返回了 ${response.status}`
   try {
-    const data = JSON.parse(text) as { error?: { message?: string } | string; message?: string }
-    if (typeof data.error === 'string' && data.error) return data.error
-    if (typeof data.error === 'object' && data.error?.message) return data.error.message
-    if (data.message) return data.message
+    const data = JSON.parse(text) as { error?: unknown; message?: string; code?: string; param?: string }
+    const fromError = errorDetail(data.error)
+    if (fromError) return fromError.slice(0, 240)
+    const own = errorDetail(data)
+    if (own) return own.slice(0, 240)
   } catch {
     return text.slice(0, 240)
   }
   return text.slice(0, 240)
+}
+
+function cleanText(text: string): string {
+  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
+}
+
+function squashRoles(messages: AIMessage[]): AIMessage[] {
+  const rows: AIMessage[] = []
+  for (const item of messages) {
+    const prev = rows[rows.length - 1]
+    if (prev && prev.role === item.role) prev.content = `${prev.content}\n${item.content}`
+    else rows.push({ role: item.role, content: item.content })
+  }
+  return rows
+}
+
+/** 收成多数接口都接受的形状：角色交替、以 user 结尾，必要时不使用 system。 */
+function normalizeMessages(messages: AIMessage[], maxChars: number, foldSystem: boolean): AIMessage[] {
+  const systemCap = Math.min(700, Math.floor(maxChars * 0.6))
+  const systemRaw = cleanText(messages.filter((item) => item.role === 'system').map((item) => item.content).join('\n'))
+  const system = systemRaw.length <= systemCap ? systemRaw : systemRaw.slice(-systemCap)
+  const rest = messages.filter((item) => item.role !== 'system')
+  const kept: AIMessage[] = []
+  let used = foldSystem ? Math.min(system.length, systemCap) : system.length
+  for (let index = rest.length - 1; index >= 0; index -= 1) {
+    const item = rest[index]
+    if (!item) continue
+    const content = cleanText(item.content).slice(0, 400)
+    if (!content) continue
+    if (used + content.length > maxChars && kept.length > 0) break
+    kept.push({ role: item.role === 'assistant' ? 'assistant' : 'user', content })
+    used += content.length
+  }
+  kept.reverse()
+  let rows: AIMessage[] = foldSystem || !system ? kept : [{ role: 'system', content: system }, ...kept]
+  if (foldSystem && system) {
+    if (rows[0]?.role === 'user') rows[0] = { role: 'user', content: `${system}\n\n${rows[0].content}` }
+    else rows = [{ role: 'user', content: system }, ...rows]
+  }
+  rows = squashRoles(rows)
+  while (rows[0]?.role === 'assistant') rows.shift()
+  if (!rows.some((item) => item.role === 'user')) rows.push({ role: 'user', content: '请继续。' })
+  if (rows[rows.length - 1]?.role !== 'user') rows.push({ role: 'user', content: '请继续。' })
+  return rows.length > 0 ? rows : [{ role: 'user', content: '请继续。' }]
 }
 
 function partText(part: unknown): string {
@@ -188,40 +247,73 @@ export class AIAdapter {
     return new AIError(raw || '请求失败了', 'api')
   }
 
+  private payloads(request: AIRequest): Array<Record<string, unknown>> {
+    const temperature = typeof request.temperature === 'number' && request.temperature > 0 && request.temperature <= 1
+      ? request.temperature
+      : 0.8
+    const normal: Record<string, unknown> = {
+      model: this.config.model,
+      messages: request.messages,
+      temperature,
+      max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+    }
+    if (typeof request.topP === 'number' && request.topP > 0 && request.topP < 1) normal.top_p = request.topP
+    if (request.frequencyPenalty) normal.frequency_penalty = request.frequencyPenalty
+    if (request.presencePenalty) normal.presence_penalty = request.presencePenalty
+    return [
+      normal,
+      {
+        model: this.config.model,
+        messages: normalizeMessages(request.messages, 1400, false),
+        temperature: 0.8,
+        max_tokens: 512,
+      },
+      {
+        model: this.config.model,
+        messages: normalizeMessages(request.messages, 700, true),
+        max_tokens: 256,
+      },
+      {
+        model: this.config.model,
+        messages: normalizeMessages(request.messages, 500, true),
+      },
+    ]
+  }
+
   private async openai(request: AIRequest): Promise<AIResponse> {
     const timeoutMs = request.timeoutMs ?? 120_000
-    let response: Response
-    try {
-      response = await fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
-        method: 'POST',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: request.messages,
-          temperature: request.temperature,
-          top_p: request.topP,
-          ...(request.frequencyPenalty ? { frequency_penalty: request.frequencyPenalty } : {}),
-          ...(request.presencePenalty ? { presence_penalty: request.presencePenalty } : {}),
-          max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
-        }),
-      })
-    } catch (error) {
-      throw AIAdapter.asNetworkError(error)
-    }
+    const payloads = this.payloads(request)
+    let last = '请求失败了'
+    for (let index = 0; index < payloads.length; index += 1) {
+      let response: Response
+      try {
+        response = await fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
+          method: 'POST',
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
+          },
+          body: JSON.stringify(payloads[index]),
+        })
+      } catch (error) {
+        throw AIAdapter.asNetworkError(error)
+      }
 
-    if (!response.ok) {
-      const message = await readError(response)
-      const retryable = response.status === 429 || response.status >= 500
-      throw new AIError(message, retryable ? 'network' : 'api', retryable)
-    }
+      if (!response.ok) {
+        last = await readError(response)
+        const retryable = response.status === 429 || response.status >= 500
+        if (retryable) throw new AIError(last, 'network', retryable)
+        if (response.status === 400 && invalidParam(last) && index < payloads.length - 1) continue
+        throw new AIError(last, 'api')
+      }
 
-    const data = (await response.json()) as unknown
-    const content = extractContent(data)
-    if (!content) throw new AIError('接口回来了，但没有文字。', 'api', true)
-    return { content, model: this.config.model, provider: 'openai' }
+      const data = (await response.json()) as unknown
+      const content = extractContent(data)
+      if (content) return { content, model: this.config.model, provider: 'openai' }
+      last = '接口回来了，但没有文字。'
+      if (index === payloads.length - 1) throw new AIError(last, 'api', true)
+    }
+    throw new AIError(last, 'api')
   }
 }

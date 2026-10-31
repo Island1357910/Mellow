@@ -1,3 +1,4 @@
+import { APPLE_THEME } from '../theme/apple.ts'
 import Dexie from 'dexie'
 import { OFFICIAL_PRESETS } from '../data/officialPresets.ts'
 import { sortChats } from '../lib/chats.ts'
@@ -232,6 +233,7 @@ class StorageService {
   }
 
   private async ensureBundled(): Promise<void> {
+    if (await this.meta.themes.get(APPLE_THEME.id)) await this.meta.themes.put(APPLE_THEME)
     const themes = await this.meta.themes.toArray()
     const themeIds = new Set(themes.map((item) => item.id))
     const missingThemes = BUNDLED_THEMES.filter((item) => !themeIds.has(item.id))
@@ -404,6 +406,10 @@ class StorageService {
     return this.ns(namespace).chars.orderBy('createdAt').toArray()
   }
 
+  async listModernCharacters(namespace: string): Promise<Character[]> {
+    return (await this.listCharacters(namespace)).filter(c => !c.tags.some(t => t === '旧世' || t === '古风') && !c.extensions?.jiushi)
+  }
+
   async putCharacter(namespace: string, character: Character): Promise<void> {
     const db = this.ns(namespace)
     await db.chars.put(character)
@@ -552,6 +558,20 @@ class StorageService {
 
   async setBag(namespace: string, id: string, value: unknown): Promise<void> {
     await this.ns(namespace).appData.put({ id, value })
+  }
+
+  /** Commit virtual currency and an app state together, including across browser tabs. */
+  async updateEconomy<T>(namespace: string, id: string, change: (state: T | null, coins: number) => { state: T; coins: number }): Promise<{ state: T; coins: number }> {
+    const db = this.ns(namespace)
+    return db.transaction('rw', db.appData, async () => {
+      const state = (await db.appData.get(id))?.value as T | undefined
+      const saved = (await db.appData.get('coins'))?.value
+      const coins = typeof saved === 'number' && Number.isFinite(saved) ? saved : 20
+      const next = change(state ?? null, coins)
+      if (!Number.isFinite(next.coins) || next.coins < 0) throw new Error('余额不足')
+      await db.appData.bulkPut([{ id, value: next.state }, { id: 'coins', value: next.coins }])
+      return next
+    })
   }
 
   async deleteBag(namespace: string, id: string): Promise<void> {

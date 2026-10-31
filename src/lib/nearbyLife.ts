@@ -44,7 +44,7 @@ export async function tickNearbyLife(input: {
   presets: Preset[]
 }): Promise<void> {
   if (isSmsProactivePaused()) return
-  const chars = (await storage.listCharacters(input.namespace)).filter(isNearbyCharacter)
+  const chars = (await storage.listModernCharacters(input.namespace)).filter(isNearbyCharacter)
   if (chars.length === 0) return
 
   for (const character of chars) {

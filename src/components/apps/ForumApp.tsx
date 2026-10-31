@@ -1,197 +1,38 @@
-import { Heart } from 'lucide-react'
+import { Heart, MessageCircle, Search, PenLine, UserPlus, Check, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
-import { candyStyle } from '../../lib/candy.ts'
 import { modePresetId } from '../../lib/defaults.ts'
-import { generatePlotForumPost, generateRandomForumPost, normalizeForumThreads, replyForumCommentAi, type ForumThread } from '../../lib/forumAi.ts'
+import { FORUM_BOARDS, generatePlotForumPost, generateRandomForumPost, normalizeForumThreads, replyForumCommentAi, type ForumThread } from '../../lib/forumAi.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
-
-function clock(): number {
-  return Date.now()
-}
-
-function usePhone() {
-  const identities = useMellow((state) => state.identities)
-  const activeIdentityId = useMellow((state) => state.activeIdentityId)
-  return identities.find((item) => item.id === activeIdentityId) ?? null
-}
-
-const BOARDS = ['树洞', '日常', '提问', '剧情']
-
-export function ForumApp(props: { onBack: () => void }) {
-  const phone = usePhone()
-  const presets = useMellow((state) => state.presets)
-  const settings = useMellow((state) => state.settings)
-  const voice = presets.find((item) => item.id === modePresetId(settings, 'forum'))?.data.prompts.find((item) => item.enabled)?.content ?? ''
-  const dataRevision = useMellow((state) => state.dataRevision)
-  const [rows, setRows] = useState<ForumThread[] | null>(null)
-  const [tab, setTab] = useState<'all' | 'mine'>('all')
-  const [openId, setOpenId] = useState<string | null>(null)
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-  const [plot, setPlot] = useState('')
-  const [comment, setComment] = useState('')
-  const [board, setBoard] = useState(BOARDS[0] ?? '树洞')
-
-  const persist = (next: ForumThread[]) => {
-    if (!phone) return
-    setRows(next)
-    void storage.setBag(phone.namespace, 'forum', next.slice(0, 40))
-  }
-
-  const publish = () => {
-    if (!phone || !rows) return
-    const text = body.trim()
-    if (!title.trim() || !text) return
-    persist([{
-      id: uid('topic'),
-      title: title.trim().slice(0, 24),
-      board,
-      author: phone.name,
-      text: text.slice(0, 400),
-      at: clock(),
-      likes: 0,
-      liked: false,
-      replies: [],
-      mine: true,
-    }, ...rows])
-    setTitle('')
-    setBody('')
-    setTab('mine')
-  }
-
-  const growRandom = (baseRows: ForumThread[] = rows ?? []) => {
-    if (!phone) return
-    const key = jobKey(phone.namespace, 'forum', 'random')
-    if (isAiJobRunning(key)) return
-    runAiJob(key, async () => {
-      await generateRandomForumPost(phone.namespace, voice, baseRows)
-    })
-  }
-
-  useEffect(() => {
-    if (!phone) return
-    let stop = false
-    void (async () => {
-      const raw = await storage.getBag(phone.namespace, 'forum')
-      const saved = normalizeForumThreads(raw)
-      if (stop) return
-      setRows(saved)
-      if (raw !== null && JSON.stringify(saved) !== JSON.stringify(raw)) {
-        await storage.setBag(phone.namespace, 'forum', saved)
-      }
-      if (saved.length === 0) {
-        const seeded = await storage.getBag<boolean>(phone.namespace, 'forum_seeded')
-        if (!seeded) {
-          await storage.setBag(phone.namespace, 'forum_seeded', true)
-          growRandom(saved)
-        }
-      }
-    })()
-    return () => {
-      stop = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, dataRevision])
-
-  if (!phone || !rows) return null
-  const opened = rows.find((item) => item.id === openId) ?? null
-  const visible = rows.filter((item) => (tab === 'mine' ? item.mine : true))
-  const busy =
-    isAiJobRunning(jobKey(phone.namespace, 'forum', 'random'))
-    || isAiJobRunning(jobKey(phone.namespace, 'forum', 'plot'))
-    || (opened ? isAiJobRunning(jobKey(phone.namespace, 'forum', `reply-${opened.id}`)) : false)
-
-  const grow = () => {
-    const text = plot.trim()
-    if (!text || busy || !phone || !rows) return
-    const key = jobKey(phone.namespace, 'forum', 'plot')
-    if (isAiJobRunning(key)) return
-    runAiJob(key, async () => {
-      await generatePlotForumPost(phone.namespace, voice, text, rows)
-    })
-    setPlot('')
-  }
-
-  const likeThread = (id: string) => {
-    persist(rows.map((item) => (item.id === id ? { ...item, liked: !item.liked, likes: item.likes + (item.liked ? -1 : 1) } : item)))
-  }
-
-  const sendComment = () => {
-    if (!opened || !comment.trim() || !phone) return
-    const mine = { id: uid('reply'), author: phone.name, text: comment.trim().slice(0, 120), at: clock(), likes: 0, liked: false }
-    persist(rows.map((item) => (item.id === opened.id ? { ...item, likes: item.likes + 1, replies: [...item.replies, mine] } : item)))
-    const threadId = opened.id
-    setComment('')
-    runAiJob(jobKey(phone.namespace, 'forum', `reply-${threadId}`), async () => {
-      await replyForumCommentAi({ namespace: phone.namespace, threadId, player: phone.name, voice })
-    })
-  }
-
-  return (
-    <div className="sms-shell h-full min-h-0" style={candyStyle('#F0C56A', '#F8D0DC', '#D5F0E4')}>
-      <Screen title={opened ? opened.board : '论坛'} subtitle={opened ? opened.author : '帖子、跟帖、吃瓜'} onBack={() => (opened ? setOpenId(null) : props.onBack())}>
-        {opened ? (
-          <div className="space-y-3">
-            <article className="menu-card">
-              <p className="text-base font-semibold">{opened.title}</p>
-              <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{opened.author} · {opened.board}</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{opened.text}</p>
-              <button type="button" className="chip mt-3" onClick={() => likeThread(opened.id)}><Heart size={13} fill={opened.liked ? 'currentColor' : 'none'} /> {opened.likes}</button>
-            </article>
-            <div className="space-y-2">
-              {opened.replies.map((item) => (
-                <article key={item.id} className="menu-card">
-                  <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.author}</p>
-                  <p className="mt-1 text-sm leading-6">{item.text}</p>
-                </article>
-              ))}
-            </div>
-            <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); sendComment() }}>
-              <input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="跟一帖" className="soft-input" />
-              <button type="submit" className="chip chip-solid shrink-0" disabled={!comment.trim()}>发送</button>
-            </form>
-          </div>
-        ) : (
-          <>
-            <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-white/70 p-1 text-xs">
-              <button type="button" className="rounded-full py-1.5" style={{ background: tab === 'all' ? '#F0C56A' : 'transparent' }} onClick={() => setTab('all')}>广场</button>
-              <button type="button" className="rounded-full py-1.5" style={{ background: tab === 'mine' ? '#F0C56A' : 'transparent' }} onClick={() => setTab('mine')}>我的</button>
-            </div>
-            <div className="menu-card mb-3 space-y-2">
-              <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>根据当前剧情随机来帖，或指定想看的内容</p>
-              <button type="button" className="chip chip-butter w-full" disabled={busy} onClick={() => void growRandom()}>{busy ? '正在写…' : '随机生成帖子'}</button>
-            </div>
-            <form className="menu-card mb-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void grow() }}>
-              <textarea value={plot} rows={3} onChange={(event) => setPlot(event.target.value)} placeholder="可选：指定想看的内容，比如有人在电梯里认出了前桌" className="soft-input resize-none" />
-              <button type="submit" className="chip chip-solid" disabled={busy || !plot.trim()}>{busy ? '正在写…' : '按指定内容生成'}</button>
-            </form>
-            <form className="menu-card mb-3 space-y-2" onSubmit={(event) => { event.preventDefault(); publish() }}>
-              <div className="flex flex-wrap gap-1.5">
-                {BOARDS.map((item) => (
-                  <button key={item} type="button" className="chip" style={board === item ? { background: '#F0C56A' } : undefined} onClick={() => setBoard(item)}>{item}</button>
-                ))}
-              </div>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" className="soft-input" />
-              <textarea value={body} rows={3} onChange={(event) => setBody(event.target.value)} placeholder="自己发一帖" className="soft-input resize-none" />
-              <button type="submit" className="chip chip-solid" disabled={!title.trim() || !body.trim()}>发布</button>
-            </form>
-            <div className="space-y-2">
-              {visible.length === 0 ? <PillNote tone="butter">版面还是空的</PillNote> : visible.map((item) => (
-                <button key={item.id} type="button" className="menu-card w-full text-left" onClick={() => setOpenId(item.id)}>
-                  <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.board} · {item.author}</p>
-                  <p className="mt-1 text-sm font-medium">{item.title}</p>
-                  <p className="mt-1 line-clamp-2 text-sm leading-6">{item.text}</p>
-                  <p className="mt-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.likes} 赞 · {item.replies.length} 回复</p>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </Screen>
-    </div>
-  )
+export function ForumApp({onBack}:{onBack:()=>void}){
+ const phone=useMellow(s=>s.identities.find(i=>i.id===s.activeIdentityId)),settings=useMellow(s=>s.settings),presets=useMellow(s=>s.presets),revision=useMellow(s=>s.dataRevision)
+ const namespace=phone?.namespace||''
+ const voice=presets.find(p=>p.id===modePresetId(settings,'forum'))?.data.prompts.filter(b=>b.enabled).map(b=>b.content).join('\n')||''
+ const [rows,setRows]=useState<ForumThread[]>([]),[ready,setReady]=useState(false),[openId,setOpenId]=useState<string|null>(null),[tab,setTab]=useState<'all'|'follow'|'mine'>('all'),[section,setSection]=useState('全部'),[query,setQuery]=useState(''),[follows,setFollows]=useState<string[]>([]),[writing,setWriting]=useState(false),[title,setTitle]=useState(''),[body,setBody]=useState(''),[board,setBoard]=useState('日常'),[plot,setPlot]=useState(''),[comment,setComment]=useState(''),[note,setNote]=useState(''),[busy,setBusy]=useState(false)
+ useEffect(()=>{let alive=true;if(namespace)void Promise.all([storage.getBag(namespace,'forum'),storage.getBag<string[]>(namespace,'forum_follows')]).then(([saved,following])=>{if(alive){setRows(normalizeForumThreads(saved));setFollows(following??[]);setReady(true)}});return()=>{alive=false}},[namespace,revision])
+ if(!phone)return null
+ const persist=async(next:ForumThread[])=>{await storage.setBag(namespace,'forum',next.slice(0,40));setRows(next)}
+ const opened=rows.find(r=>r.id===openId)
+ const visible=rows.filter(r=>(section==='全部'||r.board===section)&&(tab==='all'||(tab==='mine'?r.mine:follows.includes(r.author)))&&[r.title,r.text,r.author,r.board].join(' ').toLowerCase().includes(query.toLowerCase()))
+ const following=(author:string)=>{const next=follows.includes(author)?follows.filter(a=>a!==author):[...follows,author];setFollows(next);void storage.setBag(namespace,'forum_follows',next)}
+ const like=(id:string)=>void persist(rows.map(r=>r.id===id?{...r,liked:!r.liked,likes:Math.max(0,r.likes+(r.liked?-1:1))}:r))
+ const generate=(specified:boolean)=>{const key=jobKey(namespace,'forum',specified?'plot':'random');if(busy||isAiJobRunning(key))return;setBusy(true);setNote('');runAiJob(key,async()=>{try{const next=specified?await generatePlotForumPost(namespace,voice,plot,rows,section==='全部'?undefined:section):await generateRandomForumPost(namespace,voice,rows,section==='全部'?undefined:section);setRows(next);if(specified)setPlot('')}catch(e){setNote(e instanceof Error?e.message:'这次没写成')}finally{setBusy(false)}})}
+ const publish=async()=>{if(!ready||!body.trim()||!title.trim())return;try{await persist([{id:uid('topic'),title:title.trim().slice(0,64),text:body.trim().slice(0,12000),board,author:phone.name,at:Date.now(),likes:0,liked:false,replies:[],mine:true},...rows]);setWriting(false);setBody('');setTitle('');setTab('mine');setSection('全部')}catch(e){setNote(String(e))}}
+ const sendComment=()=>{if(!opened||!comment.trim()||busy)return;const text=comment.trim();setComment('');setBusy(true);void persist(rows.map(r=>r.id===opened.id?{...r,replies:[...r.replies,{id:uid('reply'),author:phone.name,text,at:Date.now(),likes:0,liked:false}]}:r)).then(()=>{runAiJob(jobKey(namespace,'forum','reply-'+opened.id),async()=>{try{await replyForumCommentAi({namespace,threadId:opened.id,player:phone.name,voice})}catch(e){setNote(String(e))}finally{setBusy(false)}})}).catch(e=>{setNote(String(e));setBusy(false)})}
+ const followButton=(author:string)=><button className="chip star-follow" aria-pressed={follows.includes(author)} onClick={()=>following(author)}>{follows.includes(author)?<Check size={13}/>:<UserPlus size={13}/>} {follows.includes(author)?'已关注':'关注'}</button>
+ const when=(at:number)=>new Date(at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})
+ return <div className="sms-shell star-shell h-full min-h-0"><Screen title={writing?'发一帖':opened?opened.board:'论坛'} subtitle={opened?opened.author:'同好相遇，日常有声'} onBack={()=>{if(opened)setOpenId(null);else if(writing)setWriting(false);else onBack()}} right={!opened&&!writing?<button className="chip chip-solid" onClick={()=>{setBoard(section==='全部'?'日常':section);setWriting(true)}}><PenLine size={14}/>发帖</button>:null}>
+ {note&&<PillNote tone="butter">{note}</PillNote>}
+ {writing?<form className="menu-card space-y-3" onSubmit={e=>{e.preventDefault();void publish()}}><div className="flex flex-wrap gap-2">{FORUM_BOARDS.map(b=><button key={b} type="button" className={board===b?'chip chip-solid':'chip'} onClick={()=>setBoard(b)}>{b}</button>)}</div><input className="soft-input" aria-label="帖子标题" maxLength={64} placeholder="给这一帖起个名字" value={title} onChange={e=>setTitle(e.target.value)}/><textarea className="soft-input resize-none leading-7" rows={10} maxLength={12000} aria-label="帖子正文" placeholder="写下想说的话，也可以放一篇同人文" value={body} onChange={e=>setBody(e.target.value)}/><div className="flex items-center justify-between text-xs"><span>{body.length}/12000</span><button className="chip chip-solid" disabled={!ready||!title.trim()||!body.trim()}>发布到{board}</button></div></form>:opened?<><article className="menu-card"><div className="mb-4 flex items-center justify-between"><span className="text-xs">{opened.author} · {when(opened.at)}</span>{!opened.mine&&followButton(opened.author)}</div><h2 className="mb-4 text-xl font-semibold">{opened.title}</h2><p className="whitespace-pre-wrap break-words text-sm leading-8">{opened.text}</p><div className="mt-4 flex gap-3"><button className="chip" onClick={()=>like(opened.id)}><Heart size={14} fill={opened.liked?'currentColor':'none'}/>{opened.likes}</button><span className="chip"><MessageCircle size={14}/>{opened.replies.length}</span></div></article><h3 className="my-4 text-sm font-semibold">评论</h3><div className="space-y-2">{opened.replies.map(r=><article key={r.id} className="menu-card"><p className="mb-2 text-xs opacity-70">{r.author} · {when(r.at)}</p><p className="text-sm leading-6">{r.text}</p></article>)}</div><form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();sendComment()}}><input className="soft-input min-w-0" aria-label="论坛评论" value={comment} onChange={e=>setComment(e.target.value)} placeholder="说说你的想法"/><button className="chip chip-solid" disabled={busy||!comment.trim()}>发送</button></form></>:<>
+ <label className="star-search mb-3 flex items-center gap-2 rounded-2xl border border-current/10 px-3 py-2"><Search size={17}/><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" aria-label="搜索论坛" placeholder="搜索帖子、作者、同好话题" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}>清除</button>}</label>
+ <nav aria-label="论坛分区" className="safe-tab-strip">{['全部',...FORUM_BOARDS].map(b=><button key={b} className={section===b?'chip chip-solid shrink-0':'chip shrink-0'} aria-pressed={section===b} onClick={()=>setSection(b)}>{b}</button>)}</nav>
+ <nav aria-label="论坛信息流" className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white/70 p-1 text-xs">{([['all','推荐'],['follow','关注'],['mine','我的']] as const).map(([id,label])=><button key={id} className="rounded-full py-2" aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+ <details className="menu-card mb-3"><summary className="cursor-pointer text-sm"><Sparkles size={14} className="mr-2 inline"/>来一点新鲜帖子</summary><p className="my-3 text-xs">按当前分区写帖子，也可以指定话题。</p><textarea className="soft-input" rows={2} placeholder="想让大家讨论什么？" aria-label="论坛生成话题" value={plot} onChange={e=>setPlot(e.target.value)}/><div className="mt-3 flex gap-2"><button className="chip" disabled={busy} onClick={()=>generate(false)}>随机来一帖</button><button className="chip chip-solid" disabled={busy||!plot.trim()} onClick={()=>generate(true)}>按话题生成</button></div></details>
+ <p className="mb-3 text-xs opacity-70">{section} · {visible.length} 条{busy?' · 正在写…':''}</p>
+ <div className="space-y-3">{!ready?<PillNote>正在打开论坛…</PillNote>:!visible.length?<PillNote tone="butter">{query?'没有匹配的帖子':'这个分区还安静，发一帖或生成一篇新内容吧。'}</PillNote>:visible.map(r=><article key={r.id} className="menu-card star-post"><div className="mb-3 flex items-center justify-between gap-2"><button className="flex min-w-0 items-center gap-2 text-left" onClick={()=>setQuery(r.author)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/60">{r.author.slice(0,1)}</span><span className="min-w-0"><strong className="block truncate text-sm">{r.author}</strong><span className="block text-[11px] opacity-70">{when(r.at)} · {r.board}</span></span></button>{!r.mine&&followButton(r.author)}</div><button className="block w-full text-left" onClick={()=>setOpenId(r.id)}><h2 className="mb-2 font-semibold">{r.title}</h2><p className="line-clamp-5 whitespace-pre-wrap text-sm leading-7">{r.text}</p><span className="mt-2 block text-xs opacity-65">展开全文</span></button><div className="mt-3 grid grid-cols-2 gap-2 border-t border-current/10 pt-3"><button className="chip" onClick={()=>like(r.id)}><Heart size={14} fill={r.liked?'currentColor':'none'}/>{r.likes}</button><button className="chip" onClick={()=>setOpenId(r.id)}><MessageCircle size={14}/>{r.replies.length} 评论</button></div></article>)}</div>
+ </>}
+ </Screen></div>
 }

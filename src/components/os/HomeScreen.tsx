@@ -205,7 +205,6 @@ export function HomeScreen() {
       {page3.length > 0 ? (
         <section className="home-page relative z-10">
           <div className="launcher-col launcher-apps">
-            <p className="mb-3 text-xs" style={{ color: 'var(--m-text-secondary)' }}>还有这些</p>
             <div className="launcher-board" style={{ marginTop: 0, alignContent: 'start' }}>
               {page3.map((app) => (
                 <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} onClick={() => openApp(app.id)} />

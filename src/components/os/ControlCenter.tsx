@@ -87,7 +87,7 @@ function Tile(props: { icon: ReactNode; label: string; on: boolean; onClick: () 
     <button
       type="button"
       onClick={props.onClick}
-      className="flex items-center gap-2 rounded-3xl px-4 py-4 text-left text-sm"
+      data-theme-control data-on={props.on} aria-pressed={props.on} className="control-tile flex items-center gap-2 rounded-3xl px-4 py-4 text-left text-sm"
       style={{ background: props.on ? 'var(--m-primary)' : 'rgba(255,255,255,0.8)' }}
     >
       {props.icon}

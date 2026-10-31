@@ -1,4 +1,6 @@
+import { RecordDate, useRecordArchive } from './RecordArchive.tsx'
 import { useEffect, useState, type ReactNode } from 'react'
+import { downloadJson } from '../../lib/download.ts'
 import { askLine } from '../../lib/ask.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
@@ -20,10 +22,19 @@ function usePhone() {
   return identities.find((item) => item.id === activeIdentityId) ?? null
 }
 
+const GUIDES: Record<string, [string,string,string]> = {
+  '宠物日记': ['🐾','一屋两人，一只毛茸茸','饱腹、精神与亲密都会留下变化，先观察今天的状态，再决定陪它做什么。'],
+  '植物管家': ['🌿','给窗台一点时间','水与光会随时间消耗；叶子的状态是线索。每盆植物都有自己的养护记录。'],
+  '身体记录': ['◌','听听身体的小信号','按睡眠、饮食和身体感受分开记录，保留具体时间，留意一周里重复出现的变化。'],
+  '梦境电台': ['☾','昨夜，哪一帧没散场','记下颜色、场景和醒来时的感觉；播一则把梦变成短旁白，不当作预言。'],
+  '灵感捕手': ['✦','先收藏，再慢慢完成','抓住一句话，把最想写的钉在前面；展开会沿着原来的语气延伸。'],
+  '写作助手': ['✒','把草稿写成你的声音','续写、对白和细节各有用处；修改前会保留上一稿，可撤销或导出。'],
+  '音乐速记': ['♫','给一段旋律留个坐标','歌名、心情、一句词，都可以成为下一次创作的起点。音乐播放在首页或外部连接。'],
+}
 function Shell(props: { title: string; subtitle: string; tint: string; onBack: () => void; children: ReactNode }) {
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle(props.tint, '#F8D0DC', '#E6DDF8')}>
-      <Screen title={props.title} subtitle={props.subtitle} onBack={props.onBack}>{props.children}</Screen>
+      <Screen title={props.title} subtitle={props.subtitle} onBack={props.onBack}><section className="pocket-hero mb-4 flex items-start gap-3 rounded-3xl p-4"><span className="text-3xl">{GUIDES[props.title]?.[0]}</span><div><h2 className="font-semibold">{GUIDES[props.title]?.[1]}</h2><p className="mt-1 text-xs leading-5 opacity-75">{GUIDES[props.title]?.[2]}</p></div></section>{props.children}</Screen>
     </div>
   )
 }
@@ -68,6 +79,7 @@ interface PetLog {
 }
 
 interface PetState {
+  caredAt?: number
   name: string
   kind: PetKind
   full: number
@@ -116,7 +128,7 @@ function sceneOf(pet: PetState): string {
 
 function readPet(raw: PetState | { name: string; mood: number; log: PetLog[] } | null): PetState {
   if (!raw) return { name: '小糖', kind: '猫', full: 70, mood: 60, energy: 70, bond: 20, log: [] }
-  if ('kind' in raw && raw.kind) return raw
+  if ('kind' in raw && raw.kind) { const hours=Math.min(72, Math.max(0,(Date.now()-(raw.caredAt ?? Date.now()))/3600000)); return { ...raw, full: clamp(raw.full-Math.floor(hours*3)), mood: clamp(raw.mood-Math.floor(hours)), energy: clamp(raw.energy+Math.floor(hours*2)), caredAt: Date.now() } }
   return { name: raw.name || '小糖', kind: '猫', full: 70, mood: raw.mood ?? 60, energy: 60, bond: 30, log: raw.log ?? [] }
 }
 
@@ -137,7 +149,7 @@ export function PetApp(props: { onBack: () => void }) {
   if (!phone || !pet) return null
   const acts = PET_ACTS[pet.kind]
   const commit = (next: PetState, line: string) => {
-    const saved = { ...next, log: [{ id: uid('pet'), text: line, at: clock() }, ...next.log].slice(0, 24) }
+    const saved = { ...next, caredAt: Date.now(), log: [{ id: uid('pet'), text: line, at: clock() }, ...next.log].slice(0, 24) }
     setPet(saved)
     void storage.setBag(phone.namespace, 'pet', saved)
   }
@@ -216,6 +228,7 @@ export function PetApp(props: { onBack: () => void }) {
 }
 
 interface Plant {
+  tendedAt?: number
   id: string
   name: string
   note: string
@@ -234,10 +247,10 @@ export function PlantApp(props: { onBack: () => void }) {
   const { phone, rows, save } = useRows<Plant>('plants')
   const [name, setName] = useState('')
   if (!phone || !rows) return null
-  const plants = rows.map((item) => ({ ...item, water: item.water ?? 55, sun: item.sun ?? 50, note: item.note || '还在' }))
+  const plants = rows.map(item => { const hours=Math.min(168, Math.max(0,(Date.now()-(item.tendedAt ?? Date.now()))/3600000));return { ...item, water: clamp((item.water ?? 55)-Math.floor(hours)), sun: clamp((item.sun ?? 50)-Math.floor(hours/3)), tendedAt: Date.now(), note: item.note || '还在' } })
   const add = () => {
     if (!name.trim()) return
-    save([{ id: uid('plant'), name: name.trim(), note: '刚搬进来', water: 60, sun: 50 }, ...plants])
+    save([{ id: uid('plant'), name: name.trim(), note: '刚搬进来', water: 60, sun: 50, tendedAt: Date.now() }, ...plants])
     setName('')
   }
   const patch = (id: string, next: Partial<Plant>, note: string) => {
@@ -290,12 +303,13 @@ const BODY_KINDS = [
 
 export function BodyApp(props: { onBack: () => void }) {
   const { phone, rows, save } = useRows<BodyRow>('body')
+  const archive = useRecordArchive(rows)
   const [kind, setKind] = useState('睡')
   const [text, setText] = useState('')
   if (!phone || !rows) return null
   const hint = BODY_KINDS.find((item) => item.id === kind)?.hint ?? ''
   return (
-    <Shell title="身体记录" subtitle="睡、吃、身体" tint="#F2B48A" onBack={props.onBack}>
+    <Shell title="身体记录" subtitle="睡、吃、身体" tint="#F2B48A" onBack={props.onBack}><section className="menu-card mb-3"><p className="text-xs">最近七天</p><p className="mt-1 text-lg font-semibold">{rows.filter(r=>r.at !== undefined && Date.now()-r.at<7*86400000).length} 条身体记录</p><p className="mt-1 text-xs">记录具体时长、时间或感受，方便回看生活节奏。</p></section>
       <div className="mb-3 grid grid-cols-3 gap-2">
         {BODY_KINDS.map((item) => (
           <button key={item.id} type="button" className="menu-card text-sm" style={kind === item.id ? { background: '#F8E6C0' } : undefined} onClick={() => setKind(item.id)}>
@@ -313,10 +327,10 @@ export function BodyApp(props: { onBack: () => void }) {
         <input value={text} onChange={(event) => setText(event.target.value)} placeholder={hint} className="soft-input" />
         <button type="submit" className="chip chip-solid shrink-0">记下</button>
       </form>
-      <div className="space-y-2">
-        {rows.length === 0 ? <PillNote tone="peach">还没有记录。关心你的人以后可能会问。</PillNote> : rows.map((item) => (
+      {archive.control}<div className="space-y-2">
+        {rows.length === 0 ? <PillNote tone="peach">还没有记录。关心你的人以后可能会问。</PillNote> : archive.visible.map((item) => (
           <article key={item.id} className="menu-card text-sm">
-            <span className="mr-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.kind}{item.at ? ` · ${new Date(item.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}</span>
+            <RecordDate at={item.at}/><span className="mr-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.kind}</span>
             {item.text}
           </article>
         ))}
@@ -326,6 +340,7 @@ export function BodyApp(props: { onBack: () => void }) {
 }
 
 interface Dream {
+  at?: number
   id: string
   text: string
   echo?: string
@@ -333,36 +348,39 @@ interface Dream {
 
 export function DreamApp(props: { onBack: () => void }) {
   const { phone, rows, save } = useRows<Dream>('dreams')
+  const archive = useRecordArchive(rows)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
   if (!phone || !rows) return null
   const air = async (item: Dream) => {
     if (busy) return
     setBusy(item.id)
+    setError('')
     try {
       const echo = await askLine('把这段梦接成电台里的一小段旁白，60 字以内，不要解释，不要列点。', item.text, 120)
       save(rows.map((row) => (row.id === item.id ? { ...row, echo } : row)))
-    } catch {
-      save(rows.map((row) => (row.id === item.id ? { ...row, echo: '信号不好，这段先留在这里。' } : row)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '生成失败，可以重试')
     } finally {
       setBusy('')
     }
   }
   return (
-    <Shell title="梦境电台" subtitle="可能会漏出去" tint="#C9B6E8" onBack={props.onBack}>
+    <Shell title="梦境电台" subtitle="夜间频率 · 梦的档案" tint="#C9B6E8" onBack={props.onBack}>{error&&<PillNote tone="peach">{error}</PillNote>}<div className="mb-3 flex flex-wrap gap-2">{['反复出现的地点','醒来前最后一句话','梦里不认识的人'].map(v=><button key={v} className="chip" onClick={()=>setText(text?text+'\n'+v+'：':v+'：')}>{v}</button>)}</div>
       <form className="menu-card mb-3" onSubmit={(event) => {
         event.preventDefault()
         if (!text.trim()) return
-        save([{ id: uid('dream'), text: text.trim() }, ...rows])
+        save([{ id: uid('dream'), at: clock(), text: text.trim() }, ...rows])
         setText('')
       }}>
         <textarea value={text} rows={4} onChange={(event) => setText(event.target.value)} placeholder="梦见了什么" className="soft-input resize-none" />
         <button type="submit" className="chip chip-lilac mt-2">留下</button>
       </form>
-      <div className="space-y-2">
-        {rows.length === 0 ? <PillNote tone="lilac">电台还是静音</PillNote> : rows.map((item) => (
+      {archive.control}<div className="space-y-2">
+        {rows.length === 0 ? <PillNote tone="lilac">电台还是静音</PillNote> : archive.visible.map((item) => (
           <article key={item.id} className="menu-card">
-            <p className="text-sm leading-6">{item.text}</p>
+            <RecordDate at={item.at}/><p className="text-sm leading-6">{item.text}</p>
             {item.echo ? <p className="mt-2 text-sm leading-6" style={{ color: 'var(--m-text-secondary)' }}>{item.echo}</p> : (
               <button type="button" className="chip mt-2" disabled={busy === item.id} onClick={() => void air(item)}>{busy === item.id ? '正在播…' : '播一则'}</button>
             )}
@@ -374,6 +392,7 @@ export function DreamApp(props: { onBack: () => void }) {
 }
 
 interface Spark {
+  at?: number
   id: string
   text: string
   pinned?: boolean
@@ -382,37 +401,39 @@ interface Spark {
 
 export function SparkApp(props: { onBack: () => void }) {
   const { phone, rows, save } = useRows<Spark>('sparks')
+  const archive = useRecordArchive(rows)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
   if (!phone || !rows) return null
-  const ordered = [...rows].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)))
+  const ordered = [...archive.visible].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)))
   const expand = async (item: Spark) => {
     if (busy) return
     setBusy(item.id)
     try {
       const more = await askLine('把这句没写完的话展开成两句，保持原来的口气，不要总结。', item.text, 120)
       save(rows.map((row) => (row.id === item.id ? { ...row, more } : row)))
-    } catch {
-      save(rows.map((row) => (row.id === item.id ? { ...row, more: item.text } : row)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '生成失败，可以重试')
     } finally {
       setBusy('')
     }
   }
   return (
-    <Shell title="灵感捕手" subtitle="一句没写完" tint="#F0D48A" onBack={props.onBack}>
+    <Shell title="灵感捕手" subtitle={`${rows.length} 个火花 · ${rows.filter(r=>r.pinned).length} 个置顶`} tint="#F0D48A" onBack={props.onBack}>{error&&<PillNote tone="peach">{error}</PillNote>}<div className="mb-3 flex flex-wrap gap-2">{['人物突然撒谎的理由','两人都没提起的旧事','一个不合时宜的物件'].map(v=><button key={v} className="chip" onClick={()=>setText(v+'：')}>{v}</button>)}</div>
       <form className="mb-3 flex gap-2" onSubmit={(event) => {
         event.preventDefault()
         if (!text.trim()) return
-        save([{ id: uid('spark'), text: text.trim() }, ...rows])
+        save([{ id: uid('spark'), at: clock(), text: text.trim() }, ...rows])
         setText('')
       }}>
         <input value={text} onChange={(event) => setText(event.target.value)} placeholder="先抓住这一句" className="soft-input" />
         <button type="submit" className="chip chip-butter shrink-0">抓住</button>
       </form>
-      <div className="space-y-2">
+      {archive.control}<div className="space-y-2">
         {ordered.length === 0 ? <PillNote tone="butter">还没有漏网的句子</PillNote> : ordered.map((item) => (
           <article key={item.id} className="menu-card">
-            <p className="text-sm leading-6">{item.pinned ? '★ ' : ''}{item.text}</p>
+            <RecordDate at={item.at}/><p className="text-sm leading-6">{item.pinned ? '★ ' : ''}{item.text}</p>
             {item.more ? <p className="mt-2 text-sm leading-6" style={{ color: 'var(--m-text-secondary)' }}>{item.more}</p> : null}
             <div className="mt-2 flex gap-1.5">
               <button type="button" className="chip" onClick={() => save(rows.map((row) => row.id === item.id ? { ...row, pinned: !row.pinned } : row))}>{item.pinned ? '取消钉住' : '钉住'}</button>
@@ -431,6 +452,8 @@ export function WriteApp(props: { onBack: () => void }) {
   const [ready, setReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [style, setStyle] = useState('续写')
+  const [previous, setPrevious] = useState<string | null>(null)
   useEffect(() => {
     if (!phone) return
     let stop = false
@@ -453,7 +476,8 @@ export function WriteApp(props: { onBack: () => void }) {
     setBusy(true)
     setError('')
     try {
-      const line = await askLine('接着用户的文字往下写一两句，保持同一种语气，不要总结，不要列点。', text, 160)
+      const line = await askLine(`任务：${style}。续写时推进一个具体事件；对白模式增加有潜台词的对话；细节模式增加可见动作与环境。保持原文语气和人称，不总结、不列点。只返回可接在文末的新段落。`, text, 500)
+      setPrevious(text)
       keep(`${text.trim()}\n${line}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '没接上')
@@ -463,10 +487,10 @@ export function WriteApp(props: { onBack: () => void }) {
   }
   return (
     <Shell title="写作助手" subtitle={`${text.trim().length} 字`} tint="#E7B7C9" onBack={props.onBack}>
-      <textarea value={text} rows={10} onChange={(event) => keep(event.target.value)} placeholder="从这里开始。写到卡住的地方，让它接下去。" className="soft-input resize-none leading-7" />
+      <div className="mb-3 flex flex-wrap gap-2">{['续写','对白','细节'].map(v => <button key={v} className={style===v?'chip chip-solid':'chip'} onClick={()=>setStyle(v)}>{v}</button>)}</div><textarea value={text} rows={10} onChange={(event) => keep(event.target.value)} placeholder="从这里开始。写到卡住的地方，让它接下去。" className="soft-input resize-none leading-7" />
       <div className="mt-3 flex gap-2">
         <button type="button" className="chip chip-solid" disabled={busy || !text.trim()} onClick={() => void more()}>{busy ? '正在接…' : '接下去'}</button>
-        <button type="button" className="chip" onClick={() => keep('')}>清空</button>
+        <button type="button" className="chip" onClick={() => { setPrevious(text);keep('') }}>清空</button><button className="chip" disabled={previous===null} onClick={()=>{if(previous!==null){keep(previous);setPrevious(null)}}}>撤销</button><button className="chip" onClick={()=>downloadJson('写作草稿.json',{text,exportedAt:Date.now()})}>导出</button>
       </div>
       {error ? <div className="mt-2"><PillNote tone="peach" inline>{error}</PillNote></div> : null}
     </Shell>
@@ -474,6 +498,7 @@ export function WriteApp(props: { onBack: () => void }) {
 }
 
 interface Tune {
+  at?: number
   id: string
   title: string
   line: string
@@ -484,6 +509,7 @@ const MOODS = ['轻', '夜', '快', '慢']
 
 export function MusicApp(props: { onBack: () => void }) {
   const { phone, rows, save } = useRows<Tune>('tunes')
+  const archive = useRecordArchive(rows)
   const [title, setTitle] = useState('')
   const [line, setLine] = useState('')
   const [mood, setMood] = useState(MOODS[0] ?? '轻')
@@ -493,7 +519,7 @@ export function MusicApp(props: { onBack: () => void }) {
       <form className="menu-card mb-3 space-y-2" onSubmit={(event) => {
         event.preventDefault()
         if (!title.trim() && !line.trim()) return
-        save([{ id: uid('tune'), title: title.trim() || '未命名', line: line.trim(), mood }, ...rows])
+        save([{ id: uid('tune'), at: clock(), title: title.trim() || '未命名', line: line.trim(), mood }, ...rows])
         setTitle('')
         setLine('')
       }}>
@@ -506,10 +532,10 @@ export function MusicApp(props: { onBack: () => void }) {
         <input value={line} onChange={(event) => setLine(event.target.value)} placeholder="一句词，或一段旋律" className="soft-input" />
         <button type="submit" className="chip chip-sky">记下</button>
       </form>
-      <div className="space-y-2">
-        {rows.length === 0 ? <PillNote tone="sky">还没有旋律。播放器里的歌是另外一处。</PillNote> : rows.map((item) => (
+      {archive.control}<div className="space-y-2">
+        {rows.length === 0 ? <PillNote tone="sky">还没有旋律。播放器里的歌是另外一处。</PillNote> : archive.visible.map((item) => (
           <article key={item.id} className="menu-card">
-            <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.mood || '未标'}</p>
+            <RecordDate at={item.at}/><p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.mood || '未标'}</p>
             <p className="text-sm font-medium">{item.title}</p>
             <p className="mt-1 text-sm leading-6">{item.line}</p>
           </article>

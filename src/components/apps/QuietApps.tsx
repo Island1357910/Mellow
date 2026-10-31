@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { AppGlyph } from '../os/AppGlyph.tsx'
+import { Sparkles } from 'lucide-react'
 import { CATEGORY_LABEL, MARKET_LISTINGS } from '../../data/market.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { MarketListing } from '../../types/index.ts'
@@ -16,12 +18,12 @@ export function SideApp(props: { onBack: () => void }) {
 type MarketTab = 'all' | 'mine' | MarketListing['category']
 
 const TINTS = ['#F8D0DC', '#D5F0E4', '#F8E6C0', '#E6DDF8', '#D7E7F8', '#FBE0D2']
-const ICONS: Record<string, string> = { diary: '📔', star: '⭐', duotao: '🛍️', flash: '🛵', huizhen: '🪡', table: '🎲', pet: '🐾', plant: '🪴', body: '🩺', dream: '🌙', spark: '💡', write: '✒️', music: '🎼', create: '✒️', forum: '💬', jiushi: '📜', worldforge: '🏗️' }
 
 export function MarketApp(props: { onBack: () => void }) {
   const settings = useMellow((state) => state.settings)
   const patchSettings = useMellow((state) => state.patchSettings)
   const [tab, setTab] = useState<MarketTab>('all')
+  const [query, setQuery] = useState('')
   const installed = new Set(settings.installedApps)
   const categories = (Object.keys(CATEGORY_LABEL) as Array<MarketListing['category']>).filter((key) => MARKET_LISTINGS.some((item) => item.category === key))
   const tabs: Array<[MarketTab, string, string]> = [
@@ -33,7 +35,7 @@ export function MarketApp(props: { onBack: () => void }) {
     const next = installed.has(id) ? settings.installedApps.filter((item) => item !== id) : [...settings.installedApps, id]
     void patchSettings({ installedApps: next })
   }
-  const list = MARKET_LISTINGS.filter((item) => (tab === 'all' ? true : tab === 'mine' ? installed.has(item.id) : item.category === tab))
+  const list = MARKET_LISTINGS.filter(item => (item.name+item.description).includes(query.trim()) && (tab === 'all' ? true : tab === 'mine' ? installed.has(item.id) : item.category === tab))
   const ready = list.filter((item) => item.status === 'ready')
   const soon = list.filter((item) => item.status !== 'ready')
   const mineCount = MARKET_LISTINGS.filter((item) => installed.has(item.id)).length
@@ -41,9 +43,7 @@ export function MarketApp(props: { onBack: () => void }) {
 
   const row = (item: MarketListing, index: number) => (
     <li key={item.id} className="flex items-center gap-3 px-3 py-3">
-      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-[22px] shadow-[inset_0_-3px_0_rgba(0,0,0,0.04)]" style={{ background: TINTS[index % TINTS.length] }}>
-        {ICONS[item.id] ?? item.name.slice(0, 1)}
-      </span>
+      <AppGlyph id={item.id} tint={TINTS[index % TINTS.length]!} size={48} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-medium">{item.name}</span>
@@ -64,16 +64,16 @@ export function MarketApp(props: { onBack: () => void }) {
   return (
     <div className="sms-shell relative h-full min-h-0">
       <Screen title="市场" subtitle="装上就出现在主页" onBack={props.onBack}>
-        <div className="mb-3 flex gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
+        <input aria-label="搜索市场应用" className="soft-input mb-3" value={query} onChange={e => setQuery(e.target.value)} placeholder="按名称或玩法找应用" /><div className="mb-3 flex overflow-x-auto gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
           {tabs.map(([id, label, color]) => (
-            <button key={id} type="button" className="flex-1 whitespace-nowrap rounded-full py-1.5" style={{ background: tab === id ? color : 'transparent' }} onClick={() => setTab(id)}>
+            <button key={id} type="button" className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5" style={{ background: tab === id ? color : 'transparent' }} onClick={() => setTab(id)}>
               {label}
             </button>
           ))}
         </div>
         {tab === 'all' ? (
           <div className="mb-3 flex items-center gap-3 rounded-[24px] p-4 shadow-[0_10px_22px_rgba(243,168,186,0.18)]" style={{ background: 'linear-gradient(135deg,#FFE3EE,#EFE6FF 60%,#DDF3EA)' }}>
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-white/80 text-2xl">🧁</span>
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-white/80 text-2xl"><Sparkles size={25} strokeWidth={1.75} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold">今日上新</span>
               <span className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>{pending ? `已装上 ${mineCount} 个 · 还有 ${pending} 个在路上` : `已装上 ${mineCount} 个 · 这一页都可以装`}</span>

@@ -1,3 +1,4 @@
+import { EarningsPanel } from './EarningsPanel.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Flame, RotateCcw, Star } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -30,7 +31,7 @@ const GAMES: GameInfo[] = [
     icon: '🌸',
     tag: '反应 · 容易',
     intro: '花落下来时点中它。连续接住会计连击。',
-    rules: ['一共落下 8 朵花', '接住 6 朵及以上过关', '过关 +4 枚，没过也有 1 枚'],
+    rules: ['一共落下 8 朵花', '接住 6 朵及以上过关', '过关 +40 枚，没过也有 5 枚'],
     rate: 1,
     cap: 120,
     tint: '#F8E3C4',
@@ -42,7 +43,7 @@ const GAMES: GameInfo[] = [
     icon: '🎨',
     tag: '记忆 · 容易',
     intro: '记住闪过的颜色，再按同样的顺序点回去。',
-    rules: ['序列一轮比一轮长，共 4 轮', '点错扣一颗心，三颗心用完结束', '过关 +4 枚，没过也有 1 枚'],
+    rules: ['序列一轮比一轮长，共 4 轮', '点错扣一颗心，三颗心用完结束', '过关 +40 枚，没过也有 5 枚'],
     rate: 1,
     cap: 130,
     tint: '#F7D0DC',
@@ -54,7 +55,7 @@ const GAMES: GameInfo[] = [
     icon: '🃏',
     tag: '记忆 · 中等',
     intro: '在时间走完之前，把四对图案翻出来。',
-    rules: ['一次翻两张，相同就留下', '限时 25 秒，连续配对有连击', '过关 +8 枚，没过也有 1 枚'],
+    rules: ['一次翻两张，相同就留下', '限时 25 秒，连续配对有连击', '过关 +80 枚，没过也有 5 枚'],
     rate: 2,
     cap: 130,
     tint: '#D7F0E4',
@@ -66,7 +67,7 @@ const GAMES: GameInfo[] = [
     icon: '🔢',
     tag: '眼力 · 中等',
     intro: '按 1 到 9 点。每点对一个，剩下的数字会换位置。',
-    rules: ['点错扣一颗心，共三颗', '限时 20 秒', '过关 +8 枚，没过也有 1 枚'],
+    rules: ['点错扣一颗心，共三颗', '限时 20 秒', '过关 +80 枚，没过也有 5 枚'],
     rate: 2,
     cap: 160,
     tint: '#E4DDF6',
@@ -78,7 +79,7 @@ const GAMES: GameInfo[] = [
     icon: '🥁',
     tag: '节奏 · 较难',
     intro: '光点走到中间的色块时敲下去，敲中 8 拍。',
-    rules: ['深色是完美，浅色也算好', '8 拍里打中 6 拍过关', '过关 +12 枚，没过也有 1 枚'],
+    rules: ['深色是完美，浅色也算好', '8 拍里打中 6 拍过关', '过关 +120 枚，没过也有 5 枚'],
     rate: 3,
     cap: 140,
     tint: '#F6D7C4',
@@ -173,7 +174,7 @@ export function ChengfengApp(props: { onBack: () => void }) {
       if (!game || !namespace) return 0
       const item = GAMES.find((entry) => entry.id === game)
       if (!item) return 0
-      const gain = won ? item.rate * 4 : 1
+      const gain = won ? item.rate * 40 : 5
       setCoins(await addCoins(namespace, gain))
       setBest((current) => {
         if (score <= (current[item.id] ?? 0)) return current
@@ -203,7 +204,7 @@ export function ChengfengApp(props: { onBack: () => void }) {
         {info ? (
           <Stage key={info.id} info={info} best={best[info.id] ?? 0} onExit={() => setGame(null)} onSettle={settle} />
         ) : (
-          <Lobby best={best} coins={coins} onPick={setGame} />
+          <><EarningsPanel namespace={namespace} onBalance={setCoins} /><Lobby best={best} coins={coins} onPick={setGame} /></>
         )}
       </Screen>
     </div>
@@ -217,7 +218,7 @@ function Lobby(props: { best: Record<string, number>; coins: number; onPick: (id
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] bg-white/80 text-3xl shadow-[inset_0_-3px_0_rgba(0,0,0,0.04)]">🌬️</span>
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">今天想赚一点？</span>
-          <span className="mt-0.5 block text-xs leading-5" style={DIM}>过关拿满奖励，没过关也记 1 枚。现在余额 {props.coins} 枚。</span>
+          <span className="mt-0.5 block text-xs leading-5" style={DIM}>过关拿满奖励，没过关也记 5 枚。现在余额 {props.coins} 枚。</span>
         </span>
       </div>
       <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-[24px] bg-white/85 shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
@@ -230,12 +231,12 @@ function Lobby(props: { best: Record<string, number>; coins: number; onPick: (id
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-[15px] font-medium">{game.name}</span>
-                    <span className="shrink-0 rounded-full px-1.5 text-[10px]" style={{ background: game.tint, color: game.deep }}>{game.tag}</span>
+                    <span className="shrink-0 rounded-full px-1.5 text-[10px]" style={{ background: game.tint, color: `var(--m-detail-ink, ${game.deep})` }}>{game.tag}</span>
                   </span>
                   <span className="mt-0.5 line-clamp-1 block text-xs" style={DIM}>{game.intro}</span>
                   <span className="mt-1 flex items-center gap-2">
                     <Stars value={starsOf(score, game.cap)} size={11} color={game.deep} />
-                    <span className="text-[10px]" style={{ color: game.deep }}>最好 {score}</span>
+                    <span className="text-[10px]" style={{ color: `var(--m-detail-ink, ${game.deep})` }}>最好 {score}</span>
                   </span>
                 </span>
                 <span className="chip chip-pink shrink-0" style={{ fontSize: 12, padding: '5px 12px' }}>开始</span>
@@ -320,7 +321,7 @@ function Result(props: {
           </motion.span>
         ))}
       </div>
-      <p className="mt-2 text-4xl tabular-nums" style={{ color: props.info.deep }}>{props.end.score}</p>
+      <p className="mt-2 text-4xl tabular-nums" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}>{props.end.score}</p>
       {record ? (
         <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.7 }} className="mt-2 inline-block rounded-full bg-[#F5B83D] px-3 py-1 text-xs text-white">新纪录</motion.span>
       ) : (
@@ -334,7 +335,7 @@ function Result(props: {
           </div>
         ))}
       </div>
-      <p className="mt-3 rounded-full bg-white/80 py-2 text-sm" style={{ color: props.info.deep }}>
+      <p className="mt-3 rounded-full bg-white/80 py-2 text-sm" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}>
         {props.end.gain === null ? '正在入账…' : `+${props.end.gain} 枚`}
       </p>
       <div className="mt-4 flex gap-2">
@@ -360,7 +361,7 @@ function Hud(props: { color: string; label: string; extra?: ReactNode; value: st
     <div className="mb-3 flex items-center gap-2 rounded-[20px] bg-white/85 px-3 py-2 text-xs shadow-[0_8px_16px_rgba(120,80,100,0.05)]">
       <span className="rounded-full px-2 py-0.5 text-white" style={{ background: props.color }}>{props.label}</span>
       {props.extra}
-      <span className="ml-auto font-medium tabular-nums" style={{ color: props.color }}>{props.value}</span>
+      <span className="ml-auto font-medium tabular-nums" style={{ color: `var(--m-detail-ink, ${props.color})` }}>{props.value}</span>
     </div>
   )
 }
@@ -649,7 +650,7 @@ function MemoryPlay(props: { info: GameInfo; onFinish: Finish }) {
   }
   return (
     <div>
-      <Hud color={props.info.deep} label={`${pairs}/4 对`} value={`${(left / 10).toFixed(1)}s`} extra={combo > 1 ? <span className="flex items-center gap-0.5" style={{ color: props.info.deep }}><Flame size={12} />×{combo}</span> : null} />
+      <Hud color={props.info.deep} label={`${pairs}/4 对`} value={`${(left / 10).toFixed(1)}s`} extra={combo > 1 ? <span className="flex items-center gap-0.5" style={{ color: `var(--m-detail-ink, ${props.info.deep})` }}><Flame size={12} />×{combo}</span> : null} />
       <div className="grid grid-cols-4 gap-2 rounded-[28px] p-3" style={{ background: props.info.tint }}>
         {deck.map((face, index) => {
           const shown = open.includes(index) || known.includes(index)

@@ -1,7 +1,7 @@
 import { ensureDirectChat } from '../domain/messaging.ts'
 import { askLine } from './ask.ts'
 import { uid } from './id.ts'
-import { addCoins, readCoins } from './wallet.ts'
+import { spendCoins } from './wallet.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
 
@@ -150,9 +150,7 @@ export async function checkout(input: {
   note: string
 }): Promise<Delivery> {
   const total = input.items.reduce((sum, item) => sum + item.price * item.qty, 0)
-  const coins = await readCoins(input.namespace)
-  if (coins < total) throw new Error('枚不够')
-  await addCoins(input.namespace, -total)
+  await spendCoins(input.namespace, total)
   const now = Date.now()
   const order: Delivery = {
     id: uid('order'),

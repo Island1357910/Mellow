@@ -1,3 +1,4 @@
+import { togetherNoteFor } from '../lib/together.ts'
 import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
@@ -9,7 +10,7 @@ import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
-import { capReplySegments, expandReplyParts } from '../lib/stickerReply.ts'
+import { buildSmsReplySegments, SMS_SPLIT } from '../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
@@ -158,7 +159,7 @@ function replyNote(chat: Chat): string {
   const { min, max } = replyRange(chat)
   bits.push(
     max > 1
-      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独一行写 ${SPLIT}，不要编号。`
+      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独一行写 ${SMS_SPLIT}，不要编号。每条只说一个意思，避免把所有话挤进一条长消息。`
       : '这次只发一条消息。',
   )
   if (chat.backstory?.trim()) bits.push(`你和对方的过往与关系（对方补充的，当作你们共同的记忆）：\n${chat.backstory.trim()}`)
@@ -226,23 +227,12 @@ async function applyProfileChange(namespace: string, character: Character, chatI
   return notes
 }
 
-const SPLIT = '<<<分>>>'
 
 export function replyRange(chat: Chat): { min: number; max: number } {
   const clean = (value: number | undefined, fallback: number) => (value && value >= 1 && value <= 10 ? Math.round(value) : fallback)
   const min = clean(chat.replyMin, 1)
   const max = Math.max(min, clean(chat.replyMax, 3))
   return { min, max }
-}
-
-function splitReply(content: string, max: number): string[] {
-  const parts = content
-    .split(SPLIT)
-    .flatMap((part) => part.split(/\n\s*-{3,}\s*\n/))
-    .map((part) => part.trim())
-    .filter(Boolean)
-  if (parts.length <= max) return parts.length ? parts : [content.trim()]
-  return [...parts.slice(0, max - 1), parts.slice(max - 1).join('\n')]
 }
 
 export async function replyInChat(input: {
@@ -282,6 +272,7 @@ export async function replyInChat(input: {
     const life = await nearbyLifeNote(input.namespace, input.character)
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
     const storyBridge = await storyBridgeForSms(input.namespace, input.character)
+    const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -291,6 +282,7 @@ export async function replyInChat(input: {
       priority: storyBridge,
       note: [
         replyNote(input.chat),
+        sharedContent,
         input.triggerNote ?? '',
         input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
         input.triggerNote ? '' : glance,
@@ -302,7 +294,8 @@ export async function replyInChat(input: {
     const stored = await storage.readApi()
     const key = await storage.readApiKey()
     const adapter = await AIAdapter.fromStored(stored, key)
-    const { max } = replyRange(input.chat)
+    const range = replyRange(input.chat)
+    const { max } = range
     const response = await adapter.complete({
       messages: built.messages,
       temperature: built.temperature,
@@ -312,7 +305,7 @@ export async function replyInChat(input: {
       maxTokens: Math.min(1600, 220 * max),
     })
     const { text, change } = takeProfileChange(stripThinkingFromSms(response.content))
-    const parts = capReplySegments(expandReplyParts(splitReply(text || '……', max)), max)
+    const parts = buildSmsReplySegments(text || '……', range)
     const replies = await deliverReplyParts({
       namespace: input.namespace,
       identity: input.identity,
@@ -392,7 +385,7 @@ export async function deliverSms(input: {
       history,
       fourthWall: input.fourthWall,
       priority: storyBridge,
-      note: [glance, explain, life].filter(Boolean).join('\n'),
+      note: [glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()

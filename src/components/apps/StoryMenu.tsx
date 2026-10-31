@@ -1,3 +1,4 @@
+import { ColorField } from './AppearanceEditor.tsx'
 import { ChevronDown, Download, Image, Plus, Trash2, Upload } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import {
@@ -36,8 +37,8 @@ function SwitchRow(props: { label: string; hint?: string; on: boolean; onClick: 
         <span className="block">{props.label}</span>
         {props.hint ? <span className="mt-0.5 block text-[11px] leading-4" style={dim}>{props.hint}</span> : null}
       </span>
-      <span className="relative h-6 w-10 shrink-0 rounded-full transition-colors" style={{ background: props.on ? '#F3A8BA' : '#ebe5df' }}>
-        <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ left: props.on ? 18 : 2 }} />
+      <span data-theme-control data-on={props.on} className="switch-track relative h-6 w-10 shrink-0 rounded-full transition-colors" style={{ background: props.on ? '#F3A8BA' : '#ebe5df' }}>
+        <span className="switch-thumb absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ left: props.on ? 18 : 2 }} />
       </span>
     </button>
   )
@@ -159,7 +160,7 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
       <Block title="预览">
         <div className="rounded-2xl p-3" style={{ background: r.backgroundImage ? `center / cover url(${r.backgroundImage})` : r.background || '#FBF7F4' }}>
           <p className="rounded-[18px] px-3.5 py-2.5" style={{ background: r.paper, fontFamily: FONT_STACK[r.font], fontSize: r.fontSize, lineHeight: r.lineHeight }}>
-            雨停了，街角的灯一盏一盏亮起来。他把伞收好，回头看你：<span style={{ color: r.quoteColor }}>“走吧，我知道一家还开着的店。”</span>
+            雨停了，街角的灯一盏一盏亮起来。他把伞收好，回头看你：<span style={{ color: `var(--m-quote-ink, ${r.quoteColor})` }}>“走吧，我知道一家还开着的店。”</span>
           </p>
         </div>
       </Block>
@@ -172,18 +173,18 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
         <p className="mb-1.5 mt-3 text-xs" style={dim}>行距</p>
         <Choice options={[[1.5, '紧凑'], [1.85, '舒适'], [2.2, '宽松']]} value={r.lineHeight} onChange={(lineHeight) => set({ lineHeight })} />
       </Block>
-      <Block title="颜色">
+      <Block title="颜色"><div className="mb-3 space-y-2"><ColorField label="自定义对白" value={r.quoteColor} onChange={quoteColor => set({ quoteColor })} /><ColorField label="自定义纸张" value={r.paper} onChange={paper => set({ paper })} /><ColorField label="自定义背景" value={r.background} onChange={background => set({ background, backgroundImage: '' })} /></div>
         <p className="mb-1.5 text-xs" style={dim}>对白颜色</p>
         <div className="flex flex-wrap gap-2.5">
-          {QUOTES.map((color) => <button key={color} type="button" aria-label={`对白 ${color}`} className="h-8 w-8 rounded-full" style={{ background: color, outline: r.quoteColor === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ quoteColor: color })} />)}
+          {QUOTES.map((color) => <button data-holiday-preserve key={color} type="button" aria-label={`对白 ${color}`} aria-pressed={r.quoteColor === color} className="color-swatch h-8 w-8 rounded-full" style={{ background: color, outline: r.quoteColor === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ quoteColor: color })} />)}
         </div>
         <p className="mb-1.5 mt-3 text-xs" style={dim}>纸张</p>
         <div className="flex flex-wrap gap-2.5">
-          {PAPERS.map((color) => <button key={color} type="button" aria-label={`纸张 ${color}`} className="h-8 w-8 rounded-full ring-1 ring-black/5" style={{ background: color, outline: r.paper === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ paper: color })} />)}
+          {PAPERS.map((color) => <button data-holiday-preserve key={color} type="button" aria-label={`纸张 ${color}`} aria-pressed={r.paper === color} className="h-8 w-8 rounded-full ring-1 ring-black/5" style={{ background: color, outline: r.paper === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ paper: color })} />)}
         </div>
         <p className="mb-1.5 mt-3 text-xs" style={dim}>背景</p>
         <div className="flex flex-wrap gap-2.5">
-          {BACKDROPS.map((color) => <button key={color || 'none'} type="button" aria-label={color ? `背景 ${color}` : '默认背景'} className="h-8 w-8 rounded-full ring-1 ring-black/5" style={{ background: color || 'linear-gradient(135deg,#F8D0DC,#D5F0E4)', outline: !r.backgroundImage && r.background === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ background: color, backgroundImage: '' })} />)}
+          {BACKDROPS.map((color) => <button data-holiday-preserve key={color || 'none'} type="button" aria-label={color ? `背景 ${color}` : '默认背景'} aria-pressed={!r.backgroundImage && r.background === color} className="h-8 w-8 rounded-full ring-1 ring-black/5" style={{ background: color || 'linear-gradient(135deg,#F8D0DC,#D5F0E4)', outline: !r.backgroundImage && r.background === color ? '2px solid #F3A8BA' : 'none', outlineOffset: 2 }} onClick={() => set({ background: color, backgroundImage: '' })} />)}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="chip chip-sky py-2">
@@ -232,7 +233,7 @@ function SavesTab(props: TabProps) {
     if (props.mode === 'offline') return newSave(`存档 ${props.saves.length + 1}`)
     const lead = props.chars.find((item) => item.id === props.save.charId)
     const opener = lead?.firstMes.trim().replaceAll('{{char}}', lead.name).replaceAll('{{user}}', props.save.persona?.name || props.identity.name)
-    return newSave(`${lead?.name ?? '番外'} 新的一档`, { charId: props.save.charId, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books, lines: opener ? [line('assistant', opener)] : [] })
+    return newSave(`${lead?.name ?? '番外'} 新的一档`, { charId: props.save.charId, charIds: props.save.charIds, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books, lines: opener ? [line('assistant', opener)] : [] })
   }
   return (
     <>
@@ -244,7 +245,7 @@ function SavesTab(props: TabProps) {
         <p className="mt-2 text-[11px]" style={dim}>共 {props.save.lines.length} 段 · {props.save.summaries.length} 条摘要</p>
         <button type="button" className="chip chip-danger mt-3 w-full py-2" onClick={props.onClear}>清空聊天记录</button>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" className="chip chip-lilac py-2" onClick={() => void props.onNew({ ...newSave(`${props.save.name} 副本`), ...structuredClone({ lines: props.save.lines, summaries: props.save.summaries, charId: props.save.charId, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books }) })}>复制一份</button>
+          <button type="button" className="chip chip-lilac py-2" onClick={() => void props.onNew({ ...newSave(`${props.save.name} 副本`), ...structuredClone({ lines: props.save.lines, summaries: props.save.summaries, charId: props.save.charId, charIds: props.save.charIds, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books }) })}>复制一份</button>
           <button type="button" className="chip chip-sky py-2" onClick={() => downloadJson(`${props.save.name}.json`, { kind: 'mellow-story', save: props.save })}><Download size={13} />导出</button>
         </div>
       </Block>
@@ -313,8 +314,8 @@ function MemoryTab(props: TabProps) {
         <p className="mt-2 text-[11px] leading-5" style={dim}>字数不设上限，按你填的范围写。很长的回复会分成几段续写。</p>
         <p className="mt-3 text-[11px] leading-5" style={dim}>超出 {config.keepRounds} 轮的旧剧情，只把摘要发给模型。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段之后的原文，共 {save.lines.length - rawFrom} 段。</p>
       </Block>
-      <Block title="自动总结">
-        <SwitchRow label="自动写小总结" hint="旧剧情攒够一定轮数，就自动压成一条小总结" on={config.autoSummary} onClick={() => props.onConfig({ autoSummary: !config.autoSummary })} />
+      <Block title="自动总结">{save.summaryError && <PillNote tone="butter">上次总结失败：{save.summaryError}。可现在重试，或等待下一轮回复。</PillNote>}
+        <SwitchRow label="自动写小总结" hint="按新生成的回复轮数触发，与保留原文轮数分开计算；失败会保留正文并在下轮重试" on={config.autoSummary} onClick={() => props.onConfig({ autoSummary: !config.autoSummary })} />
         <div className="mt-1 grid grid-cols-2 gap-2">
           <Num label="每攒多少轮总结一次" value={config.summaryEvery} min={2} max={50} onChange={(summaryEvery) => props.onConfig({ summaryEvery })} />
         </div>
@@ -420,8 +421,8 @@ function RegexTab(props: { mode: StoryMode; config: StoryConfig; onConfig: (patc
                     <span className="truncate text-sm">{rule.name || '未命名'}</span>
                     {!valid ? <span className="shrink-0 rounded-full bg-[#FBE3E3] px-1.5 text-[10px] text-[#b0505c]">写法有误</span> : null}
                   </button>
-                  <button type="button" aria-pressed={rule.enabled} className="relative h-5 w-9 shrink-0 rounded-full transition-colors" style={{ background: rule.enabled ? '#F3A8BA' : '#ebe5df' }} onClick={() => patchRule(rule.id, { enabled: !rule.enabled })}>
-                    <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all" style={{ left: rule.enabled ? 18 : 2 }} />
+                  <button type="button" data-theme-control data-on={rule.enabled} aria-pressed={rule.enabled} className="switch-track relative h-5 w-9 shrink-0 rounded-full transition-colors" style={{ background: rule.enabled ? '#F3A8BA' : '#ebe5df' }} onClick={() => patchRule(rule.id, { enabled: !rule.enabled })}>
+                    <span className="switch-thumb absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all" style={{ left: rule.enabled ? 18 : 2 }} />
                   </button>
                 </div>
                 {expanded ? (
@@ -458,10 +459,14 @@ function PersonaTab(props: TabProps) {
   const withBooks = props.chars.filter((item) => item.characterBook)
   return (
     <>
-      <Block title="这一档的主角">
+      <Block title="这一档的角色（可多选）">
         <div className="flex flex-wrap gap-2">
           {props.chars.map((person) => (
-            <button key={person.id} type="button" className={save.charId === person.id ? 'chip chip-lilac' : 'chip'} style={small} onClick={() => void props.onSave({ ...save, charId: person.id })}>{person.name}</button>
+            <button key={person.id} type="button" className={(save.charIds ?? [save.charId]).includes(person.id) ? 'chip chip-lilac' : 'chip'} style={small} aria-pressed={(save.charIds ?? [save.charId]).includes(person.id)} onClick={() => {
+              const ids = (save.charIds ?? [save.charId]).filter((id): id is string => Boolean(id))
+              const next = ids.includes(person.id) ? ids.filter(id => id !== person.id) : [...ids,person.id]
+              if (next.length) void props.onSave({ ...save, charId: next[0], charIds: next })
+            }}>{person.name}</button>
           ))}
         </div>
       </Block>

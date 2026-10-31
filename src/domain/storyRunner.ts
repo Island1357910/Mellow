@@ -32,10 +32,11 @@ export async function runStoryGeneration(input: {
   const phoneNs = input.namespace.replace(/__(?:side|jiushi)$/, '')
   const save = await loadSave(input.namespace, input.saveId)
   if (!save) return
-  const [chars, config] = await Promise.all([
+  const [allChars, config] = await Promise.all([
     storage.listCharacters(phoneNs),
     loadConfig(input.namespace),
   ])
+  const chars = allChars.filter(c => input.mode === 'jiushi' ? isJiushiCharacter(c) : !isJiushiCharacter(c))
   const lead = save.charId ? chars.find((item) => item.id === save.charId) : undefined
   const preset = pickPreset(
     input.presets,
@@ -60,10 +61,10 @@ export async function runStoryGeneration(input: {
   const jiushiConfig = input.mode === 'jiushi' ? await loadJiushiConfig(phoneNs) : null
   const messages = buildStoryPrompt({
     mode: input.mode,
-    save,
     config,
     chars,
-    identity: input.identity,
+    identity: jiushiConfig ? { ...input.identity, name: jiushiConfig.roleName || '无名旅人', persona: jiushiConfig.roleStory || '此世土生土长的古代居民' } : input.identity,
+    save: jiushiConfig ? { ...save, persona: { name: jiushiConfig.roleName || '无名旅人', persona: jiushiConfig.roleStory || '此世土生土长的古代居民' } } : save,
     preset,
     nudge: input.nudge,
     world,
@@ -79,9 +80,11 @@ export async function runStoryGeneration(input: {
   let next = await putSave(input.namespace, { ...save, lines: [...save.lines, line('assistant', content)] })
   if (needsSummary(next, config)) {
     try {
-      next = await putSave(input.namespace, await writeSummary(next, 'small', config.keepRounds))
-    } catch {
-      // 摘要失败不影响正文
+      next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds), summaryError: '' })
+    } catch (error) {
+      await putSave(input.namespace, { ...next, summaryError: error instanceof Error ? error.message : '总结失败，下轮自动重试' })
+      const { useMellow } = await import('../store/useMellow.ts')
+      await useMellow.getState().pushNotice({ kind: 'toast', title: '剧情已保存，总结待重试', body: error instanceof Error ? error.message : '请检查接口配置', appId: input.mode, identityId: input.identity.id, priority: 2 })
     }
   }
 }

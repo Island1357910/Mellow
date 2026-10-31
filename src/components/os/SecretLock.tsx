@@ -21,11 +21,13 @@ const IPHONE_KEYS: Array<{ key: string; label?: string } | null> = [
 
 function PinDots(props: { length: number; filled: number }) {
   return (
-    <div className="flex justify-center gap-[14px]">
+    <div className="pin-dots flex justify-center gap-[14px]" role="group" aria-label={`已输入 ${props.filled} 位，共 ${props.length} 位`}>
       {Array.from({ length: props.length }, (_, index) => (
         <span
           key={index}
-          className="h-[11px] w-[11px] rounded-full border transition-all duration-150"
+          data-theme-control
+          data-filled={index < props.filled}
+          className="pin-dot h-[11px] w-[11px] rounded-full border transition-all duration-150"
           style={{
             borderColor: index < props.filled ? '#F3A8BA' : 'rgba(58, 58, 58, 0.22)',
             background: index < props.filled ? '#F3A8BA' : 'transparent',
@@ -39,7 +41,7 @@ function PinDots(props: { length: number; filled: number }) {
 
 function IphonePinPad(props: { onKey: (key: string) => void; onCancel?: () => void }) {
   return (
-    <div className="mx-auto grid w-[min(100%,252px)] grid-cols-3 gap-x-6 gap-y-3">
+    <div className="pin-pad mx-auto grid w-[min(100%,252px)] grid-cols-3 gap-x-6 gap-y-3">
       {IPHONE_KEYS.map((item, index) => {
         if (!item) return <span key={index} />
         const { key, label } = item
@@ -48,6 +50,8 @@ function IphonePinPad(props: { onKey: (key: string) => void; onCancel?: () => vo
         return (
           <button
             key={key}
+            data-theme-control
+            data-key-kind={isCancel ? 'cancel' : isDelete ? 'delete' : 'digit'}
             type="button"
             aria-label={isCancel ? '取消' : isDelete ? '删除' : key}
             className="lock-key grid h-[72px] w-[72px] place-items-center rounded-full text-[32px] font-light transition-transform active:scale-95"
@@ -99,12 +103,14 @@ export function SecretLock(props: {
   }
 
   return (
-    <div className="relative z-20 h-full min-h-0">
+    <div className="pin-ui secret-lock relative z-20 h-full min-h-0">
       <div className="absolute inset-x-0 top-[53%] w-full -translate-y-1/2 px-5">
         <div className="mx-auto w-full max-w-[320px] text-center">
+        <h2 className="pin-title mb-4 text-lg font-semibold">{props.title ?? '请输入六位密码'}</h2>
+        {props.hint ? <p className="pin-hint mb-4 text-xs">{props.hint}</p> : null}
         <PinDots length={PIN_LENGTH} filled={digits.length} />
         {error ? (
-          <p className="mt-4 text-[13px] font-medium" style={{ color: '#b0505c' }}>
+          <p role="alert" className="pin-error mt-4 text-[13px] font-medium" style={{ color: '#b0505c' }}>
             {error}
           </p>
         ) : (
@@ -151,9 +157,9 @@ export function PasswordSetup(props: { onSave: (secret: string) => void; label?:
   }
 
   return (
-    <div className="rounded-[24px] bg-white/70 p-4">
-      <p className="text-center text-xs font-medium" style={{ color: 'var(--m-text-secondary)' }}>
-        {props.label ?? (stage === 'a' ? '输入六位密码' : '再输入一次')}
+    <div data-theme-control className="pin-ui password-setup rounded-[24px] bg-white/70 p-4">
+      <p className="pin-hint text-center text-xs font-medium" style={{ color: 'var(--m-text-secondary)' }}>
+        {stage === 'b' ? '再次输入六位密码以确认' : props.label ?? '输入六位密码'}
       </p>
       <div className="mt-4">
         <PinDots length={PIN_LENGTH} filled={current.length} />
@@ -166,7 +172,7 @@ export function PasswordSetup(props: { onSave: (secret: string) => void; label?:
           setError('')
         }} />
       </div>
-      {error ? <p className="mt-3 text-center text-xs" style={{ color: '#b0505c' }}>{error}</p> : null}
+      {error ? <p role="alert" className="pin-error mt-3 text-center text-xs" style={{ color: '#b0505c' }}>{error}</p> : null}
     </div>
   )
 }

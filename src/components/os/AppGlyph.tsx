@@ -1,7 +1,9 @@
-import { Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
+import { Globe, Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
 import { useMellow } from '../../store/useMellow.ts'
 
 const ICONS = {
+  themes: Sparkles,
+  connections: Globe,
   messages: MessageCircle,
   offline: Coffee,
   side: BookOpen,
@@ -35,7 +37,7 @@ export function AppGlyph(props: { id: string; tint: string; size?: number }) {
   const box = props.size ?? 54
   return (
     <span
-      className="grid place-items-center overflow-hidden"
+      className="app-glyph grid place-items-center overflow-hidden"
       style={{
         width: box,
         height: box,

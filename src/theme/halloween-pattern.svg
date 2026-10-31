@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="900" viewBox="0 0 420 900" fill="none">
+  <defs><g id="ghost"><path d="M12 57V28a22 22 0 0 1 44 0v29l-11-6-11 7-11-7-11 6Z" fill="#e8ddcb"/><ellipse cx="26" cy="29" rx="3" ry="4.5" fill="#241c2d"/><ellipse cx="43" cy="29" rx="3" ry="4.5" fill="#241c2d"/><path d="M31 41q4 5 8 0" stroke="#241c2d" stroke-width="2.5" stroke-linecap="round"/></g><g id="pumpkin"><path d="M32 18q-3-12 9-14" stroke="#afb88c" stroke-width="5" stroke-linecap="round"/><path d="M32 21C12 9 2 29 9 45q7 16 23 10c16 6 27-4 27-18S46 12 32 21Z" fill="#dba067"/><path d="M32 21c-13 0-15 28 0 34m0-34c13 0 15 28 0 34" stroke="#674151" stroke-width="2" opacity=".5"/><path d="m17 34 10-6 2 11Zm30 0-10-6-2 11ZM19 44l9 3 4-4 4 4 10-3-6 8H25Z" fill="#241c2d"/></g><path id="bat" d="m29 25-4-9-3 8C13 17 5 16 3 17c5 4 4 11 2 15 9-3 14 0 15 7 5-2 8 1 12 9 4-8 7-11 12-9 1-7 6-10 15-7-2-4-3-11 2-15-2-1-10 0-19 7l-3-8-4 9Z" fill="#b49ac4"/><g id="web" stroke="#b49ac4" stroke-width="1.2"><path d="M0 0h120M0 0v120M0 0l100 100M0 0l120 49M0 0l49 120"/><path d="M0 25q10-1 18-7 6-8 7-18M0 51q21-3 36-15 12-15 15-36M0 78q33-5 55-23 18-22 23-55M0 107q45-6 76-31 25-31 31-76"/></g><path id="spark" d="m0-8 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z" fill="#ddbd8e"/></defs>
+  <!-- A loose full-wallpaper composition with mixed scales and clipped edge motifs. -->
+  <path d="M343 26a30 30 0 1 0 35 43 29 29 0 0 1-35-43Z" fill="#d4b284" opacity=".65"/>
+  <use href="#web" transform="translate(-8 -5) rotate(0) scale(1.35)" opacity="0.55"/>
+  <use href="#bat" transform="translate(280 105) rotate(-18) scale(0.65)" opacity="0.65"/>
+  <use href="#bat" transform="translate(344 135) rotate(13) scale(0.38)" opacity="0.75"/>
+  <use href="#ghost" transform="translate(329 172) rotate(16) scale(1.8)" opacity="0.75"/>
+  <use href="#pumpkin" transform="translate(-43 316) rotate(-16) scale(2.25)" opacity="0.6"/>
+  <use href="#ghost" transform="translate(126 298) rotate(-20) scale(0.56)" opacity="0.65"/>
+  <use href="#bat" transform="translate(277 423) rotate(-24) scale(1.1)" opacity="0.6"/>
+  <use href="#bat" transform="translate(223 466) rotate(-8) scale(0.42)" opacity="0.65"/>
+  <use href="#pumpkin" transform="translate(353 542) rotate(17) scale(1.1)" opacity="0.65"/>
+  <use href="#ghost" transform="translate(6 641) rotate(-18) scale(1.45)" opacity="0.7"/>
+  <use href="#pumpkin" transform="translate(300 768) rotate(14) scale(2.2)" opacity="0.65"/>
+  <use href="#pumpkin" transform="translate(260 836) rotate(-15) scale(0.7)" opacity="0.7"/>
+  <use href="#web" transform="translate(0 900) rotate(-90) scale(0.8)" opacity="0.45"/>
+  <path d="M390 296q-50 37-27 73t-32 59M45 494q-35 50 10 87t-3 64M137 757q50 12 35 48t44 47" stroke="#b59ac1" stroke-width="1.2" stroke-dasharray="2 9" stroke-linecap="round" opacity=".45"/>
+  <g opacity=".75"><use href="#spark" transform="translate(219 56) scale(0.8)"/><use href="#spark" transform="translate(396 98) scale(0.45)"/><use href="#spark" transform="translate(30 244) scale(1.1)"/><use href="#spark" transform="translate(277 274) scale(0.5)"/><use href="#spark" transform="translate(178 410) scale(0.65)"/><use href="#spark" transform="translate(387 487) scale(1.2)"/><use href="#spark" transform="translate(97 556) scale(0.45)"/><use href="#spark" transform="translate(310 651) scale(0.8)"/><use href="#spark" transform="translate(166 713) scale(1)"/><use href="#spark" transform="translate(79 815) scale(0.55)"/></g>
+  <g fill="#c4ac8e" opacity=".65"><circle cx="183" cy="126" r="2"/><circle cx="67" cy="196" r="1.5"/><circle cx="233" cy="353" r="1.5"/><circle cx="22" cy="586" r="2"/><circle cx="371" cy="713" r="1.5"/><circle cx="219" cy="877" r="2"/></g>
+</svg>

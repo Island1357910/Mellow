@@ -2,7 +2,11 @@ import type { CSSProperties } from 'react'
 import type { Theme } from '../types/index.ts'
 
 export function themeStyle(theme: Theme): CSSProperties {
+  const logo = theme.logo ?? (theme.id === 'theme_halloween' ? {primary:'#E3A667',secondary:'#AA8EBA',accent:'#C4BE90'} : {primary:'#FFB5C5',secondary:'#B5E8D5',accent:'#FFE5A0'})
   return {
+    '--m-logo-primary': logo.primary,
+    '--m-logo-secondary': logo.secondary,
+    '--m-logo-accent': logo.accent,
     '--m-primary': theme.colors.primary,
     '--m-secondary': theme.colors.secondary,
     '--m-background': theme.colors.background,

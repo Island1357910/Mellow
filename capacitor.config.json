@@ -1,0 +1,16 @@
+{
+  "appId": "top.mymellow.app",
+  "appName": "半糖 Mellow",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "android": {
+    "backgroundColor": "#FDFBF7"
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "insetsHandling": "disable",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { isJiushiCharacter } from './jiushi.ts'
 import { replyInChat } from '../domain/messaging.ts'
 import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
 import { modePresetId } from './defaults.ts'
@@ -37,7 +38,7 @@ export async function tickProactive(input: {
     if (chat.proactiveLastAt && chat.proactiveLastAt >= lastUserAt + threshold) continue
 
     const character = await storage.getCharacter(input.identity.namespace, chat.memberIds[0] ?? '')
-    if (!character || character.blocked) continue
+    if (!character || character.blocked || isJiushiCharacter(character)) continue
 
     await runAiJob(key, async () => {
       await replyInChat({

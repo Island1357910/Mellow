@@ -13,6 +13,10 @@ dist
 .env.*
 !.env.example
 dist-ssr
+artifacts/
+*.keystore
+*.p12
+*.pem
 *.local
 
 # Editor directories and files

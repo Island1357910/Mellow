@@ -1,6 +1,9 @@
+import { useConnectionsTab } from '../../lib/connectionsTabs.ts'
+import { useMellow } from '../../store/useMellow.ts'
+import { ColorField } from '../apps/AppearanceEditor.tsx'
 import { Ellipsis, Link2, ListMusic, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Trash2, Upload, Volume1, Volume2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { CARD_COLORS, DISC_COLORS, isDark, resolveTrackSrc, usePlayer, type PlayerStyle, type RepeatMode } from '../../lib/playerStore.ts'
+import { useEffect, useState } from 'react'
+import { CARD_COLORS, DISC_COLORS, isDark, usePlayer, type PlayerStyle, type RepeatMode } from '../../lib/playerStore.ts'
 
 const REPEAT_MODES: Array<{ id: RepeatMode; label: string; icon: typeof Repeat1 }> = [
   { id: 'one', label: '单曲循环', icon: Repeat1 },
@@ -12,118 +15,36 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
   const load = usePlayer((state) => state.load)
   const config = usePlayer((state) => state.config)
   const patch = usePlayer((state) => state.patch)
-  useEffect(() => load(props.namespace), [load, props.namespace])
+  useEffect(() => { void load(props.namespace) }, [load, props.namespace])
   const tracks = config.tracks
   const repeatMode = config.repeatMode ?? 'one'
-  const [index, setIndex] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [volume, setVolume] = useState(3)
-  const [progress, setProgress] = useState(0)
-  const volumeRef = useRef(3)
-  const gainRef = useRef<GainNode | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const shuffleRef = useRef<number[]>([])
-  const advanceRef = useRef<(delta: number, keepPlaying?: boolean) => void>(() => {})
-  const at = tracks.length ? index % tracks.length : 0
-  const track = tracks[at]
-  const repeatMeta = REPEAT_MODES.find((item) => item.id === repeatMode) ?? REPEAT_MODES[0]
+  const index = usePlayer(s => s.index)
+  const playing = usePlayer(s => s.playing)
+  const volume = usePlayer(s => s.volume)
+  const seconds = usePlayer(s => s.seconds)
+  const duration = usePlayer(s => s.duration)
+  const error = usePlayer(s => s.error)
+  const progress = duration ? seconds / duration : 0
+  const track = tracks[index]
+  const repeatMeta = REPEAT_MODES.find(item => item.id === repeatMode) ?? REPEAT_MODES[0]
   const RepeatIcon = repeatMeta.icon
-
-  const nextIndex = (current: number, delta: number) => {
-    if (tracks.length <= 1) return current
-    if (repeatMode === 'shuffle') {
-      if (shuffleRef.current.length !== tracks.length) {
-        shuffleRef.current = tracks.map((_, idx) => idx).sort(() => Math.random() - 0.5)
-      }
-      const pos = shuffleRef.current.indexOf(current)
-      const nextPos = (pos + delta + shuffleRef.current.length) % shuffleRef.current.length
-      return shuffleRef.current[nextPos] ?? 0
-    }
-    return (current + delta + tracks.length) % tracks.length
-  }
-  const step = (delta: number, keepPlaying = false) => {
-    setProgress(0)
-    setIndex((value) => {
-      const next = nextIndex(value, delta)
-      if (next !== value) shuffleRef.current = []
-      return next
-    })
-    if (keepPlaying) setPlaying(true)
-  }
-  advanceRef.current = step
-
-  useEffect(() => {
-    if (!playing || !track) return
-    let cancelled = false
-    if (track.src) {
-      let audio: HTMLAudioElement | null = null
-      const onTime = () => {
-        if (audio && audio.duration) setProgress(audio.currentTime / audio.duration)
-      }
-      const onEnded = () => {
-        if (repeatMode === 'one') return
-        advanceRef.current(1, true)
-      }
-      void resolveTrackSrc(props.namespace, track.src).then((url) => {
-        if (cancelled || !url) return
-        audio = new Audio(url)
-        audio.loop = repeatMode === 'one'
-        audio.volume = volumeRef.current / 5
-        audio.addEventListener('timeupdate', onTime)
-        audio.addEventListener('ended', onEnded)
-        audioRef.current = audio
-        void audio.play().catch(() => setPlaying(false))
-      })
-      return () => {
-        cancelled = true
-        audio?.removeEventListener('timeupdate', onTime)
-        audio?.removeEventListener('ended', onEnded)
-        audio?.pause()
-        audioRef.current = null
-      }
-    }
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = track.tone ?? 196
-    gain.gain.value = volumeRef.current * 0.012
-    gainRef.current = gain
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.start()
-    const timer = window.setInterval(() => setProgress((value) => (value + 0.01) % 1), 600)
-    return () => {
-      window.clearInterval(timer)
-      gainRef.current = null
-      osc.stop()
-      void ctx.close()
-    }
-  }, [playing, track, props.namespace, repeatMode])
-
-  const changeVolume = (delta: number) => {
-    const next = Math.max(0, Math.min(5, volumeRef.current + delta))
-    volumeRef.current = next
-    setVolume(next)
-    if (gainRef.current) gainRef.current.gain.value = next * 0.012
-    if (audioRef.current) audioRef.current.volume = next / 5
-  }
-  const cycleRepeat = () => {
-    const atMode = REPEAT_MODES.findIndex((item) => item.id === repeatMode)
-    const next = REPEAT_MODES[(atMode + 1) % REPEAT_MODES.length]?.id ?? 'one'
-    shuffleRef.current = []
-    patch({ repeatMode: next })
-  }
+  const setPlaying = (update: (value: boolean) => boolean) => usePlayer.setState(s => ({ playing: update(s.playing), error: '' }))
+  const step = (delta: number) => usePlayer.getState().step(delta)
+  const changeVolume = (delta: number) => usePlayer.setState({ volume: Math.max(0, Math.min(5, volume + delta)) })
+  const cycleRepeat = () => patch({ repeatMode: REPEAT_MODES[(REPEAT_MODES.findIndex(item => item.id === repeatMode) + 1) % REPEAT_MODES.length].id })
   const dark = isDark(config.card)
   const ink = dark ? 'rgba(255,255,255,0.9)' : 'var(--m-text)'
   const soft = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.05)'
   const name = track?.name ?? '还没有歌'
 
   return (
-    <div className="relative flex aspect-square w-full flex-col overflow-hidden rounded-[28px] p-2.5 shadow-[0_10px_24px_rgba(90,70,80,0.06)]" style={{ background: config.card, color: ink }}>
+    <div className="music-widget relative flex aspect-square w-full flex-col overflow-hidden rounded-[28px] p-2.5 shadow-[0_10px_24px_rgba(90,70,80,0.06)]" style={{ background: config.card, color: ink }}>
       <button type="button" aria-label="播放器设置" className="absolute left-2 top-2 z-10 grid h-6 w-6 place-items-center rounded-full" style={{ background: soft }} onClick={props.onSettings}>
         <Ellipsis size={13} />
       </button>
+          <button type="button" aria-label={repeatMeta.label} title={repeatMeta.label} className="absolute left-2 top-9 z-10 grid h-6 w-6 place-items-center rounded-full" style={{ background: repeatMode === 'one' ? soft : config.disc, color: repeatMode === 'one' ? ink : '#fff' }} onClick={cycleRepeat}>
+            <RepeatIcon size={12} />
+          </button>
       <div className="relative min-h-0 flex-1">
         {config.style === 'minimal' ? (
           <button type="button" aria-label={playing ? `暂停 ${name}` : `播放 ${name}`} onClick={() => setPlaying((value) => !value)} className="flex h-full w-full flex-col items-center justify-center gap-1.5">
@@ -146,7 +67,7 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
             >
               {config.style === 'cd' ? (
                 <span
-                  className={playing ? 'vinyl-disc is-on block h-full w-full rounded-full' : 'vinyl-disc block h-full w-full rounded-full'}
+                  data-disc-style={config.style} className={playing ? 'vinyl-disc is-on block h-full w-full rounded-full' : 'vinyl-disc block h-full w-full rounded-full'}
                   style={{ background: `conic-gradient(from 30deg, #f3f3f6, ${config.disc}55, #e7f4ff, #fbe3ec, #f3f3f6, #dff3ea, ${config.disc}55, #f3f3f6)`, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}
                 >
                   <span className="absolute left-1/2 top-1/2 block h-[30%] w-[30%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 ring-1 ring-black/10" />
@@ -166,16 +87,23 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
               )}
             </button>
             {config.style === 'vinyl' ? (
-              <span className="pointer-events-none absolute right-[7%] top-[5%] h-[54%] w-4 origin-top transition-transform duration-500" style={{ transform: playing ? 'rotate(8deg)' : 'rotate(-40deg)' }}>
-                <span className="absolute left-1/2 top-0 block h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#dedede]" />
-                <span className="absolute left-1/2 top-1 block h-[74%] w-[2px] -translate-x-1/2 rounded-full bg-[#d5d5d5]" />
-                <span className="absolute bottom-0 left-1/2 block h-1.5 w-3 -translate-x-1/2 rounded-sm bg-[#f4f4f4] ring-1 ring-black/10" />
+              <span data-holiday-preserve aria-hidden="true" className="player-tonearm pointer-events-none absolute right-[7%] top-[5%] z-10 h-[54%] w-5 origin-top transition-transform duration-500" style={{ transform: playing ? 'rotate(8deg)' : 'rotate(-40deg)' }}>
+                <svg viewBox="0 0 20 76" className="block h-full w-full overflow-visible" preserveAspectRatio="none" fill="none">
+                  <path d="M10 8V63" stroke="var(--tonearm-edge, #312936)" strokeWidth="5.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                  <path d="M10 8V63" stroke="var(--tonearm-metal, #c6b3a2)" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                  <circle cx="10" cy="5" r="4.2" fill="var(--tonearm-metal, #c6b3a2)" stroke="var(--tonearm-edge, #312936)" strokeWidth="1.3" />
+                  <circle cx="10" cy="5" r="1.4" fill="var(--tonearm-edge, #312936)" />
+                  <rect x="3.5" y="60" width="13" height="10" rx="3" fill="var(--tonearm-head, #e8ded2)" stroke="var(--tonearm-edge, #312936)" strokeWidth="1.3" />
+                  <path d="M7 64.5H13" stroke="var(--tonearm-edge, #312936)" strokeWidth="1.3" strokeLinecap="round" />
+                  <path d="M10 70V74" stroke="var(--tonearm-head, #e8ded2)" strokeWidth="2" strokeLinecap="round" />
+                </svg>
               </span>
             ) : null}
           </div>
         )}
       </div>
       <div className="shrink-0">
+        {error && <p role="status" className="text-[10px]">{error}</p>}
         <p className="truncate text-center text-[11px] leading-4">{name}{track?.artist && config.style === 'minimal' ? ` · ${track.artist}` : ''}</p>
         <span className="my-1 block h-px" style={{ background: soft }}>
           <span className="block h-full transition-[width] duration-500" style={{ width: `${Math.max(6, progress * 100)}%`, background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)' }} />
@@ -183,9 +111,6 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
         <div className="flex items-center justify-between">
           <button type="button" aria-label="上一首" className="grid h-6 w-6 place-items-center rounded-full" style={{ background: soft }} onClick={() => step(-1)}>
             <SkipBack size={12} />
-          </button>
-          <button type="button" aria-label={repeatMeta.label} title={repeatMeta.label} className="grid h-6 w-6 place-items-center rounded-full" style={{ background: repeatMode === 'one' ? soft : config.disc, color: repeatMode === 'one' ? ink : '#fff' }} onClick={cycleRepeat}>
-            <RepeatIcon size={12} />
           </button>
           <button type="button" aria-label="音量减小" className="grid h-6 w-6 place-items-center rounded-full" style={{ background: soft }} onClick={() => changeVolume(-1)}>
             <Volume1 size={12} />
@@ -250,15 +175,16 @@ export function PlayerSheet(props: { onClose: () => void }) {
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end bg-black/20 backdrop-blur-[2px]" onPointerDown={(event) => event.stopPropagation()} onClick={props.onClose}>
-      <div className="sms-shell mx-auto max-h-[82%] w-full max-w-[460px] overflow-auto rounded-t-[30px] px-4 pb-10 pt-4 shadow-[0_-12px_30px_rgba(90,70,80,0.12)]" onClick={(event) => event.stopPropagation()}>
+      <div className="player-settings sms-shell mx-auto max-h-[82%] w-full max-w-[460px] overflow-auto rounded-t-[30px] px-4 pb-10 pt-4 shadow-[0_-12px_30px_rgba(90,70,80,0.12)]" onClick={(event) => event.stopPropagation()}>
         <span className="mx-auto mb-3 block h-1 w-10 rounded-full bg-black/10" />
         <div className="flex items-center justify-between">
           <h2 className="text-[18px] font-semibold">播放器设置</h2>
           <button type="button" className="chip chip-pink" onClick={props.onClose}>完成</button>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-white/80 p-1">
+        <button className="chip mt-3" onClick={() => { props.onClose(); useConnectionsTab.getState().setTab('together'); useMellow.getState().openApp('connections') }}>和 char 一起听 / 一起读</button>
+        <div role="tablist" aria-label="播放器设置分类" className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-white/80 p-1">
           {([['look', '外观'], ['list', `歌单 ${config.tracks.length}`], ['import', '导入']] as Array<[SheetTab, string]>).map(([id, label]) => (
-            <button key={id} type="button" className="rounded-full py-1.5 text-xs transition-colors" style={{ background: tab === id ? '#F3A8BA' : 'transparent', color: tab === id ? '#fff' : 'var(--m-text-secondary)', fontWeight: tab === id ? 600 : 400 }} onClick={() => setTab(id)}>
+            <button key={id} type="button" role="tab" aria-selected={tab === id} className="rounded-full py-1.5 text-xs transition-colors" style={{ background: tab === id ? '#F3A8BA' : 'transparent', color: tab === id ? '#fff' : 'var(--m-text-secondary)', fontWeight: tab === id ? 600 : 400 }} onClick={() => setTab(id)}>
               {label}
             </button>
           ))}
@@ -270,18 +196,18 @@ export function PlayerSheet(props: { onClose: () => void }) {
               <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>样式</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {STYLES.map((item) => (
-                  <button key={item.id} type="button" className="flex flex-col items-center gap-1.5 rounded-2xl py-3 text-xs" style={{ background: config.style === item.id ? '#FFF1F5' : 'white', outline: config.style === item.id ? '2px solid #F3A8BA' : '1px solid rgba(0,0,0,0.05)' }} onClick={() => patch({ style: item.id })}>
-                    <StylePreview style={item.id} disc={config.disc} />
-                    {item.label}
+                  <button key={item.id} data-theme-control type="button" aria-pressed={config.style === item.id} className="player-style-option flex flex-col items-center gap-1.5 rounded-2xl py-3 text-xs" style={{ background: config.style === item.id ? '#FFF1F5' : 'white', outline: config.style === item.id ? '2px solid #F3A8BA' : '1px solid rgba(0,0,0,0.05)' }} onClick={() => patch({ style: item.id })}>
+                    <span data-holiday-preserve className="player-style-preview"><StylePreview style={item.id} disc={config.disc} /></span>
+                    <span className="player-style-label">{item.label}</span>
                   </button>
                 ))}
               </div>
             </section>
             <section className="menu-card">
               <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>卡片底色</p>
-              <Swatches colors={CARD_COLORS} value={config.card} onPick={(card) => patch({ card })} />
+              <Swatches colors={CARD_COLORS} value={config.card} onPick={(card) => patch({ card })} /><div className="mt-2"><ColorField label="自定义卡片底色" value={config.card} onChange={card => patch({card})} /></div>
               <p className="mt-4 text-xs" style={{ color: 'var(--m-text-secondary)' }}>唱片 / 按钮颜色</p>
-              <Swatches colors={DISC_COLORS} value={config.disc} onPick={(disc) => patch({ disc })} />
+              <Swatches colors={DISC_COLORS} value={config.disc} onPick={(disc) => patch({ disc })} /><div className="mt-2"><ColorField label="自定义唱片颜色" value={config.disc} onChange={disc => patch({disc})} /></div>
             </section>
           </div>
         ) : null}
@@ -365,9 +291,9 @@ function Swatches(props: { colors: string[]; value: string; onPick: (color: stri
         <button
           key={color}
           type="button"
-          aria-label={`颜色 ${color}`}
-          className="h-8 w-8 rounded-full shadow-[0_4px_10px_rgba(120,80,100,0.1)]"
-          style={{ background: color, outline: props.value === color ? '2px solid #F3A8BA' : '1px solid rgba(0,0,0,0.08)', outlineOffset: 2 }}
+          data-holiday-preserve aria-label={`颜色 ${color}`} aria-pressed={props.value.toLowerCase() === color.toLowerCase()} title={color}
+          className="color-swatch h-8 w-8 rounded-full shadow-[0_4px_10px_rgba(120,80,100,0.1)]"
+          style={{ background: color }}
           onClick={() => props.onPick(color)}
         />
       ))}

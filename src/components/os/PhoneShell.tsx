@@ -1,3 +1,9 @@
+import { PlayerHost } from './PlayerHost.tsx'
+import { tickTogether } from '../../lib/togetherReplies.ts'
+import { Capacitor } from '@capacitor/core'
+import { APPLE_THEME } from '../../theme/apple.ts'
+import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
+import { ConnectionsApp } from '../apps/ConnectionsApp.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { ChengfengApp } from '../apps/ChengfengApp.tsx'
@@ -26,6 +32,7 @@ import { tickProactive } from '../../lib/proactive.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { formatClock } from '../../lib/format.ts'
 import { themeOf, useMellow } from '../../store/useMellow.ts'
+import { effectiveTheme } from '../../theme/seasonal.ts'
 import { themeStyle } from '../../theme/applyTheme.ts'
 import { ControlCenter } from './ControlCenter.tsx'
 import { HomeScreen } from './HomeScreen.tsx'
@@ -51,7 +58,21 @@ export function PhoneShell() {
   const identities = useMellow((state) => state.identities)
   const activeIdentityId = useMellow((state) => state.activeIdentityId)
   const touchData = useMellow((state) => state.touchData)
-  const theme = themeOf({ themes, settings })
+  const [today, setToday] = useState(() => new Date())
+  useEffect(() => { const timer = window.setInterval(() => setToday(new Date()), 30_000); return () => window.clearInterval(timer) }, [])
+  const [previewApple,setPreviewApple] = useState(()=>new URLSearchParams(window.location.search).get('themePreview')==='red-apple')
+  const theme = previewApple ? APPLE_THEME : effectiveTheme(themeOf({ themes, settings }), today)
+  const exitThemePreview = () => { const url=new URL(window.location.href);url.searchParams.delete('themePreview');window.history.replaceState(window.history.state,'',url);setPreviewApple(false) }
+  const [fontReady, setFontReady] = useState(false)
+  useEffect(() => {
+    setFontReady(false)
+    if (!theme.fontData) return
+    let alive = true
+    let loaded: FontFace | undefined
+    const face = new FontFace('MellowCustom', 'url(' + theme.fontData + ')')
+    void face.load().then(value => { if (alive) { loaded = value; document.fonts.add(value); setFontReady(true) } }).catch(() => {})
+    return () => { alive = false; if (loaded) document.fonts.delete(loaded) }
+  }, [theme.fontData])
   const dismissBackup = () => {
     setBackupAsk(false)
     const backup = settings.backup
@@ -95,7 +116,7 @@ export function PhoneShell() {
     const phone = identities.find((item) => item.id === activeIdentityId)
     if (!phone) return
     let stop = false
-    void storage.listCharacters(phone.namespace).then(async (chars) => {
+    void storage.listModernCharacters(phone.namespace).then(async (chars) => {
       const changed = await tickDeliveries(phone.namespace, chars)
       if (!stop && changed) touchData()
     })
@@ -119,11 +140,27 @@ export function PhoneShell() {
     return () => window.clearInterval(timer)
   }, [ready, locked, identities, activeIdentityId, settings, presets])
 
+  useEffect(() => {
+    if (!ready || locked) return
+    const phone = identities.find(i => i.id === activeIdentityId)
+    if (!phone) return
+    const run = () => { if (document.visibilityState === 'visible') void tickTogether(phone) }
+    run()
+    const timer = window.setInterval(run, 15_000)
+    return () => window.clearInterval(timer)
+  }, [ready, locked, identities, activeIdentityId])
+
   return (
     <div className="stage">
+      {ready && identities.find(i => i.id === activeIdentityId) && <PlayerHost namespace={identities.find(i => i.id === activeIdentityId)!.namespace} />}
       <div
         className="device"
-        style={themeStyle(theme)}
+        data-palette={theme.customPalette || theme.id === 'theme_halloween' ? 'custom' : undefined}
+        data-theme-pack={theme.id === 'theme_red_apple_love' ? 'apple' : undefined}
+        data-season={theme.id === 'theme_halloween' ? 'halloween' : undefined}
+        data-font={fontReady ? 'custom' : undefined}
+        data-effect={theme.effect}
+        style={{ ...themeStyle(theme), ...(fontReady ? { '--m-font': 'MellowCustom, sans-serif' } : {}), ...(theme.wallpaper ? { backgroundImage: 'url(' + JSON.stringify(theme.wallpaper) + ')', backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}
         onDragOver={(event) => {
           event.preventDefault()
           setDragging(true)
@@ -160,7 +197,9 @@ export function PhoneShell() {
               <ControlCenter />
             </>
           ) : null}
-          <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />
+          {theme.customCss ? <style>{'@scope (.device) { ' + theme.customCss + ' }'}</style> : null}
+          {previewApple&&<button type="button" className="theme-preview-exit" onClick={exitThemePreview}>红苹果爱恋预览 · 恢复原主题</button>}
+          {!Capacitor.isNativePlatform() && <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />}
           <div
             className="pointer-events-none absolute inset-0 z-[15]"
             style={{ background: '#2c2628', opacity: (1 - brightness) * 0.62 }}
@@ -238,6 +277,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <FlashApp onBack={props.onBack} />
     case 'huizhen':
       return <HuizhenApp onBack={props.onBack} />
+    case 'themes': return <ThemeShopApp onBack={props.onBack} />
+    case 'connections': return <ConnectionsApp onBack={props.onBack} />
     case 'map':
       return <MapApp onBack={props.onBack} />
     case 'table':
@@ -294,7 +335,7 @@ function StatusBar(props: { showClock: boolean }) {
   }, [])
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between px-6 pt-3 text-[12px]">
+    <div className="status-bar pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between px-6 pt-3 text-[12px]">
       <span className="tabular">{props.showClock ? now : ''}</span>
       <span style={{ color: 'var(--m-text-secondary)' }}>{battery === null ? '' : `${battery}%`}</span>
     </div>

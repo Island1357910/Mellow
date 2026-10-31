@@ -1,0 +1,159 @@
+/* Keep the outer phone themed while ancient pages use their own palette. */
+@scope (:root) to (.jiushi-phone) {
+/* 不寂寞万圣夜：统一表面、文字与装饰。所有规则仅在节日套组启用时生效。 */
+.halloween-wallpaper-pattern, .halloween-widget-motifs { display: none; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) {
+  --m-primary: #e3a667 !important;
+  --m-secondary: #aa8eba !important;
+  --m-background: #1b1723 !important;
+  --m-surface: #2b2435 !important;
+  --m-text: #f4eadb !important;
+  --m-text-secondary: #c9bfce !important;
+  --m-accent: #c4be90 !important;
+  --m-entry-surface: #302638;
+  --m-detail-ink: #e8ba89;
+  --m-quote-ink: #edbb89;
+  --m-shadow: 0 12px 32px #0c09154d !important;
+  color: var(--m-text);
+  background: #1b1723;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .wallpaper-base {
+  background: radial-gradient(ellipse at 10% 0%,#49304460,transparent 55%),linear-gradient(165deg,#24202f,#1b1723 60%,#282033) !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .wallpaper-wash { background: radial-gradient(ellipse at 85% 80%,#87614313,transparent 60%) !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .halloween-wallpaper-pattern {
+  display: block;
+  background: url('./halloween-pattern.svg') center / cover no-repeat;
+  opacity: .3;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .everyday-blossoms { display: none; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .halloween-widget-motifs { display: block; position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: .24; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .home-widget > :not(.halloween-widget-motifs,.everyday-blossoms) { position: relative; z-index: 1; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.home-widget,.music-widget,.dock-bar,.decor-card,.pill-note,.pocket-hero,.shop-editorial) {
+  background: #2b2435 !important;
+  color: var(--m-text) !important;
+  border: 1px solid #b495ca30;
+  box-shadow: 0 8px 24px #0b081538,inset 0 1px #e3a66708 !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .memo-widget { background: #352a32 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .mood-widget { background: #30283c !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .photo-frame { background: #30283c !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .photo-frame:has(img) { border-color: #c4ab7c66; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-glyph {
+  background: linear-gradient(145deg,#493449,#302738) !important;
+  color: #edbf89 !important;
+  box-shadow: inset 0 1px #d6abc044,inset 0 0 0 1px #a687b32b,0 5px 12px #100b1a44 !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch:nth-child(3n+2) .app-glyph { background: linear-gradient(145deg,#473629,#30272b) !important; color: #e7b778 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch:nth-child(3n) .app-glyph { background: linear-gradient(145deg,#393149,#2a2537) !important; color: #cbb5de !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch { filter: none; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch > span:last-child { color: #e6dccc !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .dock-bar { background: #302738ed !important; border-color: #c3a5cc3b; }
+/* 深底下的提示、占位符与低透明度文字保持可读。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is([style*="color: rgba(58"],[style*="color: rgb(58"],[class*="text-black/"],[class*="text-[#"],[class*="text-neutral-"],[class*="text-slate-"]):not(.halloween-widget-motifs *,[data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { color: var(--m-text-secondary) !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(input,textarea)::placeholder { color: #b9afc1 !important; opacity: 1; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(input,textarea,select) { color: var(--m-text); caret-color: #e3a667; accent-color: #e3a667; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.soft-input,.soft-select) { background-color: #211c2b !important; color: #f4eadb !important; border-color: #a98bb54d; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(input,textarea,select,button):focus-visible { outline: 2px solid #e3a667; outline-offset: 3px; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .soft-input:focus { box-shadow: 0 0 0 3px #e3a66724; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is([class*="opacity-35"],[class*="opacity-45"],[class*="opacity-50"],[class*="opacity-60"]):not(:disabled,.halloween-widget-motifs *) { opacity: .82; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .stamp-dot { background: #3b3147 !important; box-shadow: inset 0 0 0 1px #bb9ec033 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .stamp-dot[data-stamped="true"] { background: #a5703e !important; color: #fff2dc; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .stamp-dot[data-today="true"] { box-shadow: 0 0 0 1.5px #e3a667 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .stamp-label { color: #d2c7d8 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) [aria-pressed="true"] .stamp-label { color: #f2c38f !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .music-widget button { color: #eee2d1 !important; background-color: #44374e !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .music-widget button[aria-label^="播放 "] { background: transparent !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.chip,.pill-note) { background: #3a2f44 !important; color: #f4eadb !important; border-color: #b69ac13b; box-shadow: 0 3px 9px #100a181c; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.chip-solid,.chip-pink,[role="tab"][aria-selected="true"]) { background: #dca163 !important; color: #241b25 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.chip-danger,[class*="text-[#b050"]) { background: #50303e !important; color: #ffcad1 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.hz-thread-row,.hz-moment-card,.hz-star-card,.hz-diary-sheet,.hz-search-row,.hz-permission-row) { background: #2b2435; color: var(--m-text); border-color: #b495ca30; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.hz-thread-preview,.hz-star-meta,.hz-diary-date,.pick-card-blurb) { color: var(--m-text-secondary); }
+/* 兼容旧组件中的固定色，明确保留选色样本、商品图片和有规则含义的牌色。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is([class*="bg-[#"],[class*="bg-white"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background-color: #3a2e43 !important;
+  color: #f4eadb !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(button,span,div,p,label,section,article):is([style*="background: rgb("],[style*="background: rgba(255"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background: #423247 !important;
+  color: #f4eadb !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(button,div,section,article,span)[style*="background: linear-gradient"]:not(.wallpaper-base,.wallpaper-wash,.vinyl-disc,[data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background: linear-gradient(135deg,#493446,#302636) !important;
+  color: #f4eadb !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) nav button[aria-pressed="true"],
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) [role="tab"][aria-selected="true"],
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .chip-solid {
+  background: #dca163 !important;
+  color: #241b25 !important;
+  box-shadow: 0 4px 12px #0c08152b !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .home-widget .halloween-widget-motifs { background: none !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .home-widget :is([class*="bg-[#"],[class*="bg-white"]) { background: #49374c !important; color: #f4eadb !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .todo-widget li button[aria-label^="标记"] { background: #3d2f44 !important; box-shadow: inset 0 0 0 1.5px #dca163 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.round-table,.round-table-center,.round-seat-ring,.round-seat-avatar,.round-seat-badge,.round-seat-tag) { background: #3a2c42; color: #f4eadb; border-color: #b697c133; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .round-seat.is-turn .round-seat-ring { box-shadow: 0 0 0 2px #e3a667; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .uno-card { color: #241b25 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.hz-thread-avatar,.hz-stat-pill,.hz-diary-date,.hz-search-row) { background: #3a2c42; color: #dfc7b1; }
+/* 唱片保留黑胶材质，中心用暖色标记，避免统一表面色吞掉细节。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .music-widget .vinyl-disc { background: #17131e !important; box-shadow: inset 0 0 0 6px #100d17,inset 0 0 0 7px #b493b126,inset 0 0 0 12px #231b2b,inset 0 0 0 13px #c9a6bb20 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .music-widget .vinyl-disc > span:first-child { background: #d6b58a !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .music-widget .vinyl-disc > span:last-child { background: #211826 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .stamp-label { font-size: 10px; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .home-widget [class*="text-[9px]"] { font-size: 10px; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch .app-glyph[style] { background: linear-gradient(145deg,#493449,#302738) !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch:nth-child(3n+2) .app-glyph[style] { background: linear-gradient(145deg,#473629,#30272b) !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .app-launch:nth-child(3n) .app-glyph[style] { background: linear-gradient(145deg,#393149,#2a2537) !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.bind-person,.bind-person.is-active,.hz-chat-head,.hz-msg,.hz-album-tile,.hz-album-caption,.hz-phone-frame) { background: #302638 !important; color: #f4eadb !important; border-color: #aa8eba42; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .bind-person.is-active { border-color: #dca163; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.bind-person-avatar,.hz-thread-avatar,.hz-stat-pill) { background: #48354b; color: #f4eadb; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.bind-person-name,.hz-thread-title,.hz-chat-head-title,.hz-moment-text,.hz-star-text,.hz-album-name,.hz-diary-text,.hz-search-query,.hz-msg.is-me) { color: #f4eadb !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .bind-person-dot { background: #dca163; box-shadow: 0 0 0 3px #dca16326; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg rect[fill="#e9ede7"] { fill: #282632; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg path[stroke="#acd7ec"] { stroke: #4c536d; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg path[fill="#c5dcbb"] { fill: #414634; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg g[fill="#dcded6"] { fill: #39333e; stroke: #4c414f; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg g[stroke="#fff"] { stroke: #655365; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg g[stroke="#edce7a"] { stroke: #a67e56; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map svg g[fill="#7c8d94"] { fill: #e5d5bc; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .city-map button[aria-current="location"] { background: #dca163 !important; color: #241b25 !important; }
+
+/* 动态入口使用明确的表面语义，不再依赖浏览器如何序列化内联颜色。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry {
+  background: var(--m-entry-surface) !important;
+  color: #f4eadb !important;
+  border: 1px solid #b495ca35;
+  box-shadow: 0 8px 22px #0c091533 !important;
+}
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry:nth-child(1) { --m-entry-surface: #382a32; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry:nth-child(2) { --m-entry-surface: #30283c; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry:nth-child(3) { --m-entry-surface: #34283b; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry .social-entry-icon { background: #654438 !important; color: #ffe0b3 !important; box-shadow: inset 0 0 0 1px #e6b07d33; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry:nth-child(2) .social-entry-icon { background: #4f3b60 !important; color: #f0dcff !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry:nth-child(3) .social-entry-icon { background: #4b354d !important; color: #efc8dc !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry .social-entry-title { color: #f4eadb !important; font-weight: 600; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-entry .social-entry-hint { color: #c9bfce !important; }
+/* 同类旧组件：菜单分组、背景混色、白色半透明层、圆桌主持位。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.menu-group,.modal-center,.voice-bar-play) { background: #2b2435 !important; color: #f4eadb !important; border-color: #b495ca35; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(button,span,div,p,label,section,article)[style*="background: color-mix"]:not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { background: #302638 !important; color: #f4eadb !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.round-seat.is-host,.round-seat.is-turn) .round-seat-ring { background: #594137 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.round-seat.is-turn .round-seat-name,.round-table-mark) { color: #e3bd93 !important; }
+body:has(.device[data-season="halloween"]) .modal-portal { background: #110b1bb3; color: #f4eadb; color-scheme: dark; }
+/* Tailwind 任意渐变不会写入 style 属性，需独立覆盖背景图层。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is([class*="bg-[linear-gradient"],[class*="bg-[radial-gradient"],[class*="bg-gradient-"],[class*="bg-linear-"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { background: linear-gradient(135deg,#46303e,#302638) !important; color: #f4eadb !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .b-mine { background: #4a3444 !important; color: #f4eadb !important; box-shadow: 0 4px 12px #0c09152b; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .b-theirs { background: #302638 !important; color: #f4eadb !important; box-shadow: 0 4px 12px #0c09152b; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) [style*="color: rgb(176, 80, 92)"] { color: #ffcad1 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .social-face { background: #4b354d !important; color: #f4eadb !important; border-color: #aa8eba66; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .menu-row > span:first-child { background: #4b354d !important; color: #f4eadb !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(button,a)[style*="background: var(--m-primary)"]:not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { color: #241b25 !important; }
+/* Portal 中的卡片原本由 index.css 的 .device 祖先限定，需在主题作用域内直接定义。 */
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) :is(.menu-card,.soft-card,.pick-card) { background: #2b2435 !important; color: #f4eadb !important; border-color: #b495ca35; box-shadow: 0 8px 22px #0c091533 !important; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .preset-prompt-block { background: #211c2b !important; color: #f4eadb !important; box-shadow: inset 0 0 0 1px #b495ca26; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .pick-card-glow { background: #8c64764d; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .hz-moment-card::before { background: linear-gradient(#dca163,#866080); }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .round-seat.is-self .round-seat-ring { box-shadow: inset 0 0 0 2px #dca16366,0 6px 14px #0c091533; }
+:is(.device[data-season="halloween"], body:has(.device[data-season="halloween"]) .modal-portal) .soft-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23dca163' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+}

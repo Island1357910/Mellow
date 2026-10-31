@@ -188,7 +188,7 @@ export function describeMessage(item: ChatMessage): string {
     case 'image':
       return '（发来一张图片）'
     case 'sticker':
-      return `（发了一个表情包：${stickerLabel(item.content)}）`
+      return `[表情:${stickerLabel(item.content)}]`
     case 'redpacket':
       return `（发了一个红包：¥${head}${rest[0] ? `，写着“${rest[0]}”` : ''}${rest[1] ? `，${rest[1]}` : ''}）`
     case 'transfer':

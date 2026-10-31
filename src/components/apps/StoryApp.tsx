@@ -31,7 +31,7 @@ import {
   type StorySave,
 } from '../../engine/story.ts'
 import { initialOf } from '../../lib/format.ts'
-import { isJiushiCharacter } from '../../lib/jiushi.ts'
+import { isJiushiCharacter, loadJiushiConfig } from '../../lib/jiushi.ts'
 import { touchImmersive } from '../../lib/smsGuard.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
@@ -74,7 +74,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
     let alive = true
     void (async () => {
       const all = await storage.listCharacters(phone.namespace)
-      const people = props.mode === 'jiushi' ? all.filter(isJiushiCharacter) : all
+      const people = props.mode === 'jiushi' ? all.filter(isJiushiCharacter) : all.filter(c => !isJiushiCharacter(c))
       const [nextConfig, rows] = await Promise.all([loadConfig(namespace), listSaves(namespace)])
       let current: StorySave | null = null
       if (props.mode === 'offline') {
@@ -238,7 +238,7 @@ function StoryView(props: {
   const boxRef = useRef<HTMLTextAreaElement | null>(null)
   const reading = config.reading
   const rules = useMemo(() => displayRules(props.mode, config, props.chars, save), [props.mode, config, props.chars, save])
-  const present = props.mode === 'offline' ? focusChars(props.chars, save).slice(0, 4) : props.lead ? [props.lead] : []
+  const present = props.mode === 'offline' ? focusChars(props.chars, save).slice(0, 4) : props.chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id))
   const userName = props.mode === 'side' || props.mode === 'jiushi' ? save.persona?.name || props.identity.name : props.identity.name
   const storyJobKey = jobKey(props.namespace, 'story', props.save.id)
   const aiBusy = isAiJobRunning(storyJobKey)
@@ -499,7 +499,7 @@ function Prose(props: { text: string; quote: string }) {
   const parts = props.text.split(/(“[^”]*”|「[^」]*」|"[^"\n]*")/)
   return (
     <>
-      {parts.map((part, index) => (/^(“|「|")/.test(part) ? <span key={index} style={{ color: props.quote }}>{part}</span> : <span key={index}>{part}</span>))}
+      {parts.map((part, index) => (/^(“|「|")/.test(part) ? <span key={index} style={{ color: `var(--m-quote-ink, ${props.quote})` }}>{part}</span> : <span key={index}>{part}</span>))}
     </>
   )
 }
@@ -568,13 +568,15 @@ function SideLobby(props: {
 }) {
   const ancient = props.mode === 'jiushi'
   const [creating, setCreating] = useState(props.saves.length === 0)
-  const [charId, setCharId] = useState(props.chars[0]?.id ?? '')
+  const [charIds, setCharIds] = useState<string[]>(props.chars[0] ? [props.chars[0].id] : [])
+  const charId = charIds[0] ?? ''
   const [name, setName] = useState('')
-  const [personaName, setPersonaName] = useState(props.identity.name)
-  const [persona, setPersona] = useState(props.identity.persona)
+  const [personaName, setPersonaName] = useState(ancient ? '此世之人' : props.identity.name)
+  const [persona, setPersona] = useState(ancient ? '此世土生土长的古代居民' : props.identity.persona)
   const [bookIds, setBookIds] = useState<string[]>([])
   const [books, setBooks] = useState<Lorebook[]>([])
   const [warn, setWarn] = useState('')
+  useEffect(() => { if (!ancient) return; let alive=true; void loadJiushiConfig(props.identity.namespace).then(c => { if(alive){setPersonaName(c.roleName || '此世之人');setPersona(c.roleStory || '此世土生土长的古代居民')} }); return()=>{alive=false} }, [ancient,props.identity.namespace])
   const lead = props.chars.find((item) => item.id === charId)
   const withBooks = props.chars.filter((item) => item.characterBook)
   const candy = ancient
@@ -589,8 +591,9 @@ function SideLobby(props: {
     await props.onCreate(
       newSave(name.trim() || `${lead.name} 的${ancient ? '旧世线' : '番外'}`, {
         charId: lead.id,
+        charIds,
         persona: { name: personaName.trim() || props.identity.name, persona },
-        bookCharIds: bookIds.length ? bookIds : lead.characterBook ? [lead.id] : [],
+        bookCharIds: bookIds.length ? bookIds : charIds,
         books,
         lines: opener ? [line('assistant', opener)] : [],
       }),
@@ -621,7 +624,7 @@ function SideLobby(props: {
         {creating ? (
           <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="menu-card mb-4 space-y-4">
             <div>
-              <p className="mb-2 text-xs" style={{ color: 'var(--m-text-secondary)' }}>这一档的主角</p>
+              <p className="mb-2 text-xs" style={{ color: 'var(--m-text-secondary)' }}>这一档的角色（可多选，第一位为开场角色）</p>
               {props.chars.length === 0 ? (
                 ancient
                   ? <p className="jiushi-note-compact">还没有旧世角色，请先在「人物」纳入古风卡</p>
@@ -629,7 +632,7 @@ function SideLobby(props: {
               ) : null}
               <div className="flex flex-wrap gap-2">
                 {props.chars.map((person) => (
-                  <button key={person.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs" style={{ background: charId === person.id ? (ancient ? 'rgba(184,149,106,0.22)' : '#E6DDF8') : 'white', boxShadow: charId === person.id ? (ancient ? 'inset 0 0 0 1.5px rgba(107,83,68,0.35)' : 'inset 0 0 0 1.5px #B9A3E3') : 'none' }} onClick={() => setCharId(person.id)}>
+                  <button key={person.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs" style={{ background: charIds.includes(person.id) ? (ancient ? 'rgba(184,149,106,0.22)' : '#E6DDF8') : 'white', boxShadow: charIds.includes(person.id) ? (ancient ? 'inset 0 0 0 1.5px rgba(107,83,68,0.35)' : 'inset 0 0 0 1.5px #B9A3E3') : 'none' }} aria-pressed={charIds.includes(person.id)} onClick={() => setCharIds(ids => ids.includes(person.id) ? ids.filter(id => id !== person.id) : [...ids, person.id])}>
                     <Face person={person} size={24} />
                     {person.name}
                   </button>

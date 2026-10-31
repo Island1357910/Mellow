@@ -46,6 +46,7 @@ function SetupForm(props: {
             {config.hasMemory ? '开：仍记得穿书前的事，用到才提' : '关：在此世醒来，只有当前身份'}
           </p>
         </button>
+        <fieldset className="jiushi-card p-4 space-y-3"><legend className="px-2 text-sm">阅读字体</legend><div className="flex flex-wrap gap-2">{([['modern','清朗黑体'],['song','书卷宋体'],['kai','端正楷体']] as const).map(([id,label])=><button key={id} type="button" className={config.fontStyle===id?'jiushi-btn jiushi-btn-primary':'jiushi-btn'} aria-pressed={config.fontStyle===id} onClick={()=>setConfig({...config,fontStyle:id})}>{label}</button>)}</div><label className="block text-xs">正文字号 · {config.fontSize??16}px<input className="mt-2 w-full" aria-label="旧世正文字号" type="range" min="14" max="20" value={config.fontSize??16} onChange={e=>setConfig({...config,fontSize:Number(e.target.value)})}/></label><p className="leading-8" style={{fontSize:config.fontSize??16,fontFamily:config.fontStyle==='song'?'SimSun, STSong, serif':config.fontStyle==='kai'?'KaiTi, STKaiti, serif':'Microsoft YaHei, sans-serif'}}>山色入帘青，风过一卷书。</p><p className="text-xs" style={{color:'var(--js-ink-muted)'}}>保存后用于旧世阅读与输入，界面标题保留书卷感。</p></fieldset>
         <button
           type="button"
           className="jiushi-btn jiushi-btn-primary jiushi-btn-block py-3"
@@ -77,7 +78,7 @@ export function JiushiPhoneShell(props: { phone: Identity; onExit: () => void })
 
   if (setupMode && config) {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <SetupForm
           config={config}
           phone={props.phone}
@@ -96,28 +97,28 @@ export function JiushiPhoneShell(props: { phone: Identity; onExit: () => void })
 
   if (activeApp === 'rumu') {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <StoryApp mode="jiushi" onBack={() => setActiveApp(null)} />
       </JiushiShell>
     )
   }
   if (activeApp === 'chuanshu') {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <JiushiChuanShuApp phone={props.phone} onBack={() => setActiveApp(null)} />
       </JiushiShell>
     )
   }
   if (activeApp === 'roster') {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <JiushiRosterApp phone={props.phone} onBack={() => setActiveApp(null)} />
       </JiushiShell>
     )
   }
   if (activeApp === 'worldbook') {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <WorldBookApp
           onBack={() => setActiveApp(null)}
           namespaceOverride={jiushiWorldNs(props.phone.namespace)}
@@ -128,14 +129,14 @@ export function JiushiPhoneShell(props: { phone: Identity; onExit: () => void })
   }
   if (activeApp === 'worldforge') {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <WorldForgeApp onBack={() => setActiveApp(null)} jiushi worldNamespace={jiushiWorldNs(props.phone.namespace)} />
       </JiushiShell>
     )
   }
   if (activeApp === 'setup' && config) {
     return (
-      <JiushiShell>
+      <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <SetupForm
           config={config}
           phone={props.phone}
@@ -148,7 +149,7 @@ export function JiushiPhoneShell(props: { phone: Identity; onExit: () => void })
   }
 
   return (
-    <JiushiShell>
+    <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
       <header className="jiushi-header">
         <p className="jiushi-header-eyebrow">旧世小手机</p>
         <h1 className="jiushi-header-title">{config?.worldTitle || '此世'}</h1>

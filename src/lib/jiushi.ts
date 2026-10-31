@@ -12,6 +12,8 @@ import { uid } from './id.ts'
 export const JIUSHI_TAGS = ['旧世', '古风'] as const
 
 export interface JiushiConfig {
+  fontStyle?: 'modern' | 'song' | 'kai'
+  fontSize?: number
   setupDone: boolean
   /** 是否保留穿书前的现代记忆 */
   hasMemory: boolean
@@ -40,6 +42,8 @@ export interface JiushiLetter {
 
 export function defaultJiushiConfig(): JiushiConfig {
   return {
+    fontStyle: 'modern',
+    fontSize: 16,
     setupDone: false,
     hasMemory: false,
     roleName: '',
@@ -71,14 +75,14 @@ export function jiushiPromptBlock(config: JiushiConfig): string {
   const memory = config.hasMemory
     ? '玩家穿书而来，仍记得现代的事，但在此世生活；不要每句都提现代，用到才说。'
     : '玩家在此世醒来，没有现代记忆，只有当前身份与经历；不要提手机、网络、穿书等概念。'
-  const role = [config.roleName, config.roleStory].filter(Boolean).join('，') || '一个刚入此世的人'
+  const role = [config.roleName, config.roleStory].filter(Boolean).join('，') || '此世土生土长的古代居民'
   const world = config.worldTitle.trim() || '此世'
   return [
     '【旧世 · 穿书】',
     `所入：${world}。`,
     `玩家身份：${role}。`,
     memory,
-    '用古风/半文白叙事，可第三人称加对白；不要写现代短信口吻，不要提「微信」「手机App」。',
+    '玩家在此世具有古代身份；现代手机身份、职业、社交关系不得覆盖此世身份。此世使用书信、银钱、驿站、铺面与古代制度。现代记忆只能是内心知识，不能凭空产生现代设备、网络、外卖或现代应用。旧世角色不得读取现代短信、星博、购物、地图和现代日程。用古风/半文白叙事，角色认知受时代和各自见闻限制。',
   ].join('')
 }
 

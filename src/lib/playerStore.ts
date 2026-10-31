@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
+import { resolveNeteaseSong } from './neteaseAccount.ts'
 
 export type PlayerStyle = 'vinyl' | 'cd' | 'minimal'
 export type RepeatMode = 'one' | 'all' | 'shuffle'
@@ -9,6 +10,9 @@ export type Track = {
   id: string
   name: string
   artist?: string
+  lyrics?: string
+  provider?: 'netease'
+  providerId?: string
   /** http(s) 链接，或 bag:键名 指向本地导入的音频 */
   src?: string
   /** 没有音频时用的合成音高 */
@@ -57,27 +61,47 @@ export const DISC_COLORS = ['#1A1A1A', '#5B3A4A', '#2F4A5C', '#E58FA6', '#7CC7AE
 const DEFAULT_CONFIG: PlayerConfig = { style: 'vinyl', card: '#FFFFFF', disc: '#1A1A1A', tracks: BUILTIN_TRACKS, repeatMode: 'one' }
 
 type PlayerState = {
+  index: number
+  playing: boolean
+  seconds: number
+  duration: number
+  volume: number
+  error: string
+  step: (delta: number) => void
   namespace: string
   config: PlayerConfig
-  load: (namespace: string) => void
+  load: (namespace: string) => Promise<void>
   patch: (patch: Partial<PlayerConfig>) => void
   addTrack: (track: Omit<Track, 'id'>, audio?: string) => Promise<void>
   removeTrack: (id: string) => void
 }
 
+const loadFlights = new Map<string, Promise<void>>()
 export const usePlayer = create<PlayerState>((set, get) => ({
+  index: 0, playing: false, seconds: 0, duration: 0, volume: 3, error: '',
+  step: delta => {
+    const state = get(), length = state.config.tracks.length
+    const index = state.config.repeatMode === 'shuffle' && length > 1
+      ? (state.index + 1 + Math.floor(Math.random() * (length - 1))) % length
+      : (state.index + delta + length) % Math.max(1, length)
+    set({ index, seconds: 0, duration: 0, error: '' })
+  },
   namespace: '',
   config: DEFAULT_CONFIG,
-  load: (namespace) => {
-    if (get().namespace === namespace) return
-    set({ namespace, config: DEFAULT_CONFIG })
-    void storage.getBag<PlayerConfig>(namespace, 'player').then((row) => {
+  load: async (namespace) => {
+    if (get().namespace === namespace) { await loadFlights.get(namespace); return }
+    set({ namespace, config: DEFAULT_CONFIG, index: 0, playing: false, seconds: 0, duration: 0, error: '' })
+    const flight = storage.getBag<PlayerConfig>(namespace, 'player').then((row) => {
       if (row && get().namespace === namespace) set({ config: { ...DEFAULT_CONFIG, ...row, tracks: mergeTracks(row.tracks), repeatMode: row.repeatMode ?? DEFAULT_CONFIG.repeatMode } })
     })
+    loadFlights.set(namespace, flight)
+    try { await flight } finally { if (loadFlights.get(namespace) === flight) loadFlights.delete(namespace) }
   },
   patch: (patch) => {
     const config = { ...get().config, ...patch }
-    set({ config })
+    const currentId = get().config.tracks[get().index]?.id
+    const found = config.tracks.findIndex(t => t.id === currentId)
+    set({ config, index: Math.max(0, found), ...(found < 0 ? { seconds: 0, duration: 0 } : {}) })
     void storage.setBag(get().namespace, 'player', config)
   },
   addTrack: async (track, audio) => {
@@ -98,13 +122,21 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 }))
 
 export async function resolveTrackSrc(namespace: string, src: string): Promise<string> {
+  if (src.startsWith('netease:')) {
+    const id = src.slice('netease:'.length)
+    const data = await resolveNeteaseSong(namespace, id)
+    const state = usePlayer.getState()
+    if (state.namespace !== namespace) throw Error('手机身份已切换')
+    state.patch({ tracks: state.config.tracks.map(t => t.provider === 'netease' && t.providerId === id ? { ...t, lyrics: data.lyrics } : t) })
+    return data.src
+  }
   if (!src.startsWith('bag:')) return src
   return (await storage.getBag<string>(namespace, src.slice(4))) ?? ''
 }
 
 export function isDark(color: string) {
   const hex = color.replace('#', '')
-  if (hex.length !== 6) return false
+  if (hex.length !== 6 && hex.length !== 8) return false
   const [r, g, b] = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16))
   return (r * 299 + g * 587 + b * 114) / 1000 < 110
 }

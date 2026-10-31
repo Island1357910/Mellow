@@ -22,5 +22,5 @@ assert(ended.currentScene === null && ended.history.length === 1, '最后一个�
 const sample = JSON.parse(readFileSync(new URL('../public/samples/xiaoman.json', import.meta.url), 'utf8')) as unknown
 const card = parseCharacterCard(sample)
 assert(card.name === '小满' && card.firstMes.includes('到家了吗'), '示例角色卡可读')
-assert(OFFICIAL_PRESETS.length === 8, '官方预设应该是 8 个')
+assert(OFFICIAL_PRESETS.length >= 8 && new Set(OFFICIAL_PRESETS.map(p=>p.id)).size === OFFICIAL_PRESETS.length, '官方预设需要保留基础套组且 ID 唯一')
 console.log('space and sample ok')

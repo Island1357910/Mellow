@@ -25,7 +25,8 @@ export interface ForumThread {
   mine?: boolean
 }
 
-const BOARDS = ['树洞', '日常', '提问', '剧情']
+export const FORUM_BOARDS = ['日常', '同人文', 'R18', '吐槽', '树洞', '提问', '剧情']
+const BOARDS = FORUM_BOARDS
 
 export function normalizeForumThreads(raw: unknown): ForumThread[] {
   if (!Array.isArray(raw)) return []
@@ -56,10 +57,10 @@ export function normalizeForumThreads(raw: unknown): ForumThread[] {
       : []
     return [{
       id: typeof row.id === 'string' ? row.id : uid('topic'),
-      title: titleRaw.slice(0, 24),
+      title: titleRaw.slice(0, 64),
       board,
       author,
-      text: text.slice(0, 400),
+      text: text.slice(0, 12000),
       at,
       likes: typeof row.likes === 'number' && Number.isFinite(row.likes) ? row.likes : replies.length,
       liked: Boolean(row.liked),
@@ -106,7 +107,7 @@ function parseThread(parsed: { title?: unknown; board?: unknown; author?: unknow
     title: (typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim() : postText).slice(0, 24),
     board: typeof parsed.board === 'string' && BOARDS.includes(parsed.board) ? parsed.board : '日常',
     author,
-    text: postText.slice(0, 400),
+    text: postText.slice(0, 12000),
     at: clock(),
     likes: replies.length + 1,
     liked: false,
@@ -114,8 +115,8 @@ function parseThread(parsed: { title?: unknown; board?: unknown; author?: unknow
   }
 }
 
-export async function generateRandomForumPost(namespace: string, voice: string, baseRows: ForumThread[]): Promise<ForumThread[]> {
-  const chars = await storage.listCharacters(namespace)
+export async function generateRandomForumPost(namespace: string, voice: string, baseRows: ForumThread[], board?: string): Promise<ForumThread[]> {
+  const chars = await storage.listModernCharacters(namespace)
   const names = [...chars.map((item) => item.name), '巷口灯', '晚班店员', '楼对面', '路人甲'].join('、')
   const chats = await storage.listChats(namespace)
   const bits: string[] = []
@@ -127,7 +128,7 @@ export async function generateRandomForumPost(namespace: string, voice: string, 
   let made = localThread(context || '论坛里今天有点热闹', chars[0]?.name ?? '路人甲')
   try {
     const raw = await askLine(
-      `${voice}\n你在写论坛帖子。根据当前世界里的角色关系和近期发生的事，随机生成一条像真论坛一样的帖子。只返回 JSON：{"title":"标题","board":"树洞或日常或提问或剧情","author":"作者","text":"正文80到160字","replies":[{"author":"路人","text":"一句"}]}。作者从可选名字里选。回复 2 到 4 条。`,
+      `${voice}\n你在写论坛帖子。根据当前世界里的角色关系和近期发生的事，随机生成一条像真论坛一样的帖子。只返回 JSON：{"title":"标题","board":"日常或同人文或R18或吐槽或树洞或提问或剧情","author":"作者","text":"正文80到160字","replies":[{"author":"路人","text":"一句"}]}。作者从可选名字里选。回复 2 到 4 条。`,
       context.trim() ? `近期发生的事：\n${context}\n可选作者：${names}` : `可选作者：${names}\n没有明确线索就写日常或树洞。`,
       700,
     )
@@ -135,25 +136,27 @@ export async function generateRandomForumPost(namespace: string, voice: string, 
   } catch {
     made = localThread(context || '今天论坛挺安静', chars[0]?.name ?? '路人甲')
   }
+  if (board && BOARDS.includes(board)) made = { ...made, board }
   const next = [made, ...baseRows].slice(0, 40)
   await storage.setBag(namespace, 'forum', next)
   return next
 }
 
-export async function generatePlotForumPost(namespace: string, voice: string, plot: string, baseRows: ForumThread[]): Promise<ForumThread[]> {
-  const chars = await storage.listCharacters(namespace)
+export async function generatePlotForumPost(namespace: string, voice: string, plot: string, baseRows: ForumThread[], board?: string): Promise<ForumThread[]> {
+  const chars = await storage.listModernCharacters(namespace)
   const names = [...chars.map((item) => item.name), '巷口灯', '晚班店员', '楼对面', '路人甲'].join('、')
   let made = localThread(plot, '路人甲')
   try {
     const raw = await askLine(
-      `${voice}\n只返回 JSON：{"title":"标题","board":"树洞或日常或提问或剧情","author":"作者","text":"正文80到160字","replies":[{"author":"路人","text":"一句"}]}。作者从这些名字里选。回复 2 到 4 条。`,
-      `想看的剧情：${plot}\n可选作者：${names}`,
+      `${voice}\n只返回 JSON：{"title":"标题","board":"日常或同人文或R18或吐槽或树洞或提问或剧情","author":"作者","text":"正文80到160字","replies":[{"author":"路人","text":"一句"}]}。作者从这些名字里选。回复 2 到 4 条。`,
+      `目标分区：${board || '按内容判断'}。想看的剧情：${plot}\n可选作者：${names}`,
       700,
     )
     made = parseThread(readJson(raw) as ForumThread, made)
   } catch {
     made = localThread(plot, chars[0]?.name ?? '路人甲')
   }
+  if (board && BOARDS.includes(board)) made = { ...made, board }
   const next = [made, ...baseRows].slice(0, 40)
   await storage.setBag(namespace, 'forum', next)
   return next

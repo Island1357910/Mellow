@@ -36,6 +36,8 @@ export interface StorySave {
   summaries: StorySummary[]
   /** 番外：这一档的主角 */
   charId?: string
+  charIds?: string[]
+  summaryError?: string
   /** 番外：这一档里玩家是谁，不跟主线身份走 */
   persona?: StoryPersona
   /** 番外：选中哪些角色的世界书 */
@@ -509,12 +511,35 @@ function loreText(books: Lorebook[], recent: string, limit: number): string {
     .slice(0, limit)
 }
 
+function clip(text: string, max: number): string {
+  const clean = text.replace(/\u0000/g, '').trim()
+  if (clean.length <= max) return clean
+  return `${clean.slice(0, max)}…`
+}
+
+function clipTail(text: string, max: number): string {
+  const clean = text.replace(/\u0000/g, '').trim()
+  if (clean.length <= max) return clean
+  return `…\n${clean.slice(-max)}`
+}
+
+function promptLine(text: string): string {
+  const plain = text
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\u0000/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return clip(plain || '……', 600)
+}
+
 function card(character: Character): string {
   const parts = [`【${character.name}】${character.nickname ? `（昵称 ${character.nickname}）` : ''}`]
-  if (character.description.trim()) parts.push(character.description.trim())
-  if (character.personality.trim()) parts.push(`性格：${character.personality.trim()}`)
-  if (character.scenario.trim()) parts.push(`情境：${character.scenario.trim()}`)
-  if (character.mesExample.trim()) parts.push(`说话的样子（参考，不照抄）：\n${character.mesExample.trim().slice(0, 600)}`)
+  if (character.description.trim()) parts.push(clip(character.description, 800))
+  if (character.personality.trim()) parts.push(`性格：${clip(character.personality, 400)}`)
+  if (character.scenario.trim()) parts.push(`情境：${clip(character.scenario, 400)}`)
+  if (character.mesExample.trim()) parts.push(`说话的样子（参考，不照抄）：\n${clip(character.mesExample, 400)}`)
   return parts.join('\n')
 }
 
@@ -592,18 +617,21 @@ export function buildStoryPrompt(input: {
   const blocks = (input.preset?.data.prompts ?? []).filter((item) => item.enabled && item.content.trim())
   if (blocks.length) {
     systems.push(
-      blocks
-        .map((item) =>
-          fill(item.content, lead?.name ?? charName, userName)
-            .replaceAll('{{description}}', lead?.description || '（没有写）')
-            .replaceAll('{{personality}}', lead?.personality || '（没有写）')
-            .replaceAll('{{scenario}}', lead?.scenario || '（没有写）'),
-        )
-        .join('\n\n'),
+      clip(
+        blocks
+          .map((item) =>
+            fill(item.content, lead?.name ?? charName, userName)
+              .replaceAll('{{description}}', clip(lead?.description || '（没有写）', 800))
+              .replaceAll('{{personality}}', clip(lead?.personality || '（没有写）', 400))
+              .replaceAll('{{scenario}}', clip(lead?.scenario || '（没有写）', 400)),
+          )
+          .join('\n\n'),
+        1500,
+      ),
     )
   }
-  if (input.world?.trim()) systems.push(input.world.trim())
-  if (input.smsBridge?.trim() && mode !== 'offline') systems.push(input.smsBridge.trim())
+  if (input.world?.trim()) systems.push(clip(input.world, 800))
+  if (input.smsBridge?.trim() && mode !== 'offline') systems.push(clipTail(input.smsBridge, 1200))
   if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
   systems.push(
     fill(mode === 'jiushi' ? JIUSHI_RULE : mode === 'side' ? SIDE_RULE : OFFLINE_RULE, charName, userName),
@@ -612,37 +640,41 @@ export function buildStoryPrompt(input: {
   systems.push(
     `本次回复纯正文（HTML 标签不计入）目标 ${range.min}～${range.max} 汉字，可上下浮动 10%（约 ${range.lo}～${range.hi} 字）。不要为凑字数重复，也不要只写一两句敷衍。`,
   )
-  if (mode === 'side' && lead) {
-    systems.push(card(lead))
-    if (lead.systemPrompt.trim()) systems.push(fill(lead.systemPrompt, lead.name, userName))
+  if (sideLike(mode)) {
+    const cast = chars.filter(c => (save.charIds?.length ? save.charIds : [save.charId]).includes(c.id))
+    for (const person of cast) {
+      systems.push(card(person))
+      if (person.systemPrompt.trim()) systems.push(fill(person.systemPrompt, person.name, userName))
+    }
+    systems.push('参与角色各有独立视角、目的和表达，不必每轮全部发言；不共享未亲眼看见或未获知的信息。')
   }
-  systems.push(userPersona.trim() ? `玩家扮演 ${userName}。关于 ${userName}：${userPersona.trim()}` : `玩家扮演 ${userName}。`)
+  systems.push(userPersona.trim() ? `玩家扮演 ${userName}。关于 ${userName}：${clip(userPersona, 400)}` : `玩家扮演 ${userName}。`)
   let books: Lorebook[] = []
   if (mode === 'offline') {
-    const roster = chars.map((item) => `${item.name}${item.nickname ? `（${item.nickname}）` : ''}：${(item.personality || item.description).split(/[。\n]/)[0]?.slice(0, 40) ?? ''}`)
+    const roster = chars.slice(0, 20).map((item) => `${item.name}${item.nickname ? `（${item.nickname}）` : ''}：${(item.personality || item.description).split(/[。\n]/)[0]?.slice(0, 40) ?? ''}`)
     if (roster.length) systems.push(`这个世界里的人（玩家可能会找他们）：\n${roster.join('\n')}`)
-    const focus = focusChars(chars, save)
+    const focus = focusChars(chars, save).slice(0, 2)
     if (focus.length) systems.push(`此刻相关的人的完整设定：\n\n${focus.map(card).join('\n\n')}`)
     books = focus.map((item) => item.characterBook).filter((item): item is Lorebook => Boolean(item))
   } else {
     const picked = chars.filter((item) => (save.bookCharIds ?? []).includes(item.id)).map((item) => item.characterBook)
     books = [...picked.filter((item): item is Lorebook => Boolean(item)), ...(save.books ?? [])]
   }
-  const lore = loreText(books, recent, 2400)
+  const lore = loreText(books, recent, 800)
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
-  if (memory.text) systems.push(memory.text)
+  if (memory.text) systems.push(clip(memory.text, 800))
   if (sideLike(mode) && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
-  if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
+  if (mode === 'offline' && input.smsBridge?.trim()) systems.push(clipTail(input.smsBridge, 1200))
 
-  const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
-  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? cardRegex(lead) : focusChars(chars, save).flatMap(cardRegex)) : [])]
+  const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
+  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focusChars(chars, save).flatMap(cardRegex)) : [])]
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
-    messages.push({ role: item.role, content: applyRegex(item.content, rules, 'prompt', item.role) })
+    messages.push({ role: item.role, content: promptLine(applyRegex(item.content, rules, 'prompt', item.role)) })
   }
   if (input.nudge) messages.push({ role: 'user', content: input.nudge })
   if (mode === 'offline' && input.smsBridge?.trim()) {
@@ -650,7 +682,6 @@ export function buildStoryPrompt(input: {
     if (last?.role === 'user') {
       last.content = `${last.content}\n\n（不要写进正文：关系和情绪以手机短信里已经发生的结果为准，不允许把更早的线下记录当成最重要的依据。玩家刚刚这一下如果是新的，要接住，但不要延续已经在短信里结束的争吵、冷战或翻旧账。）`
     }
-    messages.push({ role: 'system', content: input.smsBridge.trim() })
   }
   return messages
 }
@@ -658,15 +689,16 @@ export function buildStoryPrompt(input: {
 export function displayRules(mode: StoryMode, config: StoryConfig, chars: Character[], save: StorySave): RegexRule[] {
   const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
   if (!config.useCardRegex) return scoped
-  const extra = sideLike(mode) ? cardRegex(chars.find((item) => item.id === save.charId)) : chars.flatMap(cardRegex)
+  const extra = sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : chars.flatMap(cardRegex)
   return [...scoped, ...extra]
 }
 
 export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepRounds: number): Promise<StorySave> {
+  void keepRounds
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const start = memoryBlock(save).covered
   if (kind === 'small') {
-    const end = Math.max(start, save.lines.length - keepRounds * 2)
+    const end = save.lines.length
     const chunk = save.lines.slice(start, end > start ? end : save.lines.length)
     if (chunk.length === 0) throw new Error('还没有需要总结的内容')
     const response = await adapter.complete({
@@ -677,6 +709,7 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
       temperature: 0.3,
       maxTokens: 400,
     })
+    if (!response.content.trim()) throw new Error('总结返回为空，将在下轮重试')
     const upTo = end > start ? end : save.lines.length
     return { ...save, summaries: [...save.summaries, { id: uid('sum'), kind, text: response.content.trim(), upTo, createdAt: Date.now() }] }
   }
@@ -696,18 +729,44 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
 export function needsSummary(save: StorySave, config: StoryConfig): boolean {
   if (!config.autoSummary) return false
   const covered = memoryBlock(save).covered
-  return save.lines.length - config.keepRounds * 2 - covered >= config.summaryEvery * 2
+  return save.lines.slice(covered).filter(item => item.role === 'assistant').length >= Math.max(1, config.summaryEvery)
+}
+
+function storyTemperature(preset: Preset | null): number {
+  const raw = preset?.data.temperature
+  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0.9
+  return Math.min(0.9, Math.max(0.2, value))
+}
+
+/** 线下上下文比短信长得多。超长人设、top_p=1 或惩罚项会让不少接口直接回「请求参数无效」。 */
+function fitStoryMessages(messages: AIMessage[]): AIMessage[] {
+  const maxChars = 1600
+  const system = `${clipTail(
+    messages.filter((item) => item.role === 'system').map((item) => item.content.trim()).filter(Boolean).join('\n\n'),
+    800,
+  )}\n用第三人称写眼前这一幕，对白用引号。不要替玩家说话或做决定。`
+  const rest = messages.filter((item) => item.role !== 'system')
+  const kept: AIMessage[] = []
+  let used = system.length
+  for (let index = rest.length - 1; index >= 0; index -= 1) {
+    const item = rest[index]
+    if (!item?.content.trim()) continue
+    const content = promptLine(item.content)
+    if (used + content.length > maxChars && kept.length > 0) break
+    kept.push({ role: item.role, content })
+    used += content.length
+  }
+  kept.reverse()
+  if (kept.length === 0 || kept[kept.length - 1]?.role !== 'user') kept.push({ role: 'user', content: '请接着眼前这一幕往下写。' })
+  return [{ role: 'system', content: system || '请写线下这一幕。' }, ...kept]
 }
 
 export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number): Promise<string> {
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const response = await adapter.complete({
-    messages,
-    temperature: preset?.data.temperature ?? 0.9,
-    topP: preset?.data.top_p ?? 0.95,
-    frequencyPenalty: preset?.data.frequency_penalty ?? 0,
-    presencePenalty: preset?.data.presence_penalty ?? 0,
-    ...(maxTokens != null ? { maxTokens } : {}),
+    messages: fitStoryMessages(messages),
+    temperature: storyTemperature(preset),
+    maxTokens: maxTokens ?? 1024,
   })
   return response.content
 }
@@ -719,7 +778,7 @@ export async function generateStoryReply(input: {
   charsMax: number
 }): Promise<string> {
   const range = storyCharRange(input.charsMin, input.charsMax)
-  const budget = Math.min(16_384, Math.max(8192, Math.ceil(range.max * 1.8)))
+  const budget = 512
   let content = await generate(input.messages, input.preset, budget)
   let len = plainStoryLength(content)
   if (len >= range.lo && len <= range.hi) return content
@@ -739,7 +798,7 @@ export async function generateStoryReply(input: {
         },
       ],
       input.preset,
-      Math.min(budget, Math.max(2048, Math.ceil(need * 2))),
+      budget,
     )
     content = `${content.trimEnd()}\n${tail.trim()}`
     len = plainStoryLength(content)

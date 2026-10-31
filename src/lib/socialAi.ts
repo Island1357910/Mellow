@@ -63,7 +63,7 @@ export async function generateMomentsFeed(namespace: string, names: string): Pro
 }
 
 export async function generateNearbyPeople(namespace: string, visit: number): Promise<SocialNearPerson[]> {
-  const [seen, chars] = await Promise.all([listNearbySeen(namespace), storage.listCharacters(namespace)])
+  const [seen, chars] = await Promise.all([listNearbySeen(namespace), storage.listModernCharacters(namespace)])
   const skip = new Set([
     ...seen,
     ...chars.filter(isNearbyCharacter).map((item) => item.name),

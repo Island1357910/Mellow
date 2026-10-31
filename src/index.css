@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../services";
 
 :root {
   color-scheme: light;
@@ -143,7 +144,8 @@ button {
   flex-direction: column;
   justify-content: flex-start;
   overflow: hidden;
-  padding-bottom: 15.15rem;
+  padding-top: clamp(2.75rem, 8dvh, 4.25rem);
+  padding-bottom: 14rem;
 }
 
 .page2-stage {
@@ -152,18 +154,29 @@ button {
   grid-template-columns: 1.82fr 0.78fr;
   gap: 0.7rem;
   width: 100%;
-  min-height: 7.25rem;
+  min-height: 4rem;
   max-height: 12.4rem;
 }
 
 .launcher-board {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
   align-content: end;
-  justify-items: center;
-  gap: 0.65rem 0.15rem;
+  justify-content: center;
+  row-gap: 0.65rem;
   margin-top: auto;
   padding-top: 0.85rem;
+}
+
+.launcher-board > .app-launch {
+  flex: 0 0 25%;
+  min-width: 0;
+}
+
+@media (max-height: 620px) {
+  .launcher-apps .page2-stage { min-height: 3.5rem; }
+  .launcher-apps .launcher-board { row-gap: 0.4rem; padding-top: 0.5rem; }
 }
 
 .chip {
@@ -1280,3 +1293,45 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+/* 自定义主题将应用原有装饰映射到玩家的调色板。 */
+.device[data-palette="custom"] .sms-shell {
+  --candy: var(--m-primary) !important;
+  --candy-2: var(--m-secondary) !important;
+  --candy-3: var(--m-accent) !important;
+  background-color: var(--m-background);
+  color: var(--m-text);
+}
+.device[data-palette="custom"] :is(.menu-card,.soft-card,.hz-thread-row,.hz-moment-card,.hz-star-card,.hz-diary-sheet,[class*="bg-white"]) {
+  background-color: var(--m-surface);
+  color: var(--m-text);
+}
+.device[data-palette="custom"] :is(.soft-input,.soft-select) { background: var(--m-surface); color: var(--m-text); border: 1px solid color-mix(in srgb,var(--m-primary) 35%,transparent); }
+.device[data-palette="custom"] :is(.menu-card,.soft-card) { border-radius: var(--m-radius); box-shadow: var(--m-shadow); }
+.device[data-palette="custom"] .chip { background: color-mix(in srgb,var(--m-surface) 85%,var(--m-primary)); color: var(--m-text); }
+.device[data-palette="custom"] :is(.chip-solid,.chip-pink) { background: var(--m-primary); color: var(--m-background); }
+.device[data-font="custom"] :is(p,span,h1,h2,h3,button,input,textarea,select,article,.readable) { font-family: var(--m-font) !important; }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] { color-scheme: dark; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .sms-shell { background: radial-gradient(ellipse at 85% 0%,#74518a55,transparent 50%),var(--m-background) !important; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.menu-card,.soft-card) { border: 1px solid #b995df35; box-shadow: 0 7px 28px #08061166, inset 0 1px #efad5630; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .app-launch { filter: saturate(.75) drop-shadow(0 0 9px #d9984e30); } }
+.device[data-effect="stars"] .home-pager { background-image: radial-gradient(circle at 15% 30%,#ffe8a5 1px,transparent 2px),radial-gradient(circle at 80% 65%,#fff 1px,transparent 2px); background-size: 75px 95px,110px 130px; }
+.device[data-effect="mist"] .home-pager { background-image: radial-gradient(ellipse at 20% 80%,#ab82c12b,transparent 60%); }
+@media (prefers-reduced-motion: reduce) { .device * { animation-duration: .01ms !important; } }
+.hz-phone-frame { border: 6px solid #333b47; border-radius: 38px; min-height: 440px; padding: 16px 18px 12px; box-shadow: 0 20px 45px #27354a25, inset 0 0 0 1px #ffffff55; position: relative; }
+.hz-phone-island { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 72px; height: 18px; border-radius: 20px; background: #252933; }
+.hz-phone-home .pick-card-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 22px 10px; }
+.hz-phone-home .pick-card { display: flex; align-items: center; flex-direction: column; gap: 6px; background: transparent; padding: 0; border: 0; border-radius: 0; box-shadow: none; min-height: 0; overflow: visible; color: inherit; }
+.hz-phone-home .pick-card-top { display: block; }
+.hz-phone-home .pick-card-icon { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 16px; background: var(--pick-tint); box-shadow: inset 0 1px 2px #fff9,0 4px 10px #0001; font-size: 23px; }
+.hz-phone-home .pick-card-name { font-size: 11px; color: inherit; }
+.hz-phone-home :is(.pick-card-blurb,.pick-card-badge,.pick-card-glow) { display: none; }
+.hz-phone-home .pick-card.is-disabled { opacity: .38; filter: grayscale(.6); }
+.star-shell .menu-card { border-radius: 18px; border: 1px solid color-mix(in srgb,var(--m-primary) 18%,transparent); box-shadow: 0 4px 18px #533f5c08; }
+.pocket-hero { border: 1px solid color-mix(in srgb,var(--candy) 40%,transparent); background: linear-gradient(120deg,color-mix(in srgb,var(--candy) 32%,var(--m-surface)),var(--m-surface)); }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .music-widget { background: var(--m-surface) !important; color: var(--m-text) !important; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.offline-bubble,.side-bubble) { background-color: var(--m-surface) !important; color: var(--m-text); } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.offline-prose,.side-prose) { color: var(--m-text); } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.menu-card,.soft-card,.pick-card) { background: var(--m-surface) !important; color: var(--m-text) !important; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.pick-card-name,.pick-card-blurb) { color: var(--m-text); } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .pick-card-icon { background: #44364f; box-shadow: inset 0 1px #d4a96544; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .chip { border: 1px solid #bd91dc33; } }

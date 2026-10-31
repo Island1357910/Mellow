@@ -1,4 +1,5 @@
 import type { Chat, ChatMessage } from '../types/index.ts'
+import { isSpeakableSms } from '../lib/smsReply.ts'
 
 const EMOTIVE = /[！!？?哈嘿呜靠卧槽妈呀救命笑死气死想你喜欢爱哭烦死了真的假的不会吧好家伙]/
 const PARTICLE = /[啊哦呜诶嘛呢吧呀哈呐噢嘞~～…]/
@@ -12,6 +13,7 @@ export function shouldReplyAsVoice(input: {
   content: string
 }): boolean {
   if (!input.chat.voiceEnabled || !input.voiceReady) return false
+  if (!isSpeakableSms(input.content)) return false
   if (input.partCount > 1 && input.partIndex < input.partCount - 1) return false
 
   const recent = [...input.history].reverse()

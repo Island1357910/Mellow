@@ -1,0 +1,45 @@
+import { bindTogetherSource, useTogether } from '../../lib/together.ts'
+import { BookOpen, Film, Globe, Music, ArrowLeft, ExternalLink, Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { askLine } from '../../lib/ask.ts'
+import { uid } from '../../lib/id.ts'
+import { storage } from '../../storage/StorageService.ts'
+import type { Character } from '../../types/index.ts'
+interface Link {id:string;name:string;url:string;kind:string;progress?:string;seconds?:number}
+interface Line {role:'user'|'assistant';text:string;at:number}
+const KINDS=[['小说',BookOpen],['电影',Film],['音乐',Music],['网页',Globe]] as const
+export function validWebUrl(raw:string){const url=new URL(raw);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('请使用不含帐号密码的 HTTP 或 HTTPS 链接');return url.href}
+export function SharedLinks({namespace}:{namespace:string}){
+  const [links,setLinks]=useState<Link[]>([]),[ready,setReady]=useState(false),[active,setActive]=useState<Link|null>(null)
+  const [name,setName]=useState(''),[url,setUrl]=useState(''),[kind,setKind]=useState('小说'),[note,setNote]=useState('')
+  useEffect(()=>{let alive=true;void storage.getBag<Link[]>(namespace,'external_links').then(saved=>{if(alive){setLinks(saved??[]);setReady(true)}});return()=>{alive=false}},[namespace])
+  const persist=async(next:Link[])=>{await storage.setBag(namespace,'external_links',next);setLinks(next)}
+  if(active)return <Together key={active.id} namespace={namespace} link={active} onBack={()=>setActive(null)} onSave={async(next)=>{await persist(links.map(l=>l.id===next.id?next:l));setActive(next)}}/>
+  return <section className="space-y-3"><div className="menu-card space-y-3"><h3 className="font-semibold">把喜欢的世界，放进手机</h3><p className="text-xs leading-6">保存小说、电影、音乐或任意网页链接，和角色一起看。支持网页预览及视频直链，也可在新窗口打开。</p><form className="space-y-2" onSubmit={e=>{e.preventDefault();if(!ready)return;try{const href=validWebUrl(url);void persist([...links,{id:uid('link'),name:name.trim()||new URL(href).hostname,url:href,kind}]).then(()=>{setName('');setUrl('');setNote('链接已保存')}).catch(e=>setNote(String(e)))}catch(e){setNote(e instanceof Error?e.message:'链接无效')}}}><div className="flex flex-wrap gap-2">{KINDS.map(([k,Icon])=><button key={k} type="button" className={kind===k?'chip chip-solid':'chip'} onClick={()=>setKind(k)}><Icon size={14}/>{k}</button>)}</div><input className="soft-input" aria-label="链接名称" placeholder="书名、电影名或网页名称" value={name} onChange={e=>setName(e.target.value)}/><input type="url" required className="soft-input" aria-label="外部网页链接" placeholder="https://…" value={url} onChange={e=>setUrl(e.target.value)}/><button className="chip chip-solid" disabled={!ready||!url.trim()}>保存链接</button></form>{note&&<p role="status" className="text-xs">{note}</p>}</div>
+  {links.map(link=>{const Icon=KINDS.find(k=>k[0]===link.kind)?.[1]??Globe;return <article key={link.id} className="menu-card"><button className="flex w-full items-center gap-3 text-left" onClick={()=>setActive(link)}><Icon size={23}/><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{link.name}</strong><span className="block truncate text-xs opacity-70">{link.kind} · {link.progress||'还没开始'}</span></span><span>›</span></button><div className="mt-3 flex gap-2"><a className="chip text-xs" href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12}/>新窗口打开</a><button className="chip text-xs" onClick={()=>void persist(links.filter(l=>l.id!==link.id))}>移除收藏</button></div></article>})}
+  <a className="chip" href="https://music.163.com/#/my/m/music/playlist" target="_blank" rel="noopener noreferrer"><Music size={14}/>网易云我的音乐</a></section>
+}
+function Together({namespace,link,onBack,onSave}:{namespace:string;link:Link;onBack:()=>void;onSave:(link:Link)=>Promise<void>}){
+  const [people,setPeople]=useState<Character[]>([]),[charId,setCharId]=useState(''),[lines,setLines]=useState<Line[]>([]),[draft,setDraft]=useState(''),[excerpt,setExcerpt]=useState(''),[progress,setProgress]=useState(link.progress||''),[busy,setBusy]=useState(false),[note,setNote]=useState('')
+  const mounted=useRef(true),lock=useRef(false)
+  const video=/\.(mp4|webm|ogg|m4v)$/i.test(new URL(link.url).pathname)
+  useEffect(()=>{mounted.current=true;void storage.listModernCharacters(namespace).then(rows=>{if(mounted.current){setPeople(rows);setCharId(rows[0]?.id||'')}});void storage.getBag<Line[]>(namespace,'together_'+link.id).then(saved=>{if(mounted.current)setLines(saved??[])});return()=>{mounted.current=false}},[namespace,link.id])
+  const importForReading=async()=>{
+    if(lock.current)return
+    lock.current=true;setBusy(true);setNote('正在读取正文…')
+    try{
+      const response=await fetch(link.url,{credentials:'omit',signal:AbortSignal.timeout(20000)})
+      if(!response.ok)throw Error('正文读取失败：'+response.status)
+      if(!(response.headers.get('content-type')??'').includes('text/plain'))throw Error('此链接不是可读取的 TXT 正文。请返回顶部陪伴面板导入 TXT，或绑定 MCP 小说正文工具；网页预览不能自动读取跨域正文。')
+      const body=await response.text()
+      if(!body.trim()||body.length>2000000)throw Error('请使用有正文且不超过 200 万字的 TXT')
+      if(!mounted.current)return
+      await useTogether.getState().load(namespace)
+      bindTogetherSource(null)
+      await useTogether.getState().patch({charId,reading:true,book:{title:link.name,text:body,page:0,kind:link.kind}})
+      setNote('已载入自动共读，请返回链接收藏，在顶部陪伴面板翻页并开启主动聊天。TA 的回应会发到短信。')
+    }catch(e){if(mounted.current)setNote(e instanceof Error?e.message:String(e))}finally{lock.current=false;if(mounted.current)setBusy(false)}
+  }
+  const send=async()=>{const person=people.find(p=>p.id===charId);if(!person||!draft.trim()||lock.current)return;lock.current=true;setBusy(true);setNote('');const next=[...lines,{role:'user' as const,text:draft.trim(),at:Date.now()}];setLines(next);setDraft('');try{await storage.setBag(namespace,'together_'+link.id,next);const answer=await askLine(`你是${person.name}，正在和玩家一起${link.kind==='电影'?'看电影':link.kind==='小说'?'读小说':'浏览内容'}。性格：${person.personality}。设定：${person.description}。只回应玩家提供的片段、观感和进度，不要声称看到了未提供的网页或画面。像陪在身边的真人，用自然简短的对白，不写分析报告。`,JSON.stringify({title:link.name,progress,excerpt,dialogue:next.slice(-12)}),400);const result=[...next,{role:'assistant' as const,text:answer,at:Date.now()}].slice(-100);await storage.setBag(namespace,'together_'+link.id,result);if(mounted.current)setLines(result)}catch(e){if(mounted.current)setNote(e instanceof Error?e.message:'这次没接上')}finally{lock.current=false;if(mounted.current)setBusy(false)}}
+  return <section className="space-y-3"><div className="flex items-center justify-between"><button className="chip" onClick={onBack}><ArrowLeft size={14}/>链接收藏</button><a className="chip" href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={14}/>新窗口</a></div><h2 className="font-semibold">一起看 · {link.name}</h2><div data-holiday-preserve className="overflow-hidden rounded-2xl bg-[#171822]">{video?<video controls preload="metadata" className="w-full" src={link.url} onLoadedMetadata={e=>{if(link.seconds)e.currentTarget.currentTime=link.seconds}} onPause={e=>void onSave({...link,seconds:e.currentTarget.currentTime,progress:Math.floor(e.currentTarget.currentTime/60)+' 分钟'})}/>:<iframe title={'一起看 '+link.name} src={link.url} className="h-[330px] w-full bg-white" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation" allow="fullscreen; picture-in-picture" referrerPolicy="no-referrer"/>}</div><p className="text-[11px] leading-5 opacity-75">部分网站不允许嵌入，请用新窗口打开。网页内容不会自动传给角色；可粘贴正在看的片段或描述画面。</p><div className="menu-card space-y-2"><input className="soft-input" aria-label="一起看进度" placeholder="第几章、页码或电影时间" value={progress} onChange={e=>setProgress(e.target.value)}/><button className="chip" onClick={()=>void onSave({...link,progress}).then(()=>setNote('进度已保存'))}>保存进度</button><select className="soft-select w-full" aria-label="一起看的角色" value={charId} onChange={e=>setCharId(e.target.value)}><option value="">选择一起看的角色</option>{people.map(p=><option key={p.id} value={p.id}>{p.remark||p.name}</option>)}</select><button className="chip" disabled={busy||!charId} onClick={()=>void importForReading()}>将此 TXT 链接载入自动共读</button><textarea className="soft-input text-xs" rows={3} aria-label="分享给角色的片段" placeholder="粘贴一段小说，或描述当前电影画面（可选）" value={excerpt} onChange={e=>setExcerpt(e.target.value)}/></div><div className="space-y-2">{lines.map((line,i)=><article key={i} className="menu-card"><p className="mb-1 text-[11px] opacity-65">{line.role==='user'?'我':'同伴'}</p><p className="whitespace-pre-wrap text-sm leading-6">{line.text}</p></article>)}</div><form className="flex gap-2" onSubmit={e=>{e.preventDefault();void send()}}><input className="soft-input min-w-0" aria-label="一起看对白" placeholder="和 TA 说点什么" value={draft} onChange={e=>setDraft(e.target.value)}/><button className="chip chip-solid" disabled={busy||!charId||!draft.trim()} aria-label="发送一起看对白"><Send size={16}/></button></form>{note&&<p role="status" className="text-xs leading-5">{note}</p>}</section>
+}
