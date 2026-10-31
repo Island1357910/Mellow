@@ -2,8 +2,9 @@ import { decryptSecret, encryptSecret } from '../storage/crypto.ts'
 import { directAccountAction, neteaseDirectAvailable } from './neteaseDirect.ts'
 import { AccountError } from './neteaseProtocol.ts'
 const originalAccountApi = 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const defaultAccountApi = 'https://mellow-account-kkcpvjjpdj.cn-hangzhou.fcapp.run/api/account'
 const configuredAccountApi = import.meta.env?.VITE_NETEASE_ACCOUNT_API?.trim()
-export const NETEASE_ACCOUNT_API = configuredAccountApi || originalAccountApi
+export const NETEASE_ACCOUNT_API = configuredAccountApi || defaultAccountApi
 if (configuredAccountApi) {
   const url = new URL(configuredAccountApi)
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw Error('网易云账号接口必须使用不含账号密码、查询参数和片段的 HTTPS 地址')
@@ -11,7 +12,7 @@ if (configuredAccountApi) {
 export interface NeteaseUser { id: string; name: string }
 interface SavedAccount { token: string; user: NeteaseUser }
 // Changing the operator's backend must never forward an existing login session to a different endpoint.
-const key = (namespace: string) => 'mellow_netease_account:' + namespace + (NETEASE_ACCOUNT_API === originalAccountApi ? '' : ':' + encodeURIComponent(NETEASE_ACCOUNT_API))
+const key = (namespace: string) => 'mellow_netease_account:' + namespace + (getNeteaseRoute(namespace) === 'direct' || NETEASE_ACCOUNT_API === originalAccountApi ? '' : ':' + encodeURIComponent(NETEASE_ACCOUNT_API))
 export type NeteaseRoute = 'direct' | 'cloud'
 export function getNeteaseRoute(namespace: string): NeteaseRoute {
   const saved = localStorage.getItem('mellow_netease_route:' + namespace)
@@ -62,7 +63,7 @@ export async function neteaseAccountCall<T>(namespace: string, action: string, i
     const status = e instanceof NeteaseApiError || e instanceof AccountError ? e.status : 502
     if (status === 401 && (await readNeteaseAccount(namespace))?.token === account?.token) forgetNeteaseAccount(namespace)
     if (e instanceof NeteaseApiError || e instanceof AccountError) throw new NeteaseApiError(e.message, status)
-    throw new NeteaseApiError(route === 'direct' ? '无法直连网易云，请检查网络或稍后重试' : '无法连接云端服务；网页可能受服务域名的网络可达性影响，Android 请更新 APK 使用直连', status)
+    throw new NeteaseApiError(route === 'direct' ? '无法直连网易云，请检查网络或稍后重试' : '无法连接网易云登录接口，请检查网络或稍后重试；网页请使用 HTTPS 地址', status)
   }
   if (account && (await readNeteaseAccount(namespace))?.token !== account.token) throw Error('账号连接已变化，请重新操作')
   return data

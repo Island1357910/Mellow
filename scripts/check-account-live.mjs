@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-const url = process.env.NETEASE_ACCOUNT_API || 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const url = process.env.NETEASE_ACCOUNT_API || 'https://mellow-account-kkcpvjjpdj.cn-hangzhou.fcapp.run/api/account'
 const origin = 'https://mymellow.top'
 async function call(action, input = {}) {
   const r = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(40000), headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ action, ...input }) })
