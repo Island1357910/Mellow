@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
-const url = 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const url = process.env.NETEASE_ACCOUNT_API || 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const origin = 'https://mymellow.top'
 async function call(action, input = {}) {
-  const r = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(40000), headers: { 'Content-Type': 'application/json', Origin: 'https://localhost' }, body: JSON.stringify({ action, ...input }) })
-  assert.equal(r.headers.get('access-control-allow-origin'), 'https://localhost')
+  const r = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(40000), headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ action, ...input }) })
+  if (!(r.headers.get('content-type') ?? '').includes('application/json')) throw Error('账号接口返回非 JSON 内容，HTTP ' + r.status)
+  assert.equal(r.headers.get('access-control-allow-origin'), origin)
   const data = await r.json()
   if (!r.ok) throw Error(data.error || '账号接口 HTTP ' + r.status)
   return data
@@ -12,7 +14,7 @@ assert.equal(new URL(login.url).origin, 'https://music.163.com')
 assert.ok(login.key)
 const checked = await call('qr_check', { key: login.key })
 assert.equal(checked.state, 'waiting')
-const unauthorized = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://localhost' }, body: JSON.stringify({ action: 'playlists' }) })
+const unauthorized = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ action: 'playlists' }) })
 assert.equal(unauthorized.status, 401)
 const insecure = await fetch(url, { method: 'OPTIONS', headers: { Origin: 'http://mymellow.top' } })
 assert.equal(insecure.status, 403)
