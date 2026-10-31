@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { APPLE_THEME } from '../../theme/apple.ts'
 import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
 import { ConnectionsApp } from '../apps/ConnectionsApp.tsx'
@@ -185,7 +186,7 @@ export function PhoneShell() {
           ) : null}
           {theme.customCss ? <style>{'@scope (.device) { ' + theme.customCss + ' }'}</style> : null}
           {previewApple&&<button type="button" className="theme-preview-exit" onClick={exitThemePreview}>红苹果爱恋预览 · 恢复原主题</button>}
-          <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />
+          {!Capacitor.isNativePlatform() && <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />}
           <div
             className="pointer-events-none absolute inset-0 z-[15]"
             style={{ background: '#2c2628', opacity: (1 - brightness) * 0.62 }}

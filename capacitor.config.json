@@ -4,7 +4,13 @@
   "webDir": "dist",
   "server": { "androidScheme": "https" },
   "android": {
-    "backgroundColor": "#FDFBF7",
-    "adjustMarginsForEdgeToEdge": "auto"
+    "backgroundColor": "#FDFBF7"
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "insetsHandling": "disable",
+      "initialViewportFitValueHint": "cover"
+    }
   }
 }
