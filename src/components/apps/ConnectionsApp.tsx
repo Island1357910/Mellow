@@ -1,3 +1,4 @@
+import { CONNECTIONS_TABS, useConnectionsTab } from '../../lib/connectionsTabs.ts'
 import { McpArgsForm } from './McpArgsForm.tsx'
 import { NeteaseAccountPanel } from './NeteaseAccountPanel.tsx'
 import { parseMcpConfig, toolArgs, adaptMusic } from '../../lib/mcpConfig.ts'
@@ -12,6 +13,7 @@ import { useMellow } from '../../store/useMellow.ts'
 import { Screen } from '../ui/primitives.tsx'
 interface Shortcut { name: string; tool: string; args: string; endpoint: string; transport?: McpTransport }
 export function ConnectionsApp({ onBack }: { onBack: () => void }) {
+  const tab=useConnectionsTab(s=>s.tab), setTab=useConnectionsTab(s=>s.setTab)
   const phone=useMellow(s=>s.identities.find(i=>i.id===s.activeIdentityId))
   const [endpoint,setEndpoint]=useState('')
   const [token,setToken]=useState('')
@@ -48,8 +50,13 @@ export function ConnectionsApp({ onBack }: { onBack: () => void }) {
     for(const item of list.slice(0,200)){const t=item as {name?:string;src?:string;artist?:string;lyrics?:string};if(typeof t.name==='string'&&typeof t.src==='string'&&/^https?:\/\//.test(t.src)){await usePlayer.getState().addTrack({name:t.name,src:t.src,artist:t.artist,lyrics:typeof t.lyrics==='string'?t.lyrics:undefined});count++}}
     setNote(`已导入 ${count} 首到首页播放器；点唱片播放`)
   }
-  return <div className="sms-shell h-full"><Screen title="外部连接" subtitle="MCP 工具与网页入口" onBack={onBack}>
-    {phone&&<><TogetherPanel key={phone.namespace} namespace={phone.namespace}/><NeteaseAccountPanel key={'netease_'+phone.namespace} namespace={phone.namespace}/><SharedLinks key={"links_"+phone.namespace} namespace={phone.namespace}/></>}
+  return <div className="sms-shell h-full"><Screen title="外部连接" subtitle="账号 · 陪伴 · 收藏 · 工具" onBack={onBack}>
+    <div role="tablist" aria-label="外部连接分类" className="sticky top-0 z-20 mb-4 grid grid-cols-4 gap-1 rounded-2xl border border-black/5 p-1 shadow-sm" style={{background:'var(--m-surface,#fff)',backdropFilter:'blur(16px)'}}>{CONNECTIONS_TABS.map((item,index)=><button key={item.id} id={'connections-tab-'+item.id} role="tab" aria-selected={tab===item.id} aria-controls={'connections-panel-'+item.id} tabIndex={tab===item.id?0:-1} className={'rounded-xl px-1 py-3 text-[11px] font-medium transition-colors '+(tab===item.id?'bg-[var(--m-primary)] text-white shadow-sm':'opacity-70')} onClick={()=>setTab(item.id)} onKeyDown={e=>{let at=index;if(e.key==='ArrowRight')at=(index+1)%4;else if(e.key==='ArrowLeft')at=(index+3)%4;else if(e.key==='Home')at=0;else if(e.key==='End')at=3;else return;e.preventDefault();setTab(CONNECTIONS_TABS[at].id);document.getElementById('connections-tab-'+CONNECTIONS_TABS[at].id)?.focus()}}>{item.label}</button>)}</div>
+    <p className="mb-3 text-xs leading-5 opacity-65">{CONNECTIONS_TABS.find(item=>item.id===tab)?.detail}</p>
+    <section role="tabpanel" id="connections-panel-account" aria-labelledby="connections-tab-account" hidden={tab!=='account'}>{phone&&<NeteaseAccountPanel key={'netease_'+phone.namespace} namespace={phone.namespace} active={tab==='account'}/>}</section>
+    <section role="tabpanel" id="connections-panel-together" aria-labelledby="connections-tab-together" hidden={tab!=='together'}>{phone&&<TogetherPanel key={phone.namespace} namespace={phone.namespace}/>}</section>
+    <section role="tabpanel" id="connections-panel-links" aria-labelledby="connections-tab-links" hidden={tab!=='links'}>{phone&&<SharedLinks key={'links_'+phone.namespace} namespace={phone.namespace}/>}</section>
+    <section role="tabpanel" id="connections-panel-mcp" aria-labelledby="connections-tab-mcp" hidden={tab!=='mcp'}>
     <section className="menu-card mt-3 space-y-3"><h3 className="font-semibold">连接 MCP 服务</h3><p className="text-xs leading-5">支持 Streamable HTTP 和旧版 SSE。可直接粘贴服务商给的 MCP 配置，或手动填地址。服务需允许网页 / APK 来源跨域访问；令牌仅本次页面驻留内存。</p>
     <details className="text-xs leading-6"><summary>粘贴 MCP 配置 / URL</summary><textarea aria-label="导入 MCP 配置" className="soft-input font-mono" rows={4} value={configText} onChange={e=>setConfigText(e.target.value)} placeholder={'粘贴 mcpServers JSON 或 https://…/sse'}/><button className="chip mt-2" disabled={busy} onClick={()=>void act(async()=>{const config=parseMcpConfig(configText);resetConnection();setEndpoint(config.endpoint);setTransport(config.transport);setToken(config.token);setConfigText('');setNote('已导入配置，点击连接并发现工具')})}>填入连接设置</button><p>GitHub 项目网址不是服务地址。若配置只有 command / args，需要先部署成远程服务。</p></details>
     <select aria-label="MCP 连接类型" className="soft-select w-full" value={transport} disabled={busy} onChange={e=>{resetConnection();setTransport(e.target.value as McpTransport)}}><option value="http">Streamable HTTP（通常为 /mcp）</option><option value="sse">旧版 HTTP + SSE（通常为 /sse）</option></select>
@@ -64,5 +71,6 @@ export function ConnectionsApp({ onBack }: { onBack: () => void }) {
     {result!==null&&<section className="menu-card mt-3"><h3>返回结果</h3><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(result,null,2)}</pre><button className="chip mt-3" disabled={busy} onClick={()=>void act(importTracks)}>导入返回歌单到播放器</button><button className="chip mt-3" disabled={busy} onClick={()=>void act(async()=>{if(!phone)return;const player=usePlayer.getState();const track=player.config.tracks[player.index];if(!track)throw Error('先在陪伴面板选择一首歌');const data=adaptMusic(mcpContent(result),contentTitle||track.name);if(!data.lyrics.trim())throw Error('返回内容中没有歌词，请选择歌词查询工具');player.patch({tracks:player.config.tracks.map(t=>t.id===track.id?{...t,lyrics:data.lyrics}:t)});setNote('歌词已保存到「'+track.name+'」，播放时自动同步给 char')})}>将返回歌词保存到当前歌曲</button></section>}
     {tools.length>0&&<button className="chip mt-3" disabled={busy} onClick={()=>{resetConnection();setNote('已断开连接并停止自动读取')}}>断开 MCP 连接</button>}
     {note&&<p role="status" className="mt-3 text-xs leading-5">{note}</p>}
+    </section>
   </Screen></div>
 }

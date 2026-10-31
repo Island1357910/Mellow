@@ -42,11 +42,13 @@ jobs:
           npm run check:together
           npm run check:mcp
           npm run check:netease
+          npm run check:direct
+          npm run check:connections
           npm run build
           npx cap sync android
         env:
           BASE_PATH: /
-          BUILD_ID: android-1.0.4-${{ github.run_number }}
+          BUILD_ID: android-1.0.5-${{ github.run_number }}
       - name: Build unsigned APK for local signing
         run: |
           set -euo pipefail
@@ -56,15 +58,15 @@ jobs:
       - name: Inspect APK and collect official signing tool
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/Mellow-1.0.4-unsigned.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/Mellow-1.0.5-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" release/apksigner.jar
-          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 release/Mellow-1.0.4-unsigned.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release/Mellow-1.0.4-unsigned.apk > release/package-info.txt
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 release/Mellow-1.0.5-unsigned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release/Mellow-1.0.5-unsigned.apk > release/package-info.txt
           cat release/package-info.txt
-          unzip -l release/Mellow-1.0.4-unsigned.apk | grep 'assets/public/index.html'
+          unzip -l release/Mellow-1.0.5-unsigned.apk | grep 'assets/public/index.html'
           cd release
-          sha256sum Mellow-1.0.4-unsigned.apk apksigner.jar > SHA256SUMS.txt
+          sha256sum Mellow-1.0.5-unsigned.apk apksigner.jar > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Mellow-1.0.4-unsigned
+          name: Mellow-1.0.5-unsigned
           path: release/

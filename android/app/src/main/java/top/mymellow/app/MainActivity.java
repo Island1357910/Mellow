@@ -14,6 +14,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(NeteaseDirectPlugin.class);
         super.onCreate(savedInstanceState);
         // User-selected songs resolve their authorized URL asynchronously.
         bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);

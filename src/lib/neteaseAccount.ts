@@ -1,8 +1,16 @@
 import { decryptSecret, encryptSecret } from '../storage/crypto.ts'
+import { directAccountAction, neteaseDirectAvailable } from './neteaseDirect.ts'
+import { AccountError } from './neteaseProtocol.ts'
 export const NETEASE_ACCOUNT_API = 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
 export interface NeteaseUser { id: string; name: string }
 interface SavedAccount { token: string; user: NeteaseUser }
 const key = (namespace: string) => 'mellow_netease_account:' + namespace
+export type NeteaseRoute = 'direct' | 'cloud'
+export function getNeteaseRoute(namespace: string): NeteaseRoute {
+  const saved = localStorage.getItem('mellow_netease_route:' + namespace)
+  return saved === 'direct' || saved === 'cloud' ? saved : neteaseDirectAvailable() ? 'direct' : 'cloud'
+}
+export function setNeteaseRoute(namespace: string, route: NeteaseRoute) { localStorage.setItem('mellow_netease_route:' + namespace, route) }
 export function accountSupported() { return typeof window !== 'undefined' && window.isSecureContext && Boolean(crypto.subtle) }
 export async function readNeteaseAccount(namespace: string): Promise<SavedAccount | null> {
   if (!accountSupported()) return null
@@ -27,15 +35,27 @@ export async function neteaseAccountCall<T>(namespace: string, action: string, i
   const requiresSession = !['qr_start', 'qr_check'].includes(action)
   const account = requiresSession ? await readNeteaseAccount(namespace) : null
   if (requiresSession && !account) throw new NeteaseApiError('请先连接网易云账号', 401)
-  const response = await fetch(NETEASE_ACCOUNT_API, {
+  let data: T
+  const route = getNeteaseRoute(namespace)
+  try {
+    if (route === 'direct') {
+      if (!neteaseDirectAvailable()) throw new NeteaseApiError('直连需要新版 Android APK，请更新安装包或手动选择云端连接', 400)
+      data = await directAccountAction(action, input, account?.token ?? '') as T
+    } else {
+      const response = await fetch(NETEASE_ACCOUNT_API, {
     method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(35_000),
     headers: { 'Content-Type': 'application/json', ...(account ? { Authorization: 'Bearer ' + account.token } : {}) },
     body: JSON.stringify({ ...input, action }),
   })
-  const data = await response.json() as T & { error?: string }
-  if (!response.ok) {
-    if (response.status === 401 && (await readNeteaseAccount(namespace))?.token === account?.token) forgetNeteaseAccount(namespace)
-    throw new NeteaseApiError(data.error || '账号服务暂时无法连接', response.status)
+      const result = await response.json() as T & { error?: string }
+      if (!response.ok) throw new NeteaseApiError(result.error || '账号服务暂时无法连接', response.status)
+      data = result
+    }
+  } catch (e) {
+    const status = e instanceof NeteaseApiError || e instanceof AccountError ? e.status : 502
+    if (status === 401 && (await readNeteaseAccount(namespace))?.token === account?.token) forgetNeteaseAccount(namespace)
+    if (e instanceof NeteaseApiError || e instanceof AccountError) throw new NeteaseApiError(e.message, status)
+    throw new NeteaseApiError(route === 'direct' ? '无法直连网易云，请检查网络或稍后重试' : '无法连接云端服务；网页可能受服务域名的网络可达性影响，Android 请更新 APK 使用直连', status)
   }
   if (account && (await readNeteaseAccount(namespace))?.token !== account.token) throw Error('账号连接已变化，请重新操作')
   return data

@@ -1,3 +1,4 @@
+import { useConnectionsTab } from '../../lib/connectionsTabs.ts'
 import { useTogether } from '../../lib/together.ts'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
@@ -531,6 +532,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
     if (id === 'music') {
       await useTogether.getState().load(props.identity.namespace)
       if (props.chat.kind === 'dm') await useTogether.getState().patch({ charId: props.chat.memberIds[0] ?? '' })
+      useConnectionsTab.getState().setTab('together')
       useMellow.getState().openApp('connections')
     }
   }

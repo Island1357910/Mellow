@@ -1,3 +1,4 @@
+import { useConnectionsTab } from '../../lib/connectionsTabs.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { ColorField } from '../apps/AppearanceEditor.tsx'
 import { Ellipsis, Link2, ListMusic, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Trash2, Upload, Volume1, Volume2 } from 'lucide-react'
@@ -180,7 +181,7 @@ export function PlayerSheet(props: { onClose: () => void }) {
           <h2 className="text-[18px] font-semibold">播放器设置</h2>
           <button type="button" className="chip chip-pink" onClick={props.onClose}>完成</button>
         </div>
-        <button className="chip mt-3" onClick={() => { props.onClose(); useMellow.getState().openApp('connections') }}>和 char 一起听 / 一起读</button>
+        <button className="chip mt-3" onClick={() => { props.onClose(); useConnectionsTab.getState().setTab('together'); useMellow.getState().openApp('connections') }}>和 char 一起听 / 一起读</button>
         <div role="tablist" aria-label="播放器设置分类" className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-white/80 p-1">
           {([['look', '外观'], ['list', `歌单 ${config.tracks.length}`], ['import', '导入']] as Array<[SheetTab, string]>).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} className="rounded-full py-1.5 text-xs transition-colors" style={{ background: tab === id ? '#F3A8BA' : 'transparent', color: tab === id ? '#fff' : 'var(--m-text-secondary)', fontWeight: tab === id ? 600 : 400 }} onClick={() => setTab(id)}>
