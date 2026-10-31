@@ -17,6 +17,8 @@ import type { BubbleStyle, Character, Chat, ChatMessage, Identity, MessageKind }
 import { PillNote } from '../ui/primitives.tsx'
 import { VoiceSelect } from './SettingsPanels.tsx'
 import { ALL_SMS_STICKERS } from '../../data/stickers.ts'
+import { parseReplySegments } from '../../lib/stickerReply.ts'
+import { spokenSmsText } from '../../lib/smsReply.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 
 type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
@@ -231,7 +233,9 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         message.role === 'user'
           ? settings.minimax.userVoiceId?.trim() || settings.minimax.voiceId || 'female-shaonv'
           : resolveCharacterVoiceId(speaker ?? primary, settings.minimax)
-      const url = await minimaxSpeak(settings.minimax, normalizeMinimaxKey(raw), message.content, voice)
+      const text = spokenSmsText(message.content)
+      if (!text) { setSpeaking(null); return }
+      const url = await minimaxSpeak(settings.minimax, normalizeMinimaxKey(raw), text, voice)
       const audio = new Audio(url)
       audio.onended = () => setSpeaking((current) => (current === message.id ? null : current))
       await audio.play()
@@ -664,18 +668,23 @@ function Bubble(props: {
       </span>
     )
   } else if (kind === 'voice') {
+    const voiceText = spokenSmsText(props.message.content)
+    const stickers = parseReplySegments(props.message.content).filter(item => item.kind === 'sticker')
     body = (
-      <div className={cls}>
+      <div className="flex flex-col items-start gap-2">
         {quoteBlock}
+        {voiceText ? <div className={cls}>
         <VoiceBubble
-          content={props.message.content}
-          seconds={voiceDurationSec(props.message.content)}
+          content={voiceText}
+          seconds={voiceDurationSec(voiceText)}
           canSpeak={props.canSpeak}
           speaking={props.speaking}
           revealed={props.voiceRevealed}
           onPlay={props.onSpeak}
           onReveal={props.onRevealVoice}
         />
+        </div> : stickers.length === 0 ? <div className={`${cls} px-3 py-2`}>{props.message.content}</div> : null}
+        {stickers.map((item, index) => <img key={`${item.content}-${index}`} src={item.content} alt="表情包" className="max-w-[140px] rounded-2xl" loading="lazy" />)}
       </div>
     )
   } else {

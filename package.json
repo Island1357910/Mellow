@@ -12,7 +12,8 @@
     "deploy:pages": "powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1",
     "check:upgrade": "node --import ./scripts/check-env.mjs scripts/check-upgrade.ts",
     "check:earnings": "node --import ./scripts/check-env.mjs scripts/check-earnings.ts",
-    "check:release": "node --import ./scripts/check-env.mjs scripts/check-release.ts"
+    "check:release": "node --import ./scripts/check-env.mjs scripts/check-release.ts",
+    "check:sms": "node --import ./scripts/check-env.mjs scripts/check-sms.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
