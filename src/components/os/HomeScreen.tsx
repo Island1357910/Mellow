@@ -195,7 +195,7 @@ export function HomeScreen() {
       <section className="home-page relative z-10">
         <div className="launcher-col launcher-apps">
           {phone ? <Page2Fill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
-          <div className="launcher-board">
+          <div className="launcher-board page2-board">
             {page2.map((app) => (
               <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} onClick={() => openApp(app.id)} />
             ))}

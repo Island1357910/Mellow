@@ -159,19 +159,21 @@ button {
 }
 
 .launcher-board {
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  flex-wrap: wrap;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-content: end;
-  justify-content: center;
-  row-gap: 0.65rem;
+  justify-items: center;
+  gap: 0.65rem 0.15rem;
   margin-top: auto;
   padding-top: 0.85rem;
 }
 
-.launcher-board > .app-launch {
-  flex: 0 0 25%;
-  min-width: 0;
+.page2-board {
+  flex: 1 1 auto;
+  align-content: start;
+  margin-top: 0;
+  padding-top: 0.75rem;
 }
 
 @media (max-height: 620px) {
