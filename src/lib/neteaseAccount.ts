@@ -1,10 +1,17 @@
 import { decryptSecret, encryptSecret } from '../storage/crypto.ts'
 import { directAccountAction, neteaseDirectAvailable } from './neteaseDirect.ts'
 import { AccountError } from './neteaseProtocol.ts'
-export const NETEASE_ACCOUNT_API = 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const originalAccountApi = 'https://mellow-music-cloud-20261031.basicheart1.chatgpt.site/api/account'
+const configuredAccountApi = import.meta.env?.VITE_NETEASE_ACCOUNT_API?.trim()
+export const NETEASE_ACCOUNT_API = configuredAccountApi || originalAccountApi
+if (configuredAccountApi) {
+  const url = new URL(configuredAccountApi)
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw Error('网易云账号接口必须使用不含账号密码、查询参数和片段的 HTTPS 地址')
+}
 export interface NeteaseUser { id: string; name: string }
 interface SavedAccount { token: string; user: NeteaseUser }
-const key = (namespace: string) => 'mellow_netease_account:' + namespace
+// Changing the operator's backend must never forward an existing login session to a different endpoint.
+const key = (namespace: string) => 'mellow_netease_account:' + namespace + (NETEASE_ACCOUNT_API === originalAccountApi ? '' : ':' + encodeURIComponent(NETEASE_ACCOUNT_API))
 export type NeteaseRoute = 'direct' | 'cloud'
 export function getNeteaseRoute(namespace: string): NeteaseRoute {
   const saved = localStorage.getItem('mellow_netease_route:' + namespace)

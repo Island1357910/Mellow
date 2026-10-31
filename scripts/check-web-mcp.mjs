@@ -34,7 +34,8 @@ try {
   await page.waitForTimeout(500)
   await page.evaluate(async () => { const { useMellow } = await import('/src/store/useMellow.ts'); useMellow.getState().openApp('connections') })
   await page.getByRole('tab', { name: 'MCP 直连' }).waitFor()
-  assert.equal(await page.getByRole('tab', { name: 'MCP 直连' }).getAttribute('aria-selected'), 'true')
+  assert.equal(await page.getByRole('tab', { name: '网易云', exact: true }).getAttribute('aria-selected'), 'true')
+  await page.getByRole('tab', { name: 'MCP 直连' }).click()
   await page.getByLabel('MCP 服务地址', { exact: true }).fill('http://127.0.0.1:5191/mcp')
   await page.getByLabel('MCP 令牌', { exact: true }).fill('test-memory-only')
   await page.screenshot({ path: 'artifacts/web-mcp-direct-form.png' })
@@ -51,5 +52,5 @@ try {
   await page.getByText('已连接，0 个工具', { exact: true }).waitFor()
   await page.getByRole('button', { name: '断开连接', exact: true }).click()
   await page.getByText('未连接', { exact: true }).waitFor()
-  console.log('Web MCP verified: default direct tab, real browser CORS, Bearer auth, session header, tool call, empty-tool status, disconnect, no built-in cloud request')
+  console.log('Web MCP verified: separate account and MCP tabs, real browser CORS, Bearer auth, session header, tool call, empty-tool status, disconnect, no built-in cloud request')
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)) }
