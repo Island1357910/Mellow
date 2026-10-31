@@ -55,7 +55,7 @@ export function PillNote(props: { children: ReactNode; tone?: keyof typeof PILL_
       ? 'mt-2 w-fit max-w-full rounded-[18px] px-3 py-1.5 text-xs leading-5'
       : 'mx-auto mt-10 w-fit max-w-[17rem] rounded-full px-4 py-2.5 text-center text-xs leading-5 shadow-[0_10px_22px_rgba(120,80,100,0.08)]'
   return (
-    <p className={shape} style={{ background: PILL_TONES[props.tone ?? 'pink'] }}>
+    <p className={`pill-note ${shape}`} style={{ background: PILL_TONES[props.tone ?? 'pink'] }}>
       {props.children}
     </p>
   )
@@ -132,11 +132,11 @@ export function Toggle(props: { label: string; hint?: string; on: boolean; onCha
         ) : null}
       </span>
       <span
-        className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+        data-theme-control data-on={props.on} className="switch-track relative h-7 w-12 shrink-0 rounded-full transition-colors"
         style={{ background: props.on ? 'var(--m-primary)' : '#e6e0da' }}
       >
         <span
-          className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow"
+          className="switch-thumb absolute top-0.5 h-6 w-6 rounded-full bg-white shadow"
           style={{ left: props.on ? '22px' : '2px' }}
         />
       </span>

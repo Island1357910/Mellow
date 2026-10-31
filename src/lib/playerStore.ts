@@ -104,7 +104,7 @@ export async function resolveTrackSrc(namespace: string, src: string): Promise<s
 
 export function isDark(color: string) {
   const hex = color.replace('#', '')
-  if (hex.length !== 6) return false
+  if (hex.length !== 6 && hex.length !== 8) return false
   const [r, g, b] = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16))
   return (r * 299 + g * 587 + b * 114) / 1000 < 110
 }

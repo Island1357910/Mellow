@@ -1,3 +1,6 @@
+import { RedeemPanel } from './RedeemPanel.tsx'
+import { APP_VERSION } from '../../lib/buildInfo.ts'
+import { AppearanceEditor } from './AppearanceEditor.tsx'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronRight, Download, ImagePlus, Palette, Plug, Shield, Sparkles, Upload, UserRound } from 'lucide-react'
@@ -11,7 +14,7 @@ import { themeFromUnknown } from '../../theme/themes.ts'
 import type { Preset, PresetMode } from '../../types/index.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { Field, ModalPortal, PillNote, Screen, SectionTitle, SoftCard, Toggle } from '../ui/primitives.tsx'
-import { ApiPanel, BackupPanel, HomeLayoutPanel, IconPanel, MinimaxPanel, PrivacyPanel } from './SettingsPanels.tsx'
+import { ApiPanel, BackupPanel, IconPanel, MinimaxPanel, PrivacyPanel } from './SettingsPanels.tsx'
 
 const AVATARS = ['🙂', '🌙', '🌸', '🐱', '🍵', '⭐', '🫧', '🍀']
 
@@ -40,7 +43,7 @@ export function SettingsApp(props: { onBack: () => void }) {
 
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle('#A9CDE8', '#E6DDF8', '#F8D0DC')}>
-      <Screen title="设置" subtitle={`${phone?.name ?? '未命名'} · 半糖 Mellow 0.1`} onBack={props.onBack}>
+      <Screen title="设置" subtitle={`${phone?.name ?? '未命名'} · 半糖 Mellow ${APP_VERSION}`} onBack={props.onBack}>
         <nav className="sticky top-0 z-10 -mx-1 grid grid-cols-5 gap-1 rounded-[22px] bg-white/80 p-1 shadow-[0_8px_20px_rgba(120,80,100,0.08)] backdrop-blur" aria-label="设置分类">
           {TABS.map((item) => {
             const on = item.id === tab
@@ -100,10 +103,10 @@ export function SettingsApp(props: { onBack: () => void }) {
           {pane === 'role' ? <RoleCard /> : null}
           {pane === 'notify' ? <NotifyCard /> : null}
           {pane === 'theme' ? <ThemeCard /> : null}
-          {pane === 'home' ? <HomeLayoutPanel /> : null}
           {pane === 'icons' ? <IconPanel /> : null}
           {pane === 'privacy' ? <PrivacyPanel /> : null}
           {pane === 'backup' ? <BackupPanel /> : null}
+          {pane === 'redeem' ? <RedeemPanel /> : null}
         </div>
         <div className="mt-4 flex justify-center pb-6"><PillNote tone="sky" compact>密钥与备份都只留在你自己手里</PillNote></div>
       </Screen>
@@ -112,13 +115,13 @@ export function SettingsApp(props: { onBack: () => void }) {
 }
 
 type TabId = 'me' | 'link' | 'talk' | 'look' | 'data'
-type PaneId = 'identity' | 'api' | 'voice' | 'preset' | 'role' | 'notify' | 'theme' | 'home' | 'icons' | 'privacy' | 'backup'
+type PaneId = 'identity' | 'api' | 'voice' | 'preset' | 'role' | 'notify' | 'theme' | 'icons' | 'privacy' | 'backup' | 'redeem'
 
 const TABS: Array<{ id: TabId; label: string; tint: string; icon: ReactNode; panes: Array<{ id: PaneId; label: string }> }> = [
-  { id: 'me', label: '身份', tint: '#E9B949', icon: <UserRound size={16} />, panes: [{ id: 'identity', label: '身份' }] },
+  { id: 'me', label: '身份', tint: '#E9B949', icon: <UserRound size={16} />, panes: [{ id: 'identity', label: '身份' }, { id: 'redeem', label: '兑换码' }] },
   { id: 'link', label: '连接', tint: '#7FB8E0', icon: <Plug size={16} />, panes: [{ id: 'api', label: '接口与模型' }, { id: 'voice', label: 'MiniMax 语音' }] },
   { id: 'talk', label: '对话', tint: '#EE9AB0', icon: <Sparkles size={16} />, panes: [{ id: 'preset', label: '预设' }, { id: 'role', label: '角色行为' }, { id: 'notify', label: '通知' }] },
-  { id: 'look', label: '外观', tint: '#B9A3E3', icon: <Palette size={16} />, panes: [{ id: 'theme', label: '主题' }, { id: 'home', label: '主页' }, { id: 'icons', label: '应用图标' }] },
+  { id: 'look', label: '外观', tint: '#B9A3E3', icon: <Palette size={16} />, panes: [{ id: 'theme', label: '主题' }, { id: 'icons', label: '应用图标' }] },
   { id: 'data', label: '数据', tint: '#8EB5A6', icon: <Shield size={16} />, panes: [{ id: 'privacy', label: '隐私' }, { id: 'backup', label: '备份与恢复' }] },
 ]
 
@@ -129,7 +132,7 @@ function ThemeCard() {
   const reloadLibraries = useMellow((state) => state.reloadLibraries)
   return (
       <SoftCard>
-        <SectionTitle tone="lilac">主题</SectionTitle>
+        <SectionTitle tone="lilac">主题</SectionTitle><a className="chip mb-3" href="?themePreview=red-apple">临时预览红苹果爱恋</a><p className="mb-3 text-xs">10 月 31 日全天使用「不寂寞万圣夜」，次日恢复原主题，平日也可手动选择。</p>
         <div className="grid grid-cols-4 gap-3">
           {themes.map((theme) => (
             <button
@@ -139,7 +142,7 @@ function ThemeCard() {
               className="flex flex-col items-center gap-1"
             >
               <span
-                className="h-12 w-12 rounded-full ring-2 ring-offset-2"
+                data-holiday-preserve className="h-12 w-12 rounded-full ring-2 ring-offset-2"
                 style={{
                   background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.secondary})`,
                   ['--tw-ring-color' as string]: settings.themeId === theme.id ? theme.colors.accent : 'transparent',
@@ -192,6 +195,7 @@ function ThemeCard() {
             导出当前主题
           </button>
         </div>
+        <AppearanceEditor />
       </SoftCard>
   )
 }

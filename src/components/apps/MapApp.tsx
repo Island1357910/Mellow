@@ -1,3 +1,4 @@
+import { MapEncounter } from './MapEncounter.tsx'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { askJson, askLine, readJson } from '../../lib/ask.ts'
@@ -38,12 +39,6 @@ interface World {
 }
 
 const KINDS = ['家', '街', '店', '公司', '公园', '学校', '车站', '海边', '医院', '别处']
-const DAYPARTS: Array<{ id: Daypart; name: string }> = [
-  { id: 'dawn', name: '清晨' },
-  { id: 'day', name: '白天' },
-  { id: 'dusk', name: '傍晚' },
-  { id: 'night', name: '夜里' },
-]
 const JOBS = [
   { id: 'flower', name: '花店店员', kinds: ['店'], pay: 8, titles: ['学徒', '店员', '主理人'] },
   { id: 'cafe', name: '咖啡馆', kinds: ['店'], pay: 7, titles: ['兼职', '吧台', '店长'] },
@@ -99,7 +94,7 @@ function normalize(saved: Partial<World> | null | undefined): World {
     visits: typeof place.visits === 'number' ? place.visits : 0,
   }))
   const fallback = places[0]?.id ?? 'home'
-  const daypart = DAYPARTS.some((item) => item.id === base.daypart) ? (base.daypart as Daypart) : 'day'
+  const daypart: Daypart = 'day'
   return {
     places: places.length ? places : freshWorld().places,
     here: places.some((item) => item.id === base.here) ? String(base.here) : fallback,
@@ -115,9 +110,6 @@ function titleOf(shifts: number, titles: string[]): string {
   return titles[0] ?? ''
 }
 
-function dayName(id: Daypart): string {
-  return DAYPARTS.find((item) => item.id === id)?.name ?? '白天'
-}
 
 function usePhone() {
   const identities = useMellow((state) => state.identities)
@@ -135,6 +127,12 @@ export function MapApp(props: { onBack: () => void }) {
   const [world, setWorld] = useState<World | null>(null)
   const [chars, setChars] = useState<Character[]>([])
   const [panel, setPanel] = useState<Panel>(null)
+  const [scenePlace, setScenePlace] = useState<string | null>(null)
+  const [now, setNow] = useState(()=>new Date())
+  useEffect(() => { const timer=window.setInterval(()=>setNow(new Date()),30000);return()=>window.clearInterval(timer) },[])
+  const realTime=now.toLocaleString('zh-CN',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})
+  const [mapQuery, setMapQuery] = useState('')
+  const [zoom, setZoom] = useState(1)
   const [dateId, setDateId] = useState('')
   const [kind, setKind] = useState('街')
   const [placeName, setPlaceName] = useState('')
@@ -158,7 +156,7 @@ export function MapApp(props: { onBack: () => void }) {
       setWorld(next)
       if (!saved?.places?.length) void storage.setBag(phone.namespace, 'map_world', next)
     })
-    void storage.listCharacters(phone.namespace).then((rows) => {
+    void storage.listModernCharacters(phone.namespace).then((rows) => {
       if (!stop) setChars(rows)
     })
     return () => {
@@ -203,7 +201,8 @@ export function MapApp(props: { onBack: () => void }) {
       setEditNote(place.note)
       setKind(place.kind)
     }
-    setPanel('here')
+    setPanel(null)
+    setScenePlace(id)
   }
 
   const replaceScene = async (sceneId: string, text: string) => {
@@ -217,14 +216,14 @@ export function MapApp(props: { onBack: () => void }) {
   }
 
   const explore = () => {
-    const local = `${dayName(world.daypart)}。${EXPLORE[here.kind] ?? EXPLORE['别处']} ${here.note}`
+    const local = `${realTime}。${EXPLORE[here.kind] ?? EXPLORE['别处']} ${here.note}`
     const id = uid('scene')
     const next = { ...world, scenes: [{ id, place: here.name, text: local }, ...world.scenes].slice(0, 24) }
     setWorld(next)
     const placeNameNow = here.name
     const placeKind = here.kind
     const placeNoteNow = here.note
-    const when = dayName(world.daypart)
+    const when = realTime
     const withWho = peopleHere.map((person) => person.name).join('、')
     void storage.setBag(namespace, 'map_world', next).then(() => {
       runAiJob(jobKey(namespace, 'map', `scene-${id}`), async () => {
@@ -241,7 +240,7 @@ export function MapApp(props: { onBack: () => void }) {
   const date = () => {
     const person = chars.find((item) => item.id === dateId)
     if (!person) return
-    const local = `${dayName(world.daypart)}，你和${person.name}在${here.name}坐了一会儿。${here.note}`
+    const local = `${realTime}，你和${person.name}在${here.name}坐了一会儿。${here.note}`
     const id = uid('scene')
     const next = { ...world, scenes: [{ id, place: here.name, text: local }, ...world.scenes].slice(0, 24) }
     setWorld(next)
@@ -249,7 +248,7 @@ export function MapApp(props: { onBack: () => void }) {
     const personName = person.name
     const placeNameNow = here.name
     const placeNoteNow = here.note
-    const when = dayName(world.daypart)
+    const when = realTime
     void storage.setBag(namespace, 'map_world', next).then(() => {
       runAiJob(jobKey(namespace, 'map', `scene-${id}`), async () => {
         const text = await askLine(
@@ -272,7 +271,7 @@ export function MapApp(props: { onBack: () => void }) {
     persist({
       ...world,
       shifts: { ...world.shifts, [jobId]: shifts },
-      scenes: [{ id: uid('scene'), place: here.name, text: `${dayName(world.daypart)}这一班结束了。口袋里多了 ${job.pay} 枚，现在是${job.name} · ${role}。` }, ...world.scenes].slice(0, 24),
+      scenes: [{ id: uid('scene'), place: here.name, text: `${realTime}这一班结束了。口袋里多了 ${job.pay} 枚，现在是${job.name} · ${role}。` }, ...world.scenes].slice(0, 24),
     })
   }
 
@@ -347,7 +346,7 @@ export function MapApp(props: { onBack: () => void }) {
       return
     }
     const placeNameNow = here.name
-    const when = dayName(world.daypart)
+    const when = realTime
     void storage.setBag(namespace, 'map_world', next).then(() => {
       runAiJob(jobKey(namespace, 'map', `scene-${id}`), async () => {
         const line = await askLine('把玩家写的这一下扩成两三句场景，保留原意，不要替玩家做决定，不要列表。', `时间：${when}。地点：${placeNameNow}。玩家写的：${text}`, 240)
@@ -435,24 +434,23 @@ export function MapApp(props: { onBack: () => void }) {
     setPanel(panel === 'here' ? null : 'here')
   }
 
+  const encounterPlace = world.places.find(p=>p.id===scenePlace)
+  if (encounterPlace) return <MapEncounter key={namespace+encounterPlace.id} namespace={namespace} player={phone.name} place={encounterPlace} people={chars.filter(p=>encounterPlace.residents.includes(p.id))} onExit={()=>setScenePlace(null)} />
+
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle('#9ED9C4', '#F8E6C0', '#F8D0DC')}>
-      <Screen title="地图" subtitle={`${here.name} · ${dayName(world.daypart)} · 来过 ${here.visits} 次`} onBack={props.onBack}>
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {DAYPARTS.map((item) => (
-            <button key={item.id} type="button" className="chip" style={world.daypart === item.id ? { background: '#F8E6C0' } : undefined} onClick={() => persist({ ...world, daypart: item.id })}>{item.name}</button>
-          ))}
-        </div>
-        <div ref={mapRef} className="relative h-[300px] overflow-hidden rounded-[28px] shadow-[0_12px_24px_rgba(120,80,100,0.08)]" style={{ background: 'radial-gradient(circle at 20% 30%, #d5f0e4, transparent 42%), radial-gradient(circle at 70% 20%, #f8e6c0, transparent 36%), radial-gradient(circle at 60% 80%, #f8d0dc, transparent 40%), #f7f1ea', touchAction: 'none' }}>
-          <span className="absolute left-[8%] top-[48%] h-3 w-[84%] rounded-full bg-white/70" />
-          <span className="absolute left-[46%] top-[8%] h-[84%] w-3 rounded-full bg-white/60" />
-          <span className="absolute left-[18%] top-[22%] h-2 w-[46%] rotate-[-18deg] rounded-full bg-white/50" />
+      <Screen title="地图" subtitle={`${here.name} · ${realTime} · 来过 ${here.visits} 次`} onBack={props.onBack}>
+        <input className="soft-input mb-3" value={mapQuery} onChange={e => setMapQuery(e.target.value)} placeholder="搜索地点、街道或分类" aria-label="搜索地图地点" />
+        {mapQuery && <div className="mb-3 flex flex-wrap gap-2">{world.places.filter(p => (p.name+p.kind+p.note).includes(mapQuery)).map(p => <button key={p.id} className="chip" onClick={() => { goTo(p.id);setMapQuery('') }}>{p.name}</button>)}{!world.places.some(p => (p.name+p.kind+p.note).includes(mapQuery)) && <p className="text-xs">没有匹配地点，可以在下方新增。</p>}</div>}
+        <div className="city-map relative h-[360px] overflow-hidden rounded-[24px] shadow-lg" style={{ background: '#e9ede7', touchAction: 'none' }}>
+          <div ref={mapRef} className="absolute inset-0 origin-center transition-transform" style={{ transform: `scale(${zoom})` }}>
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 300" preserveAspectRatio="none" aria-hidden="true"><rect width="400" height="300" fill="#e9ede7"/><path d="M245 0Q210 85 290 150T290 300" fill="none" stroke="#acd7ec" strokeWidth="35"/><path d="M275 204h88v70h-88zM12 17h64v40H12z" fill="#c5dcbb"/><g fill="#dcded6" stroke="#cfd4cb" strokeWidth="1">{Array.from({length: 35},(_,i)=><rect key={i} x={(i%7)*61+5} y={Math.floor(i/7)*64+8} width="35" height="32" rx="3"/>)}</g><g fill="none" stroke="#fff" strokeWidth="9"><path d="M0 145H400M190 0V300M0 240L400 80M45 0L85 300M0 62H400"/></g><g fill="none" stroke="#edce7a" strokeWidth="5"><path d="M0 145H400M190 0V300"/></g><g fill="#7c8d94" fontSize="9"><text x="10" y="137">半糖大道</text><text x="195" y="35">梧桐路</text><text x="310" y="257">滨河公园</text><text x="93" y="63">长宁街</text></g></svg>
           {world.places.map((place) => (
             <button
               key={place.id}
               type="button"
               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-xs shadow-[0_6px_14px_rgba(120,80,100,0.12)]"
-              style={{ left: `${place.x}%`, top: `${place.y}%`, background: place.id === here.id ? '#F3A8BA' : 'rgba(255,255,255,0.92)', touchAction: 'none' }}
+              style={{ left: `${place.x}%`, top: `${place.y}%`, background: place.id === here.id ? '#497DBA' : 'rgba(255,255,255,0.96)', color: place.id === here.id ? '#fff' : '#36474B', touchAction: 'none' }}
               onPointerDown={(event) => onPinDown(event, place.id)}
               onPointerMove={(event) => onPinMove(event, place.id)}
               onPointerUp={() => onPinUp(place.id)}
@@ -469,10 +467,12 @@ export function MapApp(props: { onBack: () => void }) {
               {place.residents.length ? ` · ${place.residents.length}` : ''}
             </button>
           ))}
+          </div>
+          <div className="absolute bottom-3 right-3 flex flex-col gap-1"><button className="rounded-lg bg-white px-3 py-1 text-lg text-slate-800 shadow" aria-label="地图放大" onClick={() => setZoom(z => Math.min(1.8,z+.2))}>+</button><button className="rounded-lg bg-white px-3 py-1 text-lg text-slate-800 shadow" aria-label="地图缩小" onClick={() => setZoom(z => Math.max(1,z-.2))}>−</button><button className="rounded-lg bg-white px-2 py-1 text-xs text-slate-800 shadow" onClick={() => setZoom(1)}>复位</button></div><span className="absolute bottom-3 left-3 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-600">虚构城市 · 示意地图</span>
         </div>
-        <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>点地点过去，按住可以拖位置。{peopleHere.length ? `这里有 ${peopleHere.map((person) => person.name).join('、')}` : '这里还没有人长住'}</p>
+        <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>点地点进入场景对话，按住可以拖位置。{peopleHere.length ? `这里有 ${peopleHere.map((person) => person.name).join('、')}` : '这里还没有人长住'}</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <button type="button" className="chip chip-mint" onClick={explore}>逛一逛</button>
+          <button type="button" className="chip chip-solid" onClick={()=>setScenePlace(here.id)}>进入场景</button><button type="button" className="chip chip-mint" onClick={explore}>记录风景</button>
           <button type="button" className="chip chip-pink" onClick={() => setPanel(panel === 'date' ? null : 'date')}>约人</button>
           <button type="button" className="chip chip-butter" onClick={() => setPanel(panel === 'work' ? null : 'work')}>上班</button>
           <button type="button" className="chip" onClick={openHere}>这个地方</button>

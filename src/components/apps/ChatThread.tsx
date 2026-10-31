@@ -1130,8 +1130,8 @@ function SwitchRow(props: { label: string; on: boolean; onClick: () => void }) {
   return (
     <button type="button" aria-pressed={props.on} onClick={props.onClick} className="flex w-full items-center justify-between py-2.5 text-left text-sm">
       <span>{props.label}</span>
-      <span className="relative h-6 w-10 rounded-full transition-colors" style={{ background: props.on ? '#F3A8BA' : '#ebe5df' }}>
-        <span className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ left: props.on ? 18 : 2 }} />
+      <span data-theme-control data-on={props.on} className="switch-track relative h-6 w-10 rounded-full transition-colors" style={{ background: props.on ? '#F3A8BA' : '#ebe5df' }}>
+        <span className="switch-thumb absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ left: props.on ? 18 : 2 }} />
       </span>
     </button>
   )

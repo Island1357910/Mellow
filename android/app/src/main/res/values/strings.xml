@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">半糖 Mellow</string>
+    <string name="title_activity_main">半糖 Mellow</string>
+    <string name="package_name">top.mymellow.app</string>
+    <string name="custom_url_scheme">top.mymellow.app</string>
+</resources>

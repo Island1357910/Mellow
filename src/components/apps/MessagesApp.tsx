@@ -71,7 +71,7 @@ export function MessagesApp(props: { onBack: () => void }) {
 
   const load = async (who: Identity) => {
     const [nextChars, nextChats, nextFolders, nextProfile, nextMoments, online] = await Promise.all([
-      storage.listCharacters(who.namespace),
+      storage.listModernCharacters(who.namespace),
       storage.listChats(who.namespace),
       storage.getBag<ContactFolder[]>(who.namespace, 'folders'),
       storage.getBag<Profile>(who.namespace, 'profile'),
@@ -80,10 +80,11 @@ export function MessagesApp(props: { onBack: () => void }) {
     ])
     const samples = nextChars.filter((item) => item.name === '小满')
     for (const sample of samples) await storage.deleteCharacter(who.namespace, sample.id)
-    const kept = samples.length > 0 ? await storage.listCharacters(who.namespace) : nextChars
+    const kept = samples.length > 0 ? await storage.listModernCharacters(who.namespace) : nextChars
     const keptChats = samples.length > 0 ? await storage.listChats(who.namespace) : nextChats
     setChars(kept)
-    setChats(keptChats)
+    const modernIds = new Set(kept.map(c => c.id))
+    setChats(keptChats.filter(chat => chat.memberIds.every(id => modernIds.has(id))))
     setFolders(nextFolders ?? [])
     setProfile({ ...EMPTY_PROFILE, nickname: who.name, ...(nextProfile ?? {}) })
     setMoments(nextMoments ?? [])
@@ -139,7 +140,7 @@ export function MessagesApp(props: { onBack: () => void }) {
           void load(identity)
         }}
         onChat={(next) => setChats((current) => current.map((item) => (item.id === next.id ? next : item)))}
-        onPeople={() => void storage.listCharacters(identity.namespace).then(setChars)}
+        onPeople={() => void storage.listModernCharacters(identity.namespace).then(setChars)}
       />
     )
   }

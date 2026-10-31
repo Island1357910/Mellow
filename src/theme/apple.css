@@ -1,0 +1,266 @@
+/* Keep the outer phone themed while ancient pages use their own palette. */
+@scope (:root) to (.jiushi-phone) {
+/* 红苹果爱恋：覆盖与节日套组相同的表面与控件，同时保留真实色样、图片和游戏牌色。 */
+.apple-atmosphere, .apple-wallpaper-pattern, .apple-widget-motifs { display: none; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) {
+  --m-primary: #b82e43 !important;
+  --m-secondary: #d9a69a !important;
+  --m-background: #fff4e4 !important;
+  --m-surface: #fff8ec !important;
+  --m-text: #482a2c !important;
+  --m-text-secondary: #77594f !important;
+  --m-accent: #688849 !important;
+  --m-entry-surface: #f1ddd0;
+  --m-detail-ink: #a03042;
+  --m-quote-ink: #a03042;
+  --m-shadow: 0 12px 32px #914f3620 !important;
+  color: var(--m-text);
+  background: #fff4e4;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .wallpaper-base {
+  background: radial-gradient(ellipse at 8% 3%,#b82e4330,transparent 55%),linear-gradient(165deg,#fff2e2,#fff7e6 54%,#edf1dc) !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .wallpaper-wash { background: radial-gradient(ellipse at 85% 80%,#b9755a13,transparent 60%) !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .apple-wallpaper-pattern {
+  display: block;
+  background: url('./apple-pattern.svg') center / cover no-repeat;
+  opacity: 1;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .everyday-blossoms { display: none; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .apple-widget-motifs { display: block; position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: .24; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .home-widget > :not(.apple-widget-motifs,.everyday-blossoms) { position: relative; z-index: 1; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.home-widget,.music-widget,.dock-bar,.decor-card,.pill-note,.pocket-hero,.shop-editorial) {
+  background: #fff8ec !important;
+  color: var(--m-text) !important;
+  border: 1px solid #b9755a30;
+  box-shadow: 0 8px 24px #914f3620,inset 0 1px #b9755a08 !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .memo-widget { background: #fff0ce !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .mood-widget { background: #e9efdd !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .photo-frame { background: #e9efdd !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .photo-frame:has(img) { border-color: #b9755a66; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-glyph {
+  background: linear-gradient(145deg,#f7dcd4,#f7e9d4) !important;
+  color: #a63343 !important;
+  box-shadow: inset 0 1px #b9755a44,inset 0 0 0 1px #b9755a2b,0 5px 12px #914f3620 !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch:nth-child(3n+2) .app-glyph { background: linear-gradient(145deg,#f5e4bc,#fff2dc) !important; color: #926126 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch:nth-child(3n) .app-glyph { background: linear-gradient(145deg,#dfe9d0,#f0f4e4) !important; color: #476735 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch { filter: none; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch > span:last-child { color: #4f342e !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .dock-bar { background: #b9755aed !important; border-color: #b9755a3b; }
+/* 深底下的提示、占位符与低透明度文字保持可读。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is([style*="color: rgba(58"],[style*="color: rgb(58"],[class*="text-black/"],[class*="text-[#"],[class*="text-neutral-"],[class*="text-slate-"]):not(.apple-widget-motifs *,[data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { color: var(--m-text-secondary) !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(input,textarea)::placeholder { color: #876b5f !important; opacity: 1; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(input,textarea,select) { color: var(--m-text); caret-color: #b82e43; accent-color: #b82e43; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.soft-input,.soft-select) { background-color: #fff7eb !important; color: #482a2c !important; border-color: #b9755a4d; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(input,textarea,select,button):focus-visible { outline: 2px solid #b82e43; outline-offset: 3px; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .soft-input:focus { box-shadow: 0 0 0 3px #b9755a24; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is([class*="opacity-35"],[class*="opacity-45"],[class*="opacity-50"],[class*="opacity-60"]):not(:disabled,.apple-widget-motifs *) { opacity: .82; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .stamp-dot { background: #f3e3cd !important; box-shadow: inset 0 0 0 1px #b9755a33 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .stamp-dot[data-stamped="true"] { background: #b6404b !important; color: #fff8e9; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .stamp-dot[data-today="true"] { box-shadow: 0 0 0 1.5px #b82e43 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .stamp-label { color: #785b53 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) [aria-pressed="true"] .stamp-label { color: #9b3143 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .music-widget button { color: #5b3435 !important; background-color: #f4ded1 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .music-widget button[aria-label^="播放 "] { background: transparent !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.chip,.pill-note) { background: #f6e6d9 !important; color: #482a2c !important; border-color: #b9755a3b; box-shadow: 0 3px 9px #914f3620; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.chip-solid,.chip-pink,[role="tab"][aria-selected="true"]) { background: #b12c40 !important; color: #fff8e9 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.chip-danger,[class*="text-[#b050"]) { background: #f8deda !important; color: #a82f42 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.hz-thread-row,.hz-moment-card,.hz-star-card,.hz-diary-sheet,.hz-search-row,.hz-permission-row) { background: #fff8ec; color: var(--m-text); border-color: #b9755a30; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.hz-thread-preview,.hz-star-meta,.hz-diary-date,.pick-card-blurb) { color: var(--m-text-secondary); }
+/* 兼容旧组件中的固定色，明确保留选色样本、商品图片和有规则含义的牌色。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is([class*="bg-[#"],[class*="bg-white"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background-color: #fff3df !important;
+  color: #482a2c !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,span,div,p,label,section,article):is([style*="background: rgb("],[style*="background: rgba(255"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background: #f1ddd0 !important;
+  color: #482a2c !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,div,section,article,span)[style*="background: linear-gradient"]:not(.wallpaper-base,.wallpaper-wash,.vinyl-disc,[data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) {
+  background: linear-gradient(135deg,#ffe8e0,#fff5df) !important;
+  color: #482a2c !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) nav button[aria-pressed="true"],
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) [role="tab"][aria-selected="true"],
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .chip-solid {
+  background: #b12c40 !important;
+  color: #fff8e9 !important;
+  box-shadow: 0 4px 12px #914f3620 !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .home-widget .apple-widget-motifs { background: none !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .home-widget :is([class*="bg-[#"],[class*="bg-white"]) { background: #efd8ca !important; color: #482a2c !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .todo-widget li button[aria-label^="标记"] { background: #fff3dc !important; box-shadow: inset 0 0 0 1.5px #b12c40 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.round-table,.round-table-center,.round-seat-ring,.round-seat-avatar,.round-seat-badge,.round-seat-tag) { background: #f5e8d8; color: #482a2c; border-color: #b9755a33; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .round-seat.is-turn .round-seat-ring { box-shadow: 0 0 0 2px #b82e43; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .uno-card { color: #fff8e9 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.hz-thread-avatar,.hz-stat-pill,.hz-diary-date,.hz-search-row) { background: #f5e8d8; color: #805546; }
+/* 唱片保留黑胶材质，中心用暖色标记，避免统一表面色吞掉细节。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .music-widget .vinyl-disc { background: #261b22 !important; box-shadow: inset 0 0 0 6px #1c1419,inset 0 0 0 7px #b9755a26,inset 0 0 0 12px #493039,inset 0 0 0 13px #b9755a20 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .music-widget .vinyl-disc > span:first-child { background: #dfb67b !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .music-widget .vinyl-disc > span:last-child { background: #382128 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .stamp-label { font-size: 10px; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .home-widget [class*="text-[9px]"] { font-size: 10px; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch .app-glyph[style] { background: linear-gradient(145deg,#f7dcd4,#f7e9d4) !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch:nth-child(3n+2) .app-glyph[style] { background: linear-gradient(145deg,#f5e4bc,#fff2dc) !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .app-launch:nth-child(3n) .app-glyph[style] { background: linear-gradient(145deg,#dfe9d0,#f0f4e4) !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.bind-person,.bind-person.is-active,.hz-chat-head,.hz-msg,.hz-album-tile,.hz-album-caption,.hz-phone-frame) { background: #f1ddd0 !important; color: #482a2c !important; border-color: #b9755a42; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .bind-person.is-active { border-color: #b12c40; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.bind-person-avatar,.hz-thread-avatar,.hz-stat-pill) { background: #e8cfb9; color: #482a2c; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.bind-person-name,.hz-thread-title,.hz-chat-head-title,.hz-moment-text,.hz-star-text,.hz-album-name,.hz-diary-text,.hz-search-query,.hz-msg.is-me) { color: #482a2c !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .bind-person-dot { background: #b12c40; box-shadow: 0 0 0 3px #b9755a26; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg rect[fill="#e9ede7"] { fill: #f3f1e2; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg path[stroke="#acd7ec"] { stroke: #add5dc; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg path[fill="#c5dcbb"] { fill: #dbe6c4; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg g[fill="#dcded6"] { fill: #e6ddcc; stroke: #d7c8b5; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg g[stroke="#fff"] { stroke: #fffaf2; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg g[stroke="#edce7a"] { stroke: #dcb05f; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map svg g[fill="#7c8d94"] { fill: #6e7863; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .city-map button[aria-current="location"] { background: #b12c40 !important; color: #fff8e9 !important; }
+
+/* 动态入口使用明确的表面语义，不再依赖浏览器如何序列化内联颜色。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry {
+  background: var(--m-entry-surface) !important;
+  color: #482a2c !important;
+  border: 1px solid #b9755a35;
+  box-shadow: 0 8px 22px #914f3620 !important;
+}
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry:nth-child(1) { --m-entry-surface: #f8ded7; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry:nth-child(2) { --m-entry-surface: #e9efdd; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry:nth-child(3) { --m-entry-surface: #f8e9c5; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry .social-entry-icon { background: #b54350 !important; color: #fff5e5 !important; box-shadow: inset 0 0 0 1px #b9755a33; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry:nth-child(2) .social-entry-icon { background: #68854c !important; color: #fff9e8 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry:nth-child(3) .social-entry-icon { background: #efe1bc !important; color: #694e35 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry .social-entry-title { color: #482a2c !important; font-weight: 600; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-entry .social-entry-hint { color: #77594f !important; }
+/* 同类旧组件：菜单分组、背景混色、白色半透明层、圆桌主持位。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.menu-group,.modal-center,.voice-bar-play) { background: #fff8ec !important; color: #482a2c !important; border-color: #b9755a35; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,span,div,p,label,section,article)[style*="background: color-mix"]:not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { background: #f1ddd0 !important; color: #482a2c !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.round-seat.is-host,.round-seat.is-turn) .round-seat-ring { background: #e7c5b0 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.round-seat.is-turn .round-seat-name,.round-table-mark) { color: #8f3f39 !important; }
+:where(body:has(.device[data-theme-pack="apple"])) .modal-portal { background: #5b393177; color: #482a2c; color-scheme: light; }
+/* Tailwind 任意渐变不会写入 style 属性，需独立覆盖背景图层。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is([class*="bg-[linear-gradient"],[class*="bg-[radial-gradient"],[class*="bg-gradient-"],[class*="bg-linear-"]):not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { background: linear-gradient(135deg,#f7e0d4,#f1ddd0) !important; color: #482a2c !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .b-mine { background: #f2c9c2 !important; color: #482a2c !important; box-shadow: 0 4px 12px #914f3620; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .b-theirs { background: #f1ddd0 !important; color: #482a2c !important; box-shadow: 0 4px 12px #914f3620; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) [style*="color: rgb(176, 80, 92)"] { color: #a82f42 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .social-face { background: #efe1bc !important; color: #482a2c !important; border-color: #b9755a66; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .menu-row > span:first-child { background: #efe1bc !important; color: #482a2c !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,a)[style*="background: var(--m-primary)"]:not([data-holiday-preserve],[data-holiday-preserve] *,[data-theme-control],[data-theme-control] *) { color: #fff8e9 !important; }
+/* Portal 中的卡片原本由 index.css 的 .device 祖先限定，需在主题作用域内直接定义。 */
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.menu-card,.soft-card,.pick-card) { background: #fff8ec !important; color: #482a2c !important; border-color: #b9755a35; box-shadow: 0 8px 22px #914f3620 !important; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .preset-prompt-block { background: #fff7eb !important; color: #482a2c !important; box-shadow: inset 0 0 0 1px #b9755a26; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .pick-card-glow { background: #b9755a4d; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .hz-moment-card::before { background: linear-gradient(#b12c40,#8ca76c); }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .round-seat.is-self .round-seat-ring { box-shadow: inset 0 0 0 2px #b9755a66,0 6px 14px #914f3620; }
+:is(.device[data-theme-pack="apple"], :where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .soft-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23b73549' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+}
+/* 苹果花园：装饰只在背景与卡片留白处出现，所有粒子均不接收点击。 */
+@scope (:root) to (.jiushi-phone) {
+.device[data-theme-pack="apple"] { color-scheme:light; --control-key-surface:#fff3df; --control-key-ink:#542e31; --control-key-border:#cf9b87; --control-dot-empty:#b8907b; --control-dot-filled:#b12c40; --control-pressed:#b12c40; --control-pressed-ink:#fff8e9; --control-error:#a82f42; }
+.device[data-theme-pack="apple"] .apple-atmosphere { display:block; overflow:hidden; }
+.device[data-theme-pack="apple"] .apple-orchard-light { background:radial-gradient(ellipse at 8% 18%,#fffbdf80,transparent 50%),radial-gradient(ellipse at 91% 80%,#e1edc445,transparent 46%); animation:apple-light-breathe 16s ease-in-out infinite alternate; }
+.device[data-theme-pack="apple"] .apple-drifter { position:absolute; left:var(--apple-left); top:var(--apple-top); opacity:.28; pointer-events:none; animation:apple-petal-drift var(--apple-duration) ease-in-out var(--apple-delay) infinite; will-change:transform; }
+.device[data-theme-pack="apple"] .apple-drifter-0 { opacity:.3; animation-name:apple-leaf-sway; }
+.device[data-theme-pack="apple"] .apple-drifter-2 { opacity:.16; }
+.device[data-theme-pack="apple"] .apple-widget-motifs { opacity:.32; }
+.apple-widget-fruit { position:absolute; right:-8px; bottom:-13px; transform:rotate(13deg); }
+.apple-widget-flower { position:absolute; right:45px; bottom:6px; transform:rotate(-13deg); }
+.apple-widget-leaf { position:absolute; right:8px; top:-5px; transform-origin:80% 90%; }
+.apple-widget-spark { position:absolute; right:63px; bottom:25px; color:#b18a43; font-size:17px; }
+.device[data-theme-pack="apple"] .apple-widget-leaf { animation:apple-sprig-sway 7s ease-in-out infinite alternate; }
+.device[data-theme-pack="apple"] .home-widget { border:1px solid #c38a6e45; box-shadow:0 9px 22px #92513312,inset 0 1px #fffdf7 !important; }
+.device[data-theme-pack="apple"] .memo-widget { background:linear-gradient(145deg,#fff9e5,#fff0d3) !important; }
+.device[data-theme-pack="apple"] .todo-widget { background:linear-gradient(145deg,#f8f9e9,#edf1dc) !important; }
+.device[data-theme-pack="apple"] .mood-widget { background:linear-gradient(155deg,#ffeae1,#f5d5cd) !important; }
+.device[data-theme-pack="apple"] .stamp-dot[data-stamped="true"] { background:#aa3848 !important; color:#fff9e9 !important; }
+.device[data-theme-pack="apple"] .stamp-dot[data-today="true"] { box-shadow:0 0 0 1.5px #ae4250,0 0 0 4px #f4d9c1 !important; }
+.device[data-theme-pack="apple"] .stamp-label { color:#795b4c !important; }
+.device[data-theme-pack="apple"] .music-widget { background:linear-gradient(155deg,#fff9e9,#f4e1ce) !important; border-radius:30px; border:1px solid #bf8b7545; }
+.device[data-theme-pack="apple"] .music-widget button { color:#9d3041 !important; background:#f4dccf !important; }
+.device[data-theme-pack="apple"] .music-widget button[aria-label^="播放 "] { background:transparent !important; }
+.device[data-theme-pack="apple"] .music-widget .vinyl-disc > span:first-child { background:#b63b4f !important; box-shadow:0 0 0 2px #f5dba8; }
+.device[data-theme-pack="apple"] .music-widget .vinyl-disc > span:last-child { background:#fff0c9 !important; }
+.device[data-theme-pack="apple"] .player-tonearm { --tonearm-metal:#a36e40; --tonearm-head:#fff3d8; --tonearm-edge:#785342; }
+.device[data-theme-pack="apple"] .app-glyph[style],.device[data-theme-pack="apple"] .app-launch .app-glyph[style] { background:linear-gradient(145deg,#fff4e0,#f3d1c6) !important; color:#aa3548 !important; border:1px solid #ca8e7f50; box-shadow:inset 0 1px #fffdf1,inset 0 -3px #b35c4910,0 5px 12px #92513315 !important; transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s; }
+.device[data-theme-pack="apple"] .app-launch:nth-child(3n+2) .app-glyph[style] { background:linear-gradient(145deg,#f6f4df,#dce7c9) !important; color:#547336 !important; }
+.device[data-theme-pack="apple"] .app-launch:nth-child(3n) .app-glyph[style] { background:linear-gradient(145deg,#fff6dc,#f1dda9) !important; color:#986d32 !important; }
+.device[data-theme-pack="apple"] .app-launch > span:last-child { color:#5b3933 !important; }
+.device[data-theme-pack="apple"] .app-launch:active .app-glyph { transform:translateY(2px) scale(.94); }
+.device[data-theme-pack="apple"] .dock-bar { position:relative; overflow:hidden; background:linear-gradient(130deg,#fff6e9e8,#f6e2d6e8) !important; border:1px solid #ca9b7f55; box-shadow:0 12px 30px #94503915,inset 0 1px #fffdf4 !important; backdrop-filter:blur(18px); }
+.device[data-theme-pack="apple"] .dock-bar::before { content:''; position:absolute; inset:-40% -100%; background:linear-gradient(110deg,transparent 42%,#fffdf34d 49%,transparent 56%); transform:translateX(-30%); animation:apple-satin-shine 14s ease-in-out infinite; pointer-events:none; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.menu-card,.soft-card,.pick-card) { border:1px solid #c7917640; background:#fff8ec !important; color:#482a2c !important; box-shadow:0 7px 20px #8f4a3410,inset 0 1px #fffdf7 !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.pocket-hero,.shop-editorial) { background:linear-gradient(125deg,#f9ddd1,#fff0ce 68%,#e8edcf) !important; border:1px solid #cc957442; color:#572f32 !important; }
+.device[data-theme-pack="apple"] .star-search { background:#fff9ed; border-color:#c38a6e45; }
+.device[data-theme-pack="apple"] :is(.star-post,.hz-moment-card) { border-left:3px solid #d8998c; }
+.device[data-theme-pack="apple"] .social-entry .social-entry-icon { background:#b54350 !important; color:#fff9ec !important; }
+.device[data-theme-pack="apple"] .social-entry:nth-child(2) .social-entry-icon { background:#68854c !important; color:#fff9ec !important; }
+.device[data-theme-pack="apple"] .social-entry:nth-child(3) .social-entry-icon { background:#b58a45 !important; color:#fff9ec !important; }
+.device[data-theme-pack="apple"] .social-face { background:#ead2b7 !important; color:#7a3b35 !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.chip-solid,.chip-pink,.journal-day[aria-pressed="true"]) { background:linear-gradient(145deg,#c74b58,#ad3045) !important; color:#fff8e9 !important; border-color:#9e2e4133; box-shadow:0 4px 10px #a7364926; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .chip-danger { background:#f6deda !important; color:#a82f42 !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,a.chip) { transition:transform .18s ease,box-shadow .25s ease,background-color .25s ease; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,a.chip):active { transform:scale(.97); }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(button,a,input,textarea,select):focus-visible { outline:2px solid #b53e50; outline-offset:3px; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(nav button[aria-pressed="true"],[role="tab"][aria-selected="true"]) { background:#b12c40 !important; color:#fff8e9 !important; box-shadow:0 4px 12px #a7364921 !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .chip[aria-pressed="true"] { outline:2px solid #b12c40; outline-offset:1px; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .switch-track { background:#ebd7c3 !important; box-shadow:inset 0 0 0 1px #b68d72; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .switch-track[data-on="true"] { background:#af3c4b !important; box-shadow:inset 0 0 0 1px #9a2e40; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .switch-track .switch-thumb { background:#fffaf0 !important; box-shadow:0 1px 4px #8e553544; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) :is(.control-tile,.player-settings .player-style-option) { background:#fff8eb !important; color:#5b3435 !important; border:1px solid #cc9f84; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .player-style-option[aria-pressed="true"] { background:#f5dfcf !important; color:#8d2e40 !important; outline:2px solid #b12c40 !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .player-style-option[aria-pressed="true"]::after { content:'✓'; position:absolute; right:8px; top:5px; color:#a63145; font:700 12px/1 system-ui; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .control-tile[data-on="true"] { background:#b12c40 !important; color:#fff8e9 !important; border-color:#9f2e42; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .password-setup { background:#fff9ee !important; color:#482a2c !important; border:1px solid #c38a6e60; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .pick-card.is-selected { border:2px solid #ae3d4c !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .pick-card-check { background:#b12c40 !important; color:#fff9eb !important; }
+:is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .file-picker::file-selector-button { background:#b12c40; color:#fff8e9; }
+.device[data-theme-pack="apple"] .b-mine { background:linear-gradient(135deg,#f5d4cb,#efbfb8) !important; color:#572e33 !important; border:1px solid #d28e8540; border-radius:20px 20px 6px 20px; }
+.device[data-theme-pack="apple"] .b-theirs { background:#fff8e9 !important; color:#482a2c !important; border:1px solid #d3b69755; border-radius:20px 20px 20px 6px; }
+.device[data-theme-pack="apple"] .lock-brand { color:#923044; text-shadow:0 2px 0 #fff5e9,0 7px 24px #b84d5126; }
+.device[data-theme-pack="apple"] .lock-brand-sub { color:#87634b; letter-spacing:.25em; }
+.device[data-theme-pack="apple"] .lock-time { color:#783b3f; text-shadow:0 3px 18px #fff6e9a6; }
+.device[data-theme-pack="apple"] .lock-brand + p { color:#87634b; }
+.device[data-theme-pack="apple"] .lock-brand ~ p { color:#87634b; }
+.device[data-theme-pack="apple"] .lock-brand { animation:apple-brand-glow 8s ease-in-out infinite alternate; }
+.device[data-theme-pack="apple"] svg:has(circle[fill*="m-logo-primary"]) { filter:drop-shadow(0 6px 12px #a63a462b); animation:apple-logo-float 7s ease-in-out infinite alternate; }
+:where(body:has(.device[data-theme-pack="apple"])) .modal-portal { background:#5b39315e; color:#482a2c; color-scheme:light; --m-primary:#b82e43; --m-surface:#fff8ec; --m-text:#482a2c; --m-text-secondary:#77594f; }
+@media(hover:hover) {
+ .device[data-theme-pack="apple"] .app-launch:hover .app-glyph { transform:translateY(-4px) rotate(-2deg); box-shadow:inset 0 1px #fffdf1,0 10px 20px #a04b3329 !important; }
+ :is(.device[data-theme-pack="apple"],:where(body:has(.device[data-theme-pack="apple"])) .modal-portal) .chip:hover { box-shadow:0 4px 14px #9e4b3224; }
+ .device[data-theme-pack="apple"] .home-widget:hover .apple-widget-fruit { transform:rotate(5deg) translateY(-2px); }
+}
+@keyframes apple-petal-drift { 0%,100% { transform:translate3d(0,-8px,0) rotate(-14deg); } 50% { transform:translate3d(10px,25px,0) rotate(23deg); } }
+@keyframes apple-leaf-sway { 0%,100% { transform:translate3d(0,0,0) rotate(-17deg); } 50% { transform:translate3d(-8px,14px,0) rotate(22deg); } }
+@keyframes apple-sprig-sway { from { transform:rotate(-11deg); } to { transform:rotate(9deg); } }
+@keyframes apple-satin-shine { 0%,65% { transform:translateX(-30%); opacity:0; } 74% { opacity:1; } 88%,100% { transform:translateX(30%); opacity:0; } }
+@keyframes apple-light-breathe { from { opacity:.45; } to { opacity:.9; } }
+@keyframes apple-brand-glow { from { text-shadow:0 2px #fff5e9,0 7px 20px #b84d5119; } to { text-shadow:0 2px #fff5e9,0 7px 27px #b84d5130; } }
+@keyframes apple-logo-float { from { transform:translateY(0); } to { transform:translateY(-5px); } }
+@media(prefers-reduced-motion:reduce) {
+ .device[data-theme-pack="apple"] *, .device[data-theme-pack="apple"] *::before, .device[data-theme-pack="apple"] *::after { animation:none !important; transition:none !important; }
+}
+}
+/* Frosted fruit palette: share the SMS ambient gradients and soften the surfaces. */
+@scope (:root) to (.jiushi-phone) {
+.device[data-theme-pack="apple"] .wallpaper-base { background:radial-gradient(circle at 0% 0%,color-mix(in srgb,var(--m-primary) 48%,transparent),transparent 36%),radial-gradient(circle at 100% 8%,color-mix(in srgb,var(--m-secondary) 58%,transparent),transparent 32%),radial-gradient(circle at 76% 100%,color-mix(in srgb,var(--m-accent) 72%,transparent),transparent 38%),var(--m-background) !important; }
+.device[data-theme-pack="apple"] .apple-wallpaper-pattern { background-size:cover; background-repeat:no-repeat; filter:blur(.35px); }
+.device[data-theme-pack="apple"] .apple-orchard-light { background:#fff7e710; backdrop-filter:blur(.6px); animation:none; }
+.device[data-theme-pack="apple"] .app-glyph[style],.device[data-theme-pack="apple"] .app-launch .app-glyph[style] { background:linear-gradient(145deg,#f7dfcfdd,#eabdb0d9) !important; color:#922b3c !important; border-color:#c95c6650; }
+.device[data-theme-pack="apple"] .app-launch:nth-child(3n+2) .app-glyph[style] { background:linear-gradient(145deg,#e8eccfdd,#c4d1a4d9) !important; color:#405f25 !important; }
+.device[data-theme-pack="apple"] .app-launch:nth-child(3n) .app-glyph[style] { background:linear-gradient(145deg,#f8e8c8dd,#e8cf97d9) !important; color:#82571e !important; }
+.device[data-theme-pack="apple"] .home-widget.mood-widget { background:linear-gradient(145deg,#f5d9cddd,#e9bbaed9) !important; }
+.device[data-theme-pack="apple"] .music-widget.music-widget { background:linear-gradient(145deg,#fff0dadd,#efd4b4d9) !important; }
+.device[data-theme-pack="apple"] .dock-bar { background:linear-gradient(120deg,#fff4e1bb,#efd6c3bb) !important; border-color:#c9826850; }
+.device[data-theme-pack="apple"] .apple-widget-motifs { opacity:.36; }
+.device[data-theme-pack="apple"] .apple-widget-spark,.device[data-theme-pack="apple"] .apple-widget-flower { display:none; }
+.device[data-theme-pack="apple"] .apple-widget-fruit { right:0; bottom:-8px; }
+.device[data-theme-pack="apple"] .apple-widget-leaf { right:20px; top:9px; }
+.device[data-theme-pack="apple"] .apple-drifter { display:none; }
+}
+@scope (:root) to (.jiushi-phone) {
+.device[data-theme-pack="apple"] :is(.app-glyph[style],.app-launch .app-glyph[style]) { border:1px solid #fff9e880; box-shadow:inset 0 1px #fff9ec70,0 5px 16px #6c494714 !important; backdrop-filter:blur(14px) saturate(1.08); }
+.device[data-theme-pack="apple"] :is(.dock-bar,.home-widget,.music-widget) { backdrop-filter:blur(16px) saturate(1.05); }
+}

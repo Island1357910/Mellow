@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { ShoppingBag } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { askLine, readJson } from '../../lib/ask.ts'
 import {
   DUOTAO,
@@ -41,8 +42,10 @@ function ShopApp(props: {
   onBack: () => void
 }) {
   const phone = usePhone()
+  const paying = useRef(false)
   const [tab, setTab] = useState<'browse' | 'cart' | 'orders'>('browse')
   const [cat, setCat] = useState('全部')
+  const [detail, setDetail] = useState<Goods | null>(null)
   const [query, setQuery] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [orders, setOrders] = useState<Delivery[]>([])
@@ -65,7 +68,7 @@ function ShopApp(props: {
       readCart(phone.namespace, props.shop),
       readDeliveries(phone.namespace),
       readCoins(phone.namespace),
-      storage.listCharacters(phone.namespace),
+      storage.listModernCharacters(phone.namespace),
       readCatalog(phone.namespace, props.shop),
     ]).then(([lines, rows, balance, people, extra]) => {
       if (stop) return
@@ -152,7 +155,8 @@ function ShopApp(props: {
   }
 
   const pay = async () => {
-    if (!lines.length) return
+    if (!lines.length || paying.current) return
+    paying.current = true
     setError('')
     try {
       const order = await checkout({
@@ -171,7 +175,7 @@ function ShopApp(props: {
       setTab('orders')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '没结成')
-    }
+    } finally { paying.current = false }
   }
 
   return (
@@ -194,7 +198,7 @@ function ShopApp(props: {
                 <div className="space-y-2">
                   {ideas.map((item) => (
                     <div key={item.id} className="flex items-center gap-2 rounded-2xl bg-white/70 px-3 py-2">
-                      <span>{item.emoji}</span>
+                      <ProductPicture item={item} className="h-10 w-10 shrink-0 rounded-xl" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm">{item.name}</span>
                         <span className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.level} · {item.price} 枚 · {item.trait || item.blurb}</span>
@@ -206,6 +210,7 @@ function ShopApp(props: {
               ) : null}
               {error ? <PillNote tone="peach" inline>{error}</PillNote> : null}
             </form>
+            <div className="shop-editorial mb-4 rounded-3xl p-5" style={{ background: `linear-gradient(135deg, ${props.tint}, var(--m-secondary))` }}><p className="text-[10px] tracking-[.2em]">{props.shop === 'duotao' ? 'MELLOW SELECT / 好物甄选' : 'FRESH & WARM / 好好吃饭'}</p><h2 className="mt-2 text-2xl font-semibold">{props.shop === 'duotao' ? '把日子过得有质感' : '热乎的，现在就想吃'}</h2><p className="mt-2 text-xs">{props.shop === 'duotao' ? '居家器物 · 随心礼物 · 每件都有故事' : '暖胃正餐 · 午后甜品 · 夜宵小食'}</p></div>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={props.shop === 'duotao' ? '搜一件' : '想吃什么'} className="soft-input mb-3" />
             <div className="mb-3 flex flex-wrap gap-1.5">
               {cats.map((item) => (
@@ -216,7 +221,7 @@ function ShopApp(props: {
               <div className="grid grid-cols-2 gap-3">
                 {shown.map((item) => (
                   <article key={item.id} className="menu-card">
-                    <span className="grid h-16 place-items-center rounded-2xl text-2xl" style={{ background: `color-mix(in srgb, ${props.tint} 45%, white)` }}>{item.emoji}</span>
+                    <button className="w-full" aria-label={`查看${item.name}`} onClick={() => setDetail(item)}><ProductPicture item={item} className="h-32 w-full rounded-2xl object-cover" /></button>
                     <p className="mt-2 text-sm font-medium">{item.name}</p>
                     <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.level ? `${item.level} · ` : ''}{item.trait || item.blurb}</p>
                     <div className="mt-2 flex items-center justify-between">
@@ -230,7 +235,7 @@ function ShopApp(props: {
               <ul className="space-y-2">
                 {shown.map((item) => (
                   <li key={item.id} className="menu-card flex items-center gap-3">
-                    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl" style={{ background: `color-mix(in srgb, ${props.tint} 50%, white)` }}>{item.emoji}</span>
+                    <button aria-label={`查看${item.name}`} onClick={() => setDetail(item)}><ProductPicture item={item} className="h-20 w-20 shrink-0 rounded-2xl object-cover" /></button>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{item.name}</span>
                       <span className="block text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.level ? `${item.level} · ` : ''}{item.trait || item.blurb} · {item.price} 枚</span>
@@ -247,7 +252,7 @@ function ShopApp(props: {
           <div className="space-y-3">
             {lines.length === 0 ? <PillNote tone="butter">购物车是空的</PillNote> : lines.map((line) => (
               <div key={line.id} className="menu-card flex items-center gap-3">
-                <span className="text-2xl">{line.goods?.emoji}</span>
+                {line.goods && <ProductPicture item={line.goods} className="h-12 w-12 shrink-0 rounded-xl" />}
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{line.goods?.name}</span>
                   <span className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{line.goods?.price} 枚</span>
@@ -291,6 +296,7 @@ function ShopApp(props: {
             ))}
           </div>
         ) : null}
+        {detail && <div role="dialog" aria-modal="true" aria-label={detail.name} className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-6" onClick={() => setDetail(null)}><article className="menu-card w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}><ProductPicture item={detail} className="h-48 w-full rounded-2xl object-contain" /><h2 className="text-xl font-semibold">{detail.name}</h2><p className="text-sm leading-6">{detail.blurb}。{detail.trait || (props.shop === 'flash' ? '可在订单留言填写口味偏好，送给角色时也能留一句话。' : '留给自己，或附上一句留言送给在意的人。')}</p><p className="text-sm">{detail.cat} · {detail.price} 枚</p><div className="flex gap-2"><button className="chip chip-solid" onClick={() => void addLine(phone.namespace, props.shop, detail.id).then(setCart).then(() => setDetail(null))}>加入购物车</button><button className="chip" onClick={() => setDetail(null)}>关闭</button></div></article></div>}
       </Screen>
     </div>
   )
@@ -302,4 +308,16 @@ export function DuotaoApp(props: { onBack: () => void }) {
 
 export function FlashApp(props: { onBack: () => void }) {
   return <ShopApp shop="flash" title="闪送" tint="#F0C56A" goods={FLASH} layout="list" onBack={props.onBack} />
+}
+
+const PRODUCT_CELLS: Record<string, [number, number]> = {
+  cup: [1,0], lamp: [1,9], daisy: [1,2], notebook: [1,5], cake: [1,1], noodle: [1,11], dumpling: [1,17],
+  blanket: [2,0], ribbon: [2,1], card: [2,2], scarf: [2,3], pen: [2,4], tea: [2,5], taro: [2,6], rice: [2,7], porridge: [2,8], pudding: [2,9], oden: [2,10], pajama: [2,11],
+}
+function ProductPicture({ item, className }: { item: Goods; className: string }) {
+  const cell = PRODUCT_CELLS[item.id]
+  if (!cell) return <span role="img" aria-label={item.name} className={className + ' grid place-items-center bg-white/50'}><ShoppingBag size={30} strokeWidth={1.5} /></span>
+  const [atlas, index] = cell
+  const rows = atlas === 1 ? 5 : 3
+  return <span role="img" aria-label={item.name} data-holiday-preserve className={className + ' block product-illustration'} style={{ backgroundImage: 'url(' + import.meta.env.BASE_URL + 'goods/product-atlas-v' + atlas + '.png)', backgroundSize: '400% ' + rows * 100 + '%', backgroundPosition: (index % 4) / 3 * 100 + '% ' + Math.floor(index / 4) / (rows - 1) * 100 + '%' }} />
 }

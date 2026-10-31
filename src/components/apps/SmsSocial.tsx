@@ -73,7 +73,7 @@ function pickImage(onData: (value: string) => void) {
 
 function Face(props: { value: string; className: string }) {
   if (props.value.startsWith('data:')) return <img src={props.value} alt="" className={props.className} />
-  return <span className={`grid place-items-center ${props.className}`} style={{ background: 'var(--m-secondary)' }}>{props.value || '·'}</span>
+  return <span className={`social-face grid place-items-center ${props.className}`} style={{ background: 'var(--m-secondary)' }}>{props.value || '·'}</span>
 }
 
 export function FeedHub(props: { onOpen: (page: 'moments' | 'nearby' | 'games') => void }) {
@@ -85,11 +85,11 @@ export function FeedHub(props: { onOpen: (page: 'moments' | 'nearby' | 'games') 
   return (
     <div className="space-y-2.5">
       {rows.map((row) => (
-        <button key={row.id} type="button" className="flex w-full items-center gap-3 rounded-[24px] px-3.5 py-3.5 text-left shadow-[0_10px_20px_rgba(120,80,100,0.06)]" style={{ background: `color-mix(in srgb, ${row.tint} 55%, white)` }} onClick={() => props.onOpen(row.id)}>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-sm" style={{ background: row.tint }}>{row.title.slice(0, 1)}</span>
+        <button key={row.id} type="button" className="social-entry flex w-full items-center gap-3 rounded-[24px] px-3.5 py-3.5 text-left shadow-[0_10px_20px_rgba(120,80,100,0.06)]" style={{ background: `var(--m-entry-surface, color-mix(in srgb, ${row.tint} 55%, white))` }} onClick={() => props.onOpen(row.id)}>
+          <span className="social-entry-icon grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-sm" style={{ background: row.tint }}>{row.title.slice(0, 1)}</span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm">{row.title}</span>
-            <span className="block truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{row.hint}</span>
+            <span className="social-entry-title block text-sm">{row.title}</span>
+            <span className="social-entry-hint block truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{row.hint}</span>
           </span>
           <ChevronRight size={16} />
         </button>
@@ -113,33 +113,47 @@ export function MomentsPage(props: {
   const [others, setOthers] = useState<Moment[]>([])
   const [note, setNote] = useState('')
   const dataRevision = useMellow((state) => state.dataRevision)
-  const key = `${props.namespace}:${props.chars.map((item) => item.id).join(',')}`
-  const momentsBusy = isAiJobRunning(jobKey(props.namespace, 'moments'))
+  const names = props.chars.map((item) => item.remark || item.name).slice(0, 8).join('、') || '没有旧熟人'
+  const [retry, setRetry] = useState(0)
+  const [momentsBusy, setMomentsBusy] = useState(false)
+
+  // Loading stored results must never start another job: finishing a job bumps dataRevision.
   useEffect(() => {
     let alive = true
-    void storage.getBag<{ at: number; posts: Moment[] }>(props.namespace, 'circle-feed').then(async (cached) => {
+    const namespace = props.namespace
+    void Promise.all([
+      storage.getBag<{ at: number; posts: Moment[] }>(namespace, 'circle-feed'),
+      storage.getBag<string>(namespace, 'circle-feed_error'),
+    ]).then(([cached, message]) => {
       if (!alive) return
-      if (cached?.posts?.length) setOthers(cached.posts)
-      if (cached && Date.now() - cached.at < 6 * 3_600_000 && cached.posts.length > 0) return
-      const names = props.chars.map((item) => item.remark || item.name).slice(0, 8).join('、') || '没有旧熟人'
-      runAiJob(jobKey(props.namespace, 'moments'), async () => {
+      setOthers(cached?.posts ?? [])
+      setNote(message || '')
+      setMomentsBusy(isAiJobRunning(jobKey(namespace, 'moments')))
+    })
+    return () => { alive = false }
+  }, [props.namespace, dataRevision])
+
+  // Request once on entry / roster changes, or when the player explicitly retries.
+  useEffect(() => {
+    let alive = true
+    const namespace = props.namespace
+    void storage.getBag<{ at: number; posts: Moment[] }>(namespace, 'circle-feed').then(async (cached) => {
+      if (!alive) return
+      if (retry === 0 && cached && Date.now() - cached.at < 6 * 3_600_000 && cached.posts.length > 0) return
+      const key = jobKey(namespace, 'moments')
+      setMomentsBusy(true)
+      setNote('')
+      runAiJob(key, async () => {
         try {
-          await generateMomentsFeed(props.namespace, names)
+          await storage.setBag(namespace, 'circle-feed_error', '')
+          await generateMomentsFeed(namespace, names)
         } catch (error) {
-          await storage.setBag(props.namespace, 'circle-feed_error', error instanceof Error ? error.message : '别人的动态没加载出来')
+          await storage.setBag(namespace, 'circle-feed_error', error instanceof Error ? error.message : '别人的动态没加载出来')
         }
       })
     })
-    void storage.getBag<string>(props.namespace, 'circle-feed_error').then((message) => {
-      if (alive && message) {
-        setNote(message)
-        void storage.setBag(props.namespace, 'circle-feed_error', '')
-      }
-    })
-    return () => {
-      alive = false
-    }
-  }, [key, props.namespace, props.chars, dataRevision])
+    return () => { alive = false }
+  }, [props.namespace, names, retry])
   const mineAvatar = props.profile.avatar || props.avatar
   const feed = [...props.moments, ...others].sort((a, b) => b.at - a.at)
   const publish = async () => {
@@ -172,13 +186,13 @@ export function MomentsPage(props: {
           </div>
         </div>
         {momentsBusy ? <div className="px-4 pt-3"><PillNote tone="lilac" compact>正在写别人的动态</PillNote></div> : null}
-        {note ? <div className="px-4 pt-3"><PillNote tone="butter" compact>{note}</PillNote></div> : null}
+        {note ? <div className="px-4 pt-3"><PillNote tone="butter" compact>{note}</PillNote><button type="button" className="chip mt-2" disabled={momentsBusy} onClick={() => setRetry((value) => value + 1)}>重新加载</button></div> : null}
         <div className="mt-3 divide-y divide-black/5">
           {feed.map((moment) => (
             <article key={moment.id} className="flex gap-3 px-4 py-3">
               <Face value={moment.mine ? (mineAvatar.startsWith('data:') ? mineAvatar : initialOf(moment.author)) : initialOf(moment.author)} className="h-10 w-10 shrink-0 overflow-hidden rounded-lg text-sm" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm" style={{ color: '#3d6b8a' }}>{moment.author}</p>
+                <p className="text-sm" style={{ color: 'var(--m-detail-ink, #3d6b8a)' }}>{moment.author}</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{moment.text}</p>
                 {moment.image ? <img src={moment.image} alt="" className="mt-2 max-h-48 rounded-xl object-cover" /> : null}
                 <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{when(moment.at)}</p>

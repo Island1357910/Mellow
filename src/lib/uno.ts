@@ -7,6 +7,7 @@ export interface UnoCard {
 }
 
 export interface UnoMatch {
+  drawnCardId?: number
   draw: UnoCard[]
   discard: UnoCard[]
   hands: UnoCard[][]
@@ -55,7 +56,7 @@ export function freshMatch(names: string[]): UnoMatch {
   const cards = shuffle(deck)
   const hands = names.map(() => cards.splice(0, 7))
   let top = cards.pop()
-  while (top && !top.color) {
+  while (top && (!top.color || !/^\d$/.test(top.rank))) {
     cards.unshift(top)
     top = cards.pop()
   }
@@ -82,6 +83,14 @@ export function canPlay(card: UnoCard, top: UnoCard | null, wild: UnoColor | nul
   if (card.rank === top.rank) return true
   if (card.color && card.color === top.color) return true
   return Boolean(card.color && top.color === null && card.color === wild)
+}
+
+export function canPlayFromHand(match: UnoMatch, card: UnoCard): boolean {
+  if (match.drawnCardId !== undefined && card.id !== match.drawnCardId) return false
+  if (!canPlay(card, topCard(match), match.wild)) return false
+  if (card.rank !== 'wild4') return true
+  const color = topCard(match)?.color ?? match.wild
+  return !match.hands[match.turn]?.some(c => c.color !== null && c.color === color)
 }
 
 function pull(match: UnoMatch, count: number): { draw: UnoCard[]; discard: UnoCard[]; cards: UnoCard[] } {
@@ -111,8 +120,7 @@ export function playCard(match: UnoMatch, handIndex: number, cardIndex: number, 
   if (match.winner !== null || match.turn !== handIndex) return null
   const hand = match.hands[handIndex]
   const card = hand?.[cardIndex]
-  const top = topCard(match)
-  if (!hand || !card || !canPlay(card, top, match.wild)) return null
+  if (!hand || !card || !canPlayFromHand(match, card)) return null
   if ((card.rank === 'wild' || card.rank === 'wild4') && !wild) return null
   const hands = match.hands.map((row) => row.slice())
   hands[handIndex] = hand.filter((_, index) => index !== cardIndex)
@@ -129,10 +137,11 @@ export function playCard(match: UnoMatch, handIndex: number, cardIndex: number, 
     note = '下一位被跳过'
   } else if (card.rank === 'draw2' || card.rank === 'wild4') {
     const victim = step(handIndex, dir, hands.length, 1)
-    const pulled = pull(match, card.rank === 'wild4' ? 4 : 2)
+    const pulled = pull({ ...match, discard: drawn.discard }, card.rank === 'wild4' ? 4 : 2)
     const victimHand = hands[victim]
     if (victimHand) hands[victim] = [...victimHand, ...pulled.cards]
     drawn.draw = pulled.draw
+    drawn.discard = pulled.discard
     skips = 2
     note = card.rank === 'wild4' ? '下一位摸四张' : '下一位摸两张'
   }
@@ -140,6 +149,7 @@ export function playCard(match: UnoMatch, handIndex: number, cardIndex: number, 
   const turn = winner === null ? step(handIndex, dir, hands.length, skips) : handIndex
   return {
     ...match,
+    drawnCardId: undefined,
     draw: drawn.draw,
     discard: drawn.discard,
     hands,
@@ -153,6 +163,7 @@ export function playCard(match: UnoMatch, handIndex: number, cardIndex: number, 
 
 export function drawForTurn(match: UnoMatch): UnoMatch {
   if (match.winner !== null) return match
+  if (match.drawnCardId !== undefined) return passAfterDraw(match)
   const pulled = pull(match, 1)
   const hands = match.hands.map((row) => row.slice())
   const hand = hands[match.turn]
@@ -164,20 +175,25 @@ export function drawForTurn(match: UnoMatch): UnoMatch {
     draw: pulled.draw,
     discard: pulled.discard,
     hands,
+    drawnCardId: playable ? card?.id : undefined,
     turn: playable ? match.turn : step(match.turn, match.dir, hands.length, 1),
     note: playable ? '摸到一张能出的' : '摸了一张，过',
   }
 }
 
+export function passAfterDraw(match: UnoMatch): UnoMatch {
+  if (match.winner !== null || match.drawnCardId === undefined) return match
+  return { ...match, drawnCardId: undefined, turn: step(match.turn, match.dir, match.hands.length, 1), note: '保留摸到的牌，过' }
+}
+
 export function aiChoice(match: UnoMatch): { index: number; color: UnoColor } | null {
   const hand = match.hands[match.turn]
-  const top = topCard(match)
   if (!hand) return null
   const colors: UnoColor[] = ['red', 'yellow', 'green', 'blue']
   const tally = Object.fromEntries(colors.map((color) => [color, hand.filter((card) => card.color === color).length])) as Record<UnoColor, number>
   const favorite = colors.slice().sort((a, b) => tally[b] - tally[a])[0] ?? 'red'
-  const index = hand.findIndex((card) => canPlay(card, top, match.wild) && card.rank !== 'wild' && card.rank !== 'wild4')
-  const wildIndex = hand.findIndex((card) => card.rank === 'wild' || card.rank === 'wild4')
+  const index = hand.findIndex((card) => canPlayFromHand(match, card) && card.rank !== 'wild' && card.rank !== 'wild4')
+  const wildIndex = hand.findIndex((card) => (card.rank === 'wild' || card.rank === 'wild4') && canPlayFromHand(match, card))
   const chosen = index >= 0 ? index : wildIndex
   if (chosen < 0) return null
   return { index: chosen, color: favorite }

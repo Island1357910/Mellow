@@ -1,3 +1,4 @@
+import { AppleAtmosphere } from './AppleMotifs.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -97,19 +98,21 @@ export function Wallpaper() {
   return (
     <>
       <div
-        className="pointer-events-none absolute inset-0"
+        className="wallpaper-base pointer-events-none absolute inset-0"
         style={{
           background:
             'linear-gradient(180deg, color-mix(in srgb, var(--m-primary) 38%, var(--m-background)) 0%, var(--m-background) 44%, color-mix(in srgb, var(--m-secondary) 32%, var(--m-background)) 100%)',
         }}
       />
       <div
-        className="pointer-events-none absolute inset-0 opacity-70"
+        className="wallpaper-wash pointer-events-none absolute inset-0 opacity-70"
         style={{
           background:
             'radial-gradient(420px 280px at 12% 8%, color-mix(in srgb, var(--m-primary) 42%, transparent), transparent 70%), radial-gradient(380px 260px at 88% 18%, color-mix(in srgb, var(--m-secondary) 40%, transparent), transparent 68%)',
         }}
       />
+      <div className="halloween-wallpaper-pattern pointer-events-none absolute inset-0" aria-hidden="true" />
+      <AppleAtmosphere />
     </>
   )
 }

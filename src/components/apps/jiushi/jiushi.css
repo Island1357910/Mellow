@@ -440,3 +440,37 @@
   background: linear-gradient(120deg, #9b3b3b, #6b5344) !important;
   box-shadow: 0 8px 18px rgba(155, 59, 59, 0.25) !important;
 }
+
+.jiushi-phone { --m-primary: #ad7147; --m-secondary: #c9b594; --m-background: #f2e8d5; --m-surface: #fcf5e7; --m-text: #3e3025; --m-text-secondary: #7d6c58; color: var(--js-ink, #3e3025); color-scheme: light; }
+/* 水墨丹青：全屏宣纸，阅读区留白，青绿只用于山水与少量强调。 */
+.jiushi-app-root { padding:0; background:#f5f3eb; }
+.jiushi-phone { --js-paper:#f5f3eb; --js-paper-deep:#e3e8df; --js-silk:#fcfcf5; --js-ink:#253634; --js-ink-soft:#4b605b; --js-ink-muted:#687c73; --js-jade:#3e7065; --js-jade-soft:#3e706514; --js-cinnabar:#a14c41; --js-border:#51736a40; --js-border-light:#51736a26; --js-gold:#718d7b; --js-shadow:0 7px 24px #304b4110; --js-serif:'SimSun','STSong','Songti SC',serif; --js-sans:'Microsoft YaHei','PingFang SC',sans-serif; --js-body:var(--js-sans); --m-primary:#3e7065; --m-secondary:#d3dfce; --m-background:#f5f3eb; --m-surface:#fcfcf5; --m-text:#253634; --m-text-secondary:#4b605b; width:100%; height:100%; border:0; border-radius:0; box-shadow:none; background:var(--js-paper); font-family:var(--js-body); }
+.jiushi-phone[data-reading-font="song"] { --js-body:'SimSun','STSong','Songti SC',serif; }
+.jiushi-phone[data-reading-font="kai"] { --js-body:'KaiTi','STKaiti','KaiTi_GB2312',serif; }
+.jiushi-phone .jiushi-paper { opacity:1; background:url('./ink-landscape-v1.png') center / cover no-repeat; }
+.jiushi-phone .jiushi-frame { display:none; }
+.device .jiushi-phone[data-reading-font] :is(p,span,button,input,textarea,select,label,article) { font-family:var(--js-body) !important; }
+.device .jiushi-phone[data-reading-font] :is(h1,h2,h3,.jiushi-header-title,.jiushi-app-tile-name) { font-family:var(--js-serif) !important; font-weight:500; }
+.jiushi-phone .jiushi-header { padding:3.2rem 1.25rem 1.6rem; }
+.jiushi-phone .jiushi-header-title { font-size:30px; letter-spacing:.18em; }
+.jiushi-phone .jiushi-header-eyebrow { color:#53756a; }
+.jiushi-phone .jiushi-header-sub { font-size:12px; margin-top:12px; }
+.jiushi-phone .jiushi-seal-line { margin-top:14px; color:#53756a; }
+.jiushi-phone .jiushi-screen-head { padding:3rem 20px 20px; }
+.jiushi-phone .jiushi-screen-title h1 { font-size:23px; }
+.jiushi-phone .jiushi-screen-title p { margin-top:7px; font-size:12px; }
+.jiushi-phone .jiushi-back { background:#fafbf3e6; border:1px solid #51736a30; border-radius:12px; }
+.jiushi-phone .jiushi-card,.jiushi-phone .jiushi-toggle { border:1px solid #51736a2b; border-radius:12px; background:#fcfcf4ed; box-shadow:0 5px 18px #304b4109; }
+.jiushi-phone .jiushi-app-grid { gap:14px; }
+.jiushi-phone .jiushi-app-tile { padding:23px 7px 18px; border-radius:12px; background:#fafbf2e8; box-shadow:0 5px 18px #304b410d; }
+.jiushi-phone .jiushi-app-tile-icon { width:42px; height:42px; border-radius:11px; color:#3e7065; border-color:#51736a33; background:#e4ecdf; box-shadow:none; }
+.jiushi-phone .jiushi-app-tile-name { font-size:15px; margin-top:7px; letter-spacing:.09em; }
+.jiushi-phone .jiushi-app-tile-blurb { font-size:10px; line-height:1.6; color:#586f63; }
+.jiushi-phone .jiushi-note { background:#fcfcf4eb; border:1px solid #51736a26; border-radius:12px; color:#4b605b; line-height:1.9; text-align:left; }
+.jiushi-phone .jiushi-btn { border-radius:10px; background:#f7f9f0; border-color:#51736a40; box-shadow:none; padding:11px 16px; font-size:13px; }
+.jiushi-phone .jiushi-btn-primary { background:#3e7065; color:#fffdf1; border-color:#3e7065; box-shadow:0 5px 15px #3e706524; }
+.jiushi-phone :is(input,textarea,select) { background:#fdfdf6f2; border:1px solid #51736a3b; color:#253634; border-radius:10px; font-size:var(--js-reader-size,16px); line-height:1.8; }
+.jiushi-phone :is(input,textarea)::placeholder { color:#7b8a7b; }
+.jiushi-phone .jiushi-field label { font-size:12px; }
+.jiushi-phone .jiushi-footer { background:transparent; border:0; padding:16px 20px 30px; }
+.jiushi-phone .readable { font-size:var(--js-reader-size,16px); line-height:2.1; }

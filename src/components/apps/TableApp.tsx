@@ -5,7 +5,7 @@ import { modePresetId } from '../../lib/defaults.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { aiMove as goAi, emptyGrid, winner, type Grid, type Stone } from '../../lib/gomoku.ts'
 import { aiMove as chessAi, applyMove, legalMoves, PIECE_NAME, setupBoard, winnerOf, type Board } from '../../lib/xiangqi.ts'
-import { aiChoice, canPlay, drawForTurn, freshMatch, playCard, topCard, UNO_COLOR, UNO_LABEL, type UnoColor, type UnoMatch } from '../../lib/uno.ts'
+import { aiChoice, canPlayFromHand, drawForTurn, freshMatch, playCard, topCard, UNO_COLOR, UNO_LABEL, type UnoCard, type UnoColor, type UnoMatch } from '../../lib/uno.ts'
 import { nextSeat, pickAt, shuffle } from '../../lib/tableTurn.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
@@ -73,7 +73,7 @@ function cast(player: string, chars: Character[], chosen: string[], min: number,
 
 function runAi(match: UnoMatch): UnoMatch {
   let next = match
-  for (let guard = 0; guard < 16 && next.winner === null && next.turn !== 0; guard += 1) {
+  for (let guard = 0; guard < 1 && next.winner === null && next.turn !== 0; guard += 1) {
     const choice = aiChoice(next)
     if (!choice) {
       next = drawForTurn(next)
@@ -87,9 +87,9 @@ function runAi(match: UnoMatch): UnoMatch {
 function Soup(props: { names: string[]; namespace: string; onBack: () => void }) {
   const dataRevision = useMellow((state) => state.dataRevision)
   const hostIndex = 1
-  const sessionId = props.names.join('-')
-  const bagKey = `table_soup_${sessionId}`
   const [soup] = useState(() => SOUPS[Math.floor(Math.random() * SOUPS.length)] ?? SOUPS[0])
+  const sessionId = props.names.join('-')
+  const bagKey = `table_soup_${sessionId}_${soup?.surface ?? ''}`
   const [turns, setTurns] = useState<Array<{ who: string; q: string; a: string }>>([])
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState(false)
@@ -101,7 +101,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
   }, [props.namespace, bagKey, dataRevision])
   if (!soup) return null
   const host = props.names[hostIndex] ?? '主持人'
-  const busy = isAiJobRunning(jobKey(props.namespace, 'table-soup', sessionId))
+  const busy = isAiJobRunning(jobKey(props.namespace, 'table-soup', `${sessionId}-${turns.length-1}`))
   const ask = () => {
     const q = draft.trim()
     if (!q || busy) return
@@ -112,7 +112,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
     setTurns(nextTurns)
     void storage.setBag(props.namespace, bagKey, { turns: nextTurns })
     setDraft('')
-    if (props.names.length > 2) setAsker((value) => nextSeat(value, props.names.length))
+    if (props.names.length > 2) setAsker(value => { const seat = nextSeat(value, props.names.length); return seat === hostIndex ? nextSeat(seat, props.names.length) : seat })
     const surface = soup.surface
     const truth = soup.truth
     runAiJob(jobKey(props.namespace, 'table-soup', `${sessionId}-${turnIndex}`), async () => {
@@ -130,7 +130,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
   }
   return (
     <Screen title="海龟汤" subtitle={`${host} 主持 · 你在提问`} onBack={props.onBack}>
-      <RoundTable names={props.names} turn={asker} host={hostIndex} caption={`${props.names[asker] ?? '我'} 提问中`} />
+      <RoundTable variant="mystery" names={props.names} turn={asker} host={hostIndex} caption={`${props.names[asker] ?? '我'} 提问中`} />
       <article className="menu-card text-sm leading-6">{soup.surface}</article>
       <div className="mt-3 space-y-2">
         {turns.map((item, index) => (
@@ -398,7 +398,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
 
   return (
     <Screen title="狼人杀" subtitle={phase === 'end' ? '结束' : phase === 'night' ? `第 ${day} 夜 · ${nightStep === 'wolf' ? '狼人' : nightStep === 'seer' ? '预言家' : '女巫'}` : `第 ${day} 天 · 投票`} onBack={props.onBack}>
-      <RoundTable names={props.names} turn={turnSeat} out={outFlags} badges={badges} caption={log} />
+      <RoundTable variant="night" names={props.names} turn={turnSeat} out={outFlags} badges={badges} caption={log} />
       <article className="menu-card">
         <p className="text-sm">你是 {me.role}</p>
         {seen ? <p className="mt-1 text-xs">{seen}</p> : null}
@@ -483,11 +483,11 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
   }
   return (
     <Screen title="五子棋" subtitle={over || (turn === 0 ? '轮到你落子' : `${rival} 在想…`)} onBack={props.onBack}>
-      <RoundTable names={props.names.slice(0, 2)} turn={turn} badges={['粉子', '墨子']} caption="黑白轮流，先连五子者胜" />
-      <div className="grid grid-cols-9 gap-1 rounded-[24px] bg-white/80 p-2">
+      <RoundTable compact variant="board" names={props.names.slice(0, 2)} turn={turn} badges={['黑子', '白子']} caption="黑白轮流，先连五子者胜" />
+      <div className="strategy-board gomoku-board" data-holiday-preserve>
         {grid.map((line, row) => line.map((stone, col) => (
-          <button key={`${row}-${col}`} type="button" aria-label={`第${row + 1}行第${col + 1}列`} className="grid aspect-square place-items-center rounded-lg bg-[#f8efe4]" onClick={() => play(row, col)}>
-            {stone ? <span className="h-3.5 w-3.5 rounded-full" style={{ background: stone === 1 ? '#F3A8BA' : '#4a4458' }} /> : null}
+          <button key={`${row}-${col}`} type="button" aria-label={`第${row + 1}行第${col + 1}列`} className="strategy-cell" onClick={() => play(row, col)}>
+            {stone ? <span className={stone===1?'go-stone is-black':'go-stone is-white'} /> : null}
           </button>
         )))}
       </div>
@@ -533,14 +533,14 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
   }
   return (
     <Screen title="象棋" subtitle={over || (turn === 0 ? '轮到你走棋' : `${rival} 在想…`)} onBack={props.onBack}>
-      <RoundTable names={props.names.slice(0, 2)} turn={turn} badges={['红方', '黑方']} caption="红先黑后，将死对方即胜" />
-      <div className="grid grid-cols-9 gap-0.5 rounded-[20px] bg-[#f6e7c1] p-1.5">
+      <RoundTable compact variant="board" names={props.names.slice(0, 2)} turn={turn} badges={['红方', '黑方']} caption="红先黑后，将死对方即胜" />
+      <div className="strategy-board xiangqi-board" data-holiday-preserve>
         {board.map((line, row) => line.map((piece, col) => {
           const on = targets.some(([tr, tc]) => tr === row && tc === col)
           const selected = pick?.[0] === row && pick?.[1] === col
           return (
-            <button key={`${row}-${col}`} type="button" aria-label={piece ? PIECE_NAME[piece] ?? '棋子' : '空位'} className="grid h-7 place-items-center rounded-full text-[11px] font-medium" style={{ background: selected ? '#F3A8BA' : on ? '#fff' : 'transparent', color: piece && piece === piece.toUpperCase() ? '#c45b6a' : '#2c2a3a' }} onClick={() => click(row, col)}>
-              {piece ? PIECE_NAME[piece] : ''}
+            <button key={`${row}-${col}`} type="button" aria-label={piece ? PIECE_NAME[piece] ?? '棋子' : '空位'} className="strategy-cell" data-selected={selected} data-target={on} data-row={row} onClick={() => click(row, col)}>
+              {piece ? <span className={piece===piece.toUpperCase()?'chess-piece is-red':'chess-piece is-black'}>{PIECE_NAME[piece]}</span> : on ? <span className="chess-target"/> : null}
             </button>
           )
         }))}
@@ -552,6 +552,11 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
 function Uno(props: { names: string[]; onBack: () => void }) {
   const [match, setMatch] = useState<UnoMatch>(() => freshMatch(props.names))
   const [wildAt, setWildAt] = useState<number | null>(null)
+  useEffect(() => {
+    if (match.winner !== null || match.turn === 0) return
+    const timer = window.setTimeout(() => setMatch(current => runAi(current)), 450)
+    return () => window.clearTimeout(timer)
+  }, [match])
   const top = topCard(match)
   const hand = match.hands[0] ?? []
   const play = (index: number, color: UnoColor | null) => {
@@ -564,47 +569,37 @@ function Uno(props: { names: string[]; onBack: () => void }) {
     const next = playCard(match, 0, index, color)
     if (!next) return
     setWildAt(null)
-    setMatch(runAi(next))
+    setMatch(next)
   }
   const draw = () => {
     const next = drawForTurn(match)
-    setMatch(next.turn === 0 ? next : runAi(next))
+    setMatch(next)
   }
-  const stuck = hand.every((card) => !canPlay(card, top, match.wild))
-  const badges = match.names.map((_, index) => `${match.hands[index]?.length ?? 0} 张`)
-  return (
-    <Screen title="UNO" subtitle={match.winner === null ? `${match.names[match.turn] ?? ''} 的回合` : `${match.names[match.winner] ?? ''} 赢了`} onBack={props.onBack}>
-      <RoundTable
-        names={props.names}
-        turn={match.winner === null ? match.turn : null}
-        badges={badges}
-        center={<span className="grid h-16 w-11 place-items-center rounded-xl text-sm font-semibold" style={{ background: top?.color ? UNO_COLOR[top.color] : '#fff' }}>{top ? UNO_LABEL[top.rank] ?? top.rank : ''}</span>}
-        caption={match.wild ? `当前颜色：${match.wild === 'red' ? '粉' : match.wild === 'yellow' ? '黄' : match.wild === 'green' ? '绿' : '蓝'}` : match.note}
-      />
-      <div className="mt-1 flex flex-wrap gap-2">
-        {hand.map((card, index) => (
-          <button key={card.id} type="button" disabled={!canPlay(card, top, match.wild) || match.turn !== 0} className="grid h-16 w-11 place-items-center rounded-xl text-sm font-semibold disabled:opacity-40" style={{ background: card.color ? UNO_COLOR[card.color] : '#fff' }} onClick={() => play(index, null)}>
-            {UNO_LABEL[card.rank] ?? card.rank}
-          </button>
-        ))}
-      </div>
-      {wildAt !== null ? (
-        <div className="mt-3 flex gap-1.5">
-          {(Object.keys(UNO_COLOR) as UnoColor[]).map((color) => (
-            <button key={color} type="button" className="h-8 w-8 rounded-full" style={{ background: UNO_COLOR[color] }} onClick={() => play(wildAt, color)} />
-          ))}
-        </div>
-      ) : null}
-      {stuck && match.turn === 0 && match.winner === null ? <button type="button" className="chip mt-3" onClick={draw}>摸一张</button> : null}
-    </Screen>
-  )
+  const stuck = hand.every((card) => !canPlayFromHand(match, card))
+  const names: Record<UnoColor,string> = {red:'红',yellow:'黄',green:'绿',blue:'蓝'}
+  const currentColor = match.wild ?? top?.color
+  const face = (card: UnoCard) => <><span className="uno-corner">{UNO_LABEL[card.rank] ?? card.rank}</span><span className="uno-face-value">{UNO_LABEL[card.rank] ?? card.rank}</span><span className="uno-color-name">{card.color ? names[card.color] : '万能'}</span></>
+  return <Screen title="UNO" subtitle={match.winner === null ? (match.turn===0?'轮到你出牌':(match.names[match.turn]??'')+' 正在思考') : (match.names[match.winner]??'')+' 获胜'} onBack={props.onBack}>
+    <section className="uno-arena" data-holiday-preserve>
+      <div className="uno-opponents">{match.names.slice(1).map((name,i)=><div key={i} className={match.turn===i+1?'uno-opponent is-turn':'uno-opponent'}><span className="uno-avatar">{name.slice(0,1)}</span><strong>{name}</strong><span>{match.hands[i+1]?.length??0} 张{match.hands[i+1]?.length===1?' · UNO!':''}</span><div className="uno-mini-hand">{Array.from({length:Math.min(5,match.hands[i+1]?.length??0)},(_,n)=><i key={n}/>)}</div></div>)}</div>
+      <div className="uno-play-area"><button type="button" className="uno-draw-pile" disabled={match.turn!==0||match.winner!==null||(!stuck&&match.drawnCardId===undefined)} onClick={draw} aria-label={match.drawnCardId!==undefined?'保留此牌并过牌':'从牌堆摸一张'}><span>UNO</span><small>{match.drawnCardId!==undefined?'过牌':'摸牌堆'}</small></button><div className="uno-discard">{top&&<span className="uno-playing-card" data-color={top.color??'wild'}>{face(top)}</span>}<span className="uno-pile-caption">弃牌堆</span></div></div>
+      <div className="uno-round-info"><span className="uno-current-color" data-color={currentColor??'wild'}>{currentColor?names[currentColor]+'色':'万能牌'}</span><span>{match.dir===1?'顺时针':'逆时针'} · {match.winner!==null?'本局结束':match.turn===0?'你的回合':'等待对方'}</span></div>
+      <p className="uno-note" role="status">{match.note}</p>
+    </section>
+    <div className="my-4 flex items-center justify-between"><h3 className="text-sm font-semibold">我的手牌 · {hand.length} 张</h3><span className="text-xs" style={{color:'var(--m-text-secondary)'}}>亮边牌可出</span></div>
+    <div className="uno-hand" data-holiday-preserve>{hand.map((card,index)=>{const playable=canPlayFromHand(match,card)&&match.turn===0&&match.winner===null;return <button key={card.id} type="button" className={playable?'uno-playing-card is-playable':'uno-playing-card'} data-color={card.color??'wild'} disabled={!playable} aria-label={(card.color?names[card.color]+'色':'万能')+' '+(UNO_LABEL[card.rank]??card.rank)+(playable?'，可出牌':'，不可出牌')} onClick={()=>play(index,null)}>{face(card)}</button>})}</div>
+    {wildAt!==null&&<section className="menu-card mt-4"><h3 className="mb-3 text-sm font-semibold">为万能牌选择颜色</h3><div className="uno-color-options" data-holiday-preserve>{(Object.keys(UNO_COLOR) as UnoColor[]).map(color=><button key={color} className="uno-current-color" data-color={color} onClick={()=>play(wildAt,color)}>{names[color]}色</button>)}</div><button className="chip mt-3" onClick={()=>setWildAt(null)}>取消</button></section>}
+    {(stuck||match.drawnCardId!==undefined)&&match.turn===0&&match.winner===null&&<button className="chip chip-solid mt-4" onClick={draw}>{match.drawnCardId!==undefined?'保留此牌并过牌':'摸一张'}</button>}
+    {match.winner!==null&&<button className="chip chip-solid mt-4" onClick={()=>{setWildAt(null);setMatch(freshMatch(props.names))}}>再来一局</button>}
+    <details className="menu-card mt-4 text-xs leading-6"><summary>玩法说明</summary><p>同色、同数字或同功能可以出牌。摸牌后只能打出本次摸到的牌，或选择过牌。+4 仅在没有当前颜色时可出；不叠加罚牌。牌面同时显示颜色名称。</p></details>
+  </Screen>
 }
 
 export function TableApp(props: { onBack: () => void }) {
   const phone = usePhone()
   const presets = useMellow((state) => state.presets)
   const settings = useMellow((state) => state.settings)
-  const voice = presets.find((item) => item.id === modePresetId(settings, 'table'))?.data.prompts.find((item) => item.enabled)?.content ?? ''
+  const voice = presets.find((item) => item.id === modePresetId(settings, 'table'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''
   useEffect(() => {
     hostVoice = voice
   }, [voice])
@@ -616,7 +611,7 @@ export function TableApp(props: { onBack: () => void }) {
   useEffect(() => {
     if (!phone) return
     let stop = false
-    void storage.listCharacters(phone.namespace).then((rows) => {
+    void storage.listModernCharacters(phone.namespace).then((rows) => {
       if (!stop) setChars(rows)
     })
     return () => {
@@ -688,5 +683,5 @@ export function TableApp(props: { onBack: () => void }) {
   if (playing && game === 'uno') view = <Uno names={names} onBack={leave} />
   if (playing && game === 'gomoku') view = <Gomoku names={names} onBack={leave} />
   if (playing && game === 'xiangqi') view = <Xiangqi names={names} onBack={leave} />
-  return <div className="sms-shell h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}</div>
+  return <div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}</div>
 }

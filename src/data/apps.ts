@@ -12,6 +12,8 @@ export interface PhoneApp {
 }
 
 export const PHONE_APPS: PhoneApp[] = [
+  { id: 'themes', name: '主题', blurb: '装扮衣橱', tint: '#B9A3E3', dock: false, fixed: true, home: true, late: true },
+  { id: 'connections', name: '外部连接', blurb: 'MCP与网页', tint: '#8EBBD2', dock: false, fixed: false, home: true, late: true },
   { id: 'messages', name: '短信', blurb: '消息', tint: '#F3A8BA', dock: true, fixed: true, home: true },
   { id: 'offline', name: '线下', blurb: '面对面', tint: '#9ED9C4', dock: true, fixed: true, home: true },
   { id: 'side', name: '番外', blurb: '另一条线', tint: '#C9B6E8', dock: false, fixed: true, home: true },

@@ -18,6 +18,7 @@ function theme(id: string, name: string, colors: ThemeColors): Theme {
 
 /** 饱和度压在马卡龙区间，不使用纯色荧光。 */
 export const BUNDLED_THEMES: Theme[] = [
+  theme('theme_halloween', '不寂寞万圣夜', { primary: '#E69A46', secondary: '#9F85D8', background: '#191524', surface: '#2B2439', text: '#FFF0D9', textSecondary: '#C8BBD7', accent: '#B8D681', success: '#9CBF89', warning: '#E7B95F', error: '#E494A5' }),
   theme('theme_macaron', '马卡龙', {
     primary: '#FFB5C5',
     secondary: '#B5E8D5',
@@ -78,13 +79,20 @@ export function themeFromUnknown(raw: unknown): Theme | null {
   const colors = {} as ThemeColors
   for (const key of COLOR_KEYS) {
     const value = raw.colors[key]
-    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) return null
+    if (typeof value !== 'string' || !/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) return null
     colors[key] = value
   }
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : '导入的主题'
   const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : uid('theme')
+  const logo = isRecord(raw.logo) ? raw.logo : null
   return {
     ...theme(id, name, colors),
+    customCss: typeof raw.customCss === 'string' ? raw.customCss : '',
+    wallpaper: typeof raw.wallpaper === 'string' ? raw.wallpaper : '',
+    fontData: typeof raw.fontData === 'string' ? raw.fontData : '',
+    ...(logo && ['primary','secondary','accent'].every(k => typeof logo[k] === 'string' && /^#[0-9a-f]{6}$/i.test(String(logo[k]))) ? { logo: logo as unknown as Theme['logo'] } : {}),
+    customPalette: raw.customPalette === true,
+    effect: raw.effect === 'stars' || raw.effect === 'mist' ? raw.effect : 'none',
     ...(isRecord(raw.radius) ? { radius: { ...radius, ...stringFields(raw.radius, radius) } } : {}),
     ...(isRecord(raw.shadow) ? { shadow: { ...shadow, ...stringFields(raw.shadow, shadow) } } : {}),
     ...(isRecord(raw.font) ? { font: { ...font, ...stringFields(raw.font, font) } } : {}),

@@ -1,3 +1,4 @@
+import { CharacterPhone } from './CharacterPhone.tsx'
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
 
 import { useEffect, useState, type CSSProperties } from 'react'
@@ -392,7 +393,7 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
     let stop = false
 
-    void storage.listCharacters(phone.namespace).then((rows) => {
+    void storage.listModernCharacters(phone.namespace).then((rows) => {
 
       if (!stop) setChars(rows)
 
@@ -424,7 +425,7 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
       const [people, allChats, stored, momentRows, feed] = await Promise.all([
 
-        storage.listCharacters(phone.namespace),
+        storage.listModernCharacters(phone.namespace),
 
         storage.listChats(phone.namespace),
 
@@ -835,7 +836,7 @@ export function HuizhenApp(props: { onBack: () => void }) {
 
             {reason ? <div className="mt-3"><PillNote tone="lilac" compact>{reason}</PillNote></div> : null}
 
-            <div className="hz-divider"><span>TA 愿意给你看</span></div>
+            <CharacterPhone key={bound} namespace={phone.namespace} charId={bound} name={person.name}>
 
             <div className="pick-card-grid">
 
@@ -864,6 +865,8 @@ export function HuizhenApp(props: { onBack: () => void }) {
               })}
 
             </div>
+
+            </CharacterPhone>
 
             <button type="button" className="chip chip-solid mt-3 w-full" disabled={assessBusy} onClick={decide}>{assessBusy ? 'TA 在想…' : '让 TA 重新决定'}</button>
 

@@ -303,6 +303,13 @@ export interface ThemeColors {
 }
 
 export interface Theme {
+  logo?: { primary: string; secondary: string; accent: string }
+  customCss?: string
+  wallpaper?: string
+  fontData?: string
+  customPalette?: boolean
+  effect?: 'none' | 'stars' | 'mist'
+
   id: string
   name: string
   colors: ThemeColors

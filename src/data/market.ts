@@ -1,6 +1,7 @@
 import type { MarketListing } from '../types/index.ts'
 
 export const MARKET_LISTINGS: MarketListing[] = [
+  { id: 'connections', name: '外部连接', category: 'explore', description: '连接自己的 MCP 服务，发现工具、保存快捷调用，将音乐服务返回的音频歌单导入播放器。也可打开已登录的网易云网页。', status: 'ready' },
   { id: 'diary', name: '日记', category: 'life', description: '只写给自己的一页。角色不会自动翻开，除非你愿意提起。', status: 'ready' },
   { id: 'star', name: '星博', category: 'social', description: '很多人一起发生活。可以看详情、评论、点赞，自己也可以写。', status: 'ready' },
   { id: 'duotao', name: '多淘', category: 'life', description: '加进购物车再一起结账。可以买给自己，也可以买给某个人。大概两三天到。', status: 'ready' },
