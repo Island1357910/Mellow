@@ -1,5 +1,6 @@
 import { CONNECTIONS_TABS, useConnectionsTab } from '../../lib/connectionsTabs.ts'
 import { McpArgsForm } from './McpArgsForm.tsx'
+import { McpConnectionForm } from './McpConnectionForm.tsx'
 import { NeteaseAccountPanel } from './NeteaseAccountPanel.tsx'
 import { parseMcpConfig, toolArgs, adaptMusic } from '../../lib/mcpConfig.ts'
 import { TogetherPanel } from './TogetherPanel.tsx'
@@ -27,16 +28,17 @@ export function ConnectionsApp({ onBack }: { onBack: () => void }) {
   const [bound,setBound]=useState(false)
   const [result,setResult]=useState<unknown>(null)
   const [busy,setBusy]=useState(false)
+  const [isConnected,setIsConnected]=useState(false)
   const [note,setNote]=useState('')
   const [shortcuts,setShortcuts]=useState<Shortcut[]>([])
   const client=useRef<McpClient|null>(null)
   const connected=useRef('')
   const connectedTransport=useRef<McpTransport>('http')
-  const resetConnection=()=>{if(phone)disconnectTogetherSource(phone.namespace);client.current?.close();client.current=null;connected.current='';setTools([]);bindTogetherSource(null);setBound(false);setResult(null)}
+  const resetConnection=()=>{if(phone)disconnectTogetherSource(phone.namespace);client.current?.close();client.current=null;connected.current='';setIsConnected(false);setTools([]);bindTogetherSource(null);setBound(false);setResult(null)}
   useEffect(()=>{if(!phone)return;let alive=true;void storage.getBag<Shortcut[]>(phone.namespace,'mcp_shortcuts').then(rows=>{if(alive)setShortcuts(rows??[])});return()=>{alive=false}},[phone])
   useEffect(()=>()=>{if(!phone||!hasTogetherSource(phone.namespace))client.current?.close()},[phone?.namespace])
-  const act=async(task:()=>Promise<void>)=>{if(busy)return;setBusy(true);setNote('');try{await task()}catch(e){setNote(e instanceof Error?e.message:'连接失败')}finally{setBusy(false)}}
-  const connect=async()=>{resetConnection();const next=new McpClient(endpoint,token,transport);const list=await next.connect();client.current=next;connected.current=endpoint;connectedTransport.current=transport;setTools(list);setTool(list[0]?.name??'');setNote(`已连接，${list.length} 个工具`)}
+  const act=async(task:()=>Promise<void>)=>{if(busy)return;setBusy(true);setNote('');try{await task()}catch(e){const message=e instanceof Error?e.message:'连接失败';setNote(/failed to fetch|load failed|networkerror/i.test(message)?'未能访问 MCP 服务：请检查服务地址、当前网络和服务端跨域设置；浏览器无法区分这些原因。可展开连接帮助查看教程。':message)}finally{setBusy(false)}}
+  const connect=async()=>{resetConnection();const next=new McpClient(endpoint,token,transport);const list=await next.connect();client.current=next;connected.current=endpoint;connectedTransport.current=transport;setIsConnected(true);setTools(list);setTool(list[0]?.name??'');setNote(`已连接，${list.length} 个工具`)}
   const call=async(name=tool,raw=args)=>{if(!client.current||connected.current!==endpoint)throw new Error('先连接当前地址');const input=toolArgs(raw,tools.find(t=>t.name===name));setResult(await client.current.call(name,input));setNote('工具已返回结果')}
   const importTracks=async()=>{
     if(!phone)return
@@ -57,12 +59,8 @@ export function ConnectionsApp({ onBack }: { onBack: () => void }) {
     <section role="tabpanel" id="connections-panel-together" aria-labelledby="connections-tab-together" hidden={tab!=='together'}>{phone&&<TogetherPanel key={phone.namespace} namespace={phone.namespace}/>}</section>
     <section role="tabpanel" id="connections-panel-links" aria-labelledby="connections-tab-links" hidden={tab!=='links'}>{phone&&<SharedLinks key={'links_'+phone.namespace} namespace={phone.namespace}/>}</section>
     <section role="tabpanel" id="connections-panel-mcp" aria-labelledby="connections-tab-mcp" hidden={tab!=='mcp'}>
-    <section className="menu-card mt-3 space-y-3"><h3 className="font-semibold">连接 MCP 服务</h3><p className="text-xs leading-5">支持 Streamable HTTP 和旧版 SSE。可直接粘贴服务商给的 MCP 配置，或手动填地址。服务需允许网页 / APK 来源跨域访问；令牌仅本次页面驻留内存。</p>
-    <details className="text-xs leading-6"><summary>粘贴 MCP 配置 / URL</summary><textarea aria-label="导入 MCP 配置" className="soft-input font-mono" rows={4} value={configText} onChange={e=>setConfigText(e.target.value)} placeholder={'粘贴 mcpServers JSON 或 https://…/sse'}/><button className="chip mt-2" disabled={busy} onClick={()=>void act(async()=>{const config=parseMcpConfig(configText);resetConnection();setEndpoint(config.endpoint);setTransport(config.transport);setToken(config.token);setConfigText('');setNote('已导入配置，点击连接并发现工具')})}>填入连接设置</button><p>GitHub 项目网址不是服务地址。若配置只有 command / args，需要先部署成远程服务。</p></details>
-    <select aria-label="MCP 连接类型" className="soft-select w-full" value={transport} disabled={busy} onChange={e=>{resetConnection();setTransport(e.target.value as McpTransport)}}><option value="http">Streamable HTTP（通常为 /mcp）</option><option value="sse">旧版 HTTP + SSE（通常为 /sse）</option></select>
-    <input aria-label="MCP 服务地址" className="soft-input" value={endpoint} disabled={busy} onChange={e=>{resetConnection();setEndpoint(e.target.value)}} placeholder="https://你的服务/mcp"/>
-    <input aria-label="MCP 令牌" type="password" className="soft-input" value={token} disabled={busy} onChange={e=>{resetConnection();setToken(e.target.value)}} placeholder="Bearer Token（可选）"/>
-    <button disabled={busy} className="chip chip-solid" onClick={()=>void act(connect)}>{busy?'处理中…':'连接并发现工具'}</button>
+    <McpConnectionForm endpoint={endpoint} token={token} transport={transport} configText={configText} busy={busy} connected={isConnected} onEndpoint={value=>{resetConnection();setEndpoint(value)}} onToken={value=>{resetConnection();setToken(value)}} onTransport={value=>{resetConnection();setTransport(value)}} onConfig={setConfigText} onConnect={()=>void act(connect)} onDisconnect={()=>{resetConnection();setNote('已断开连接并停止自动读取')}} onImport={()=>void act(async()=>{const config=parseMcpConfig(configText);resetConnection();setEndpoint(config.endpoint);setTransport(config.transport);setToken(config.token);setConfigText('');setNote('已导入配置，点击连接并发现工具')})}/>
+    <section className={tools.length?'menu-card mt-3 space-y-3':'hidden'}><h3 className="font-semibold">选择并使用工具</h3>
     {tools.length>0&&<><select aria-label="MCP 工具" className="soft-select w-full" value={tool} disabled={busy} onChange={e=>{setTool(e.target.value);setArgs('{}');setResult(null)}}>{tools.map(t=><option key={t.name}>{t.name}</option>)}</select><p className="text-xs">{tools.find(t=>t.name===tool)?.description}</p><details className="text-xs"><summary>查看参数格式</summary><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(tools.find(t=>t.name===tool)?.inputSchema,null,2)}</pre></details><McpArgsForm key={tool} tool={tools.find(t=>t.name===tool)} value={args} onChange={setArgs}/><p className="text-xs">高级参数 JSON（与上方表单同步）</p><textarea aria-label="工具参数 JSON" className="soft-input font-mono text-xs" rows={5} value={args} onChange={e=>setArgs(e.target.value)}/><div className="flex flex-wrap gap-2"><button disabled={busy} className="chip chip-solid" onClick={()=>void act(()=>call())}>执行工具</button><button className="chip" onClick={()=>void act(async()=>{if(!phone)return;JSON.parse(args);const next=[...shortcuts,{name:tool,tool,args,endpoint,transport}];await storage.setBag(phone.namespace,'mcp_shortcuts',next);setShortcuts(next);setNote('已保存快捷操作，参数不应含密钥')})}>保存快捷操作</button></div></>}
     </section>
     {shortcuts.length>0&&<section className="menu-card mt-3"><h3>快捷操作</h3>{shortcuts.map((s,i)=><div key={i} className="mt-2 flex gap-2"><button className="chip" disabled={busy||s.endpoint!==connected.current||(s.transport??'http')!==connectedTransport.current} onClick={()=>void act(()=>call(s.tool,s.args))}>{s.name}</button><button className="chip" onClick={()=>{const next=shortcuts.filter((_,n)=>n!==i);setShortcuts(next);if(phone)void storage.setBag(phone.namespace,'mcp_shortcuts',next)}}>删除</button></div>)}<p className="mt-2 text-xs">连接对应服务后，一键调用保存的歌单或播放工具。</p></section>}
