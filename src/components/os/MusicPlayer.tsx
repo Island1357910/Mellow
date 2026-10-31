@@ -14,7 +14,7 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
   const load = usePlayer((state) => state.load)
   const config = usePlayer((state) => state.config)
   const patch = usePlayer((state) => state.patch)
-  useEffect(() => load(props.namespace), [load, props.namespace])
+  useEffect(() => { void load(props.namespace) }, [load, props.namespace])
   const tracks = config.tracks
   const repeatMode = config.repeatMode ?? 'one'
   const index = usePlayer(s => s.index)

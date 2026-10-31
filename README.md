@@ -73,13 +73,15 @@ npx vite preview
 
 ### 外部连接与 MCP
 
+1.0.4 增加「网易云账号 · 我的歌单」：手机内生成登录二维码，用户在网易云 App 中确认后读取自己的创建 / 收藏歌单，按账号权限获取音频和歌词，接入现有 char 共享与主动聊天。凭据按身份加密保存在本机 localStorage，不进入聊天提示或备份。见 [网易云账号连接教程](docs/网易云账号连接教程.md)。验证命令 `npm run check:netease`。
+
 顶部「陪伴」支持选择 char 一起听歌、读小说：LRC 歌词随进度同步，TXT 全文导入后按页共享；可开启适度主动短信。完整操作教程见 [一起听一起读使用教程](docs/一起听一起读使用教程.md)，验证命令为 `npm run check:together`。自动运行依赖页面保持打开，刷新后 MCP 读取源需要重新连接。
 
 在市场安装「外部连接」。支持 MCP 2025 Streamable HTTP 的 initialize、会话头、tools/list 分页和 tools/call，兼容 JSON 与 SSE 返回。需用户自行提供已部署且允许跨域访问的服务；Bearer Token 只在当前页面内存驻留。工具可以手动执行并保存不含密钥的参数为快捷操作，也可绑定一个只读查询工具自动同步当前歌曲、歌词或阅读正文。
 
 音乐服务若返回 `structuredContent.tracks`，或文本 JSON 中的 `tracks` 数组，播放器可导入每首的 `name`、`src`（HTTPS 音频直链）及可选 `artist`、`lyrics`。播放类工具也可由快捷操作一键调用。网页入口打开网易云我的音乐，不能直接跨域读取网易云 Cookie；没有真实 MCP 服务与帐号授权时，不会声称帐号歌单已经接通。
 
-协议依据：[MCP 2025-11-25 Streamable HTTP](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-11-25/basic/transports.mdx)。本轮未实现 stdio、旧 HTTP+SSE、OAuth 授权界面或 2026 版协议自动协商。
+支持 Streamable HTTP 和旧 HTTP+SSE，可导入单个远程 `mcpServers` / `servers` JSON 配置；工具按 schema 生成常用参数表单。连接支持 Bearer Token，未实现 STDIO 进程启动、OAuth 授权界面或 2026 版协议自动协商。返回内容兼容常见歌词与正文字段；仅返回音乐卡片标记时会提示服务未提供歌词或音频。协议与适配回归：`npm run check:mcp`。
 
 ### 验证
 

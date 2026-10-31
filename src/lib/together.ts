@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { storage } from '../storage/StorageService.ts'
 import { usePlayer } from './playerStore.ts'
 import { McpClient } from './mcp.ts'
+import { adaptMusic, adaptReading } from './mcpConfig.ts'
 
 export interface Reading { title: string; text: string; page: number; kind: string }
 export interface TogetherConfig { charId: string; music: boolean; reading: boolean; auto: boolean; minutes: number; book: Reading | null }
@@ -84,13 +85,17 @@ export async function togetherNoteFor(namespace: string, charId: string): Promis
   return saved ? togetherSnapshot(namespace, charId, saved).note : ''
 }
 
-export interface ContentBinding { namespace: string; client: McpClient; tool: string; args: Record<string, unknown>; kind: 'music' | 'reading'; lastAt: number; busy: boolean }
+export interface ContentBinding { namespace: string; client: McpClient; tool: string; args: Record<string, unknown>; kind: 'music' | 'reading'; title?: string; lastAt: number; busy: boolean }
 let binding: ContentBinding | null = null
 export function bindTogetherSource(value: Omit<ContentBinding, 'lastAt' | 'busy'> | null) {
   binding = value ? { ...value, lastAt: 0, busy: false } : null
   useTogether.setState({ externalMusic: null })
 }
 export function hasTogetherSource(namespace: string) { return binding?.namespace === namespace }
+export function disconnectTogetherSource(namespace: string) {
+  if (binding?.namespace !== namespace) return
+  binding.client.close(); bindTogetherSource(null)
+}
 export function mcpContent(result: unknown): Record<string, unknown> {
   const row = result as { isError?: boolean; structuredContent?: Record<string, unknown>; content?: { type: string; text?: string }[] } | null
   if (row?.isError) throw Error('读取工具返回错误')
@@ -114,14 +119,12 @@ export async function pollTogetherSource(namespace: string, force = false): Prom
     const latest = useTogether.getState().config
     if (!(b.kind === 'music' ? latest.music : latest.reading)) return
     if (b.kind === 'music') {
-      const song = (data.nowPlaying ?? data) as Record<string, unknown>
-      if (typeof song.name !== 'string') throw Error('音乐读取工具需要返回 name、lyrics，可带 artist')
+      const song = adaptMusic(data, b.title)
       // 查询外部播放状态只共享资料，不擅自控制外部播放器。
-      useTogether.setState({ externalMusic: { name: song.name, artist: typeof song.artist === 'string' ? song.artist : '', lyrics: typeof song.lyrics === 'string' ? song.lyrics.slice(0, 100_000) : '', seconds: Math.max(0, Number(song.position) || 0), playing: song.playing !== false } })
+      useTogether.setState({ externalMusic: { name: song.name, artist: song.artist, lyrics: song.lyrics, seconds: song.position, playing: song.playing } })
     } else {
-      const read = (data.reading ?? data) as Record<string, unknown>
-      if (typeof read.text !== 'string' || !read.text.trim()) throw Error('阅读工具需要返回 text 正文，可带 title')
-      const title = typeof read.title === 'string' ? read.title : '正在阅读'
+      const read = adaptReading(data, b.title)
+      const title = read.title
       const old = useTogether.getState().config.book
       const text = read.text.slice(0, 2_000_000)
       await useTogether.getState().patch({ book: { title, text, kind: '同步阅读', page: old?.title === title && old.text === text ? old.page : 0 } })

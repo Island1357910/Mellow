@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../services";
 
 :root {
   color-scheme: light;

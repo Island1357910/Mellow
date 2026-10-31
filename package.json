@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
@@ -14,7 +14,9 @@
     "check:earnings": "node --import ./scripts/check-env.mjs scripts/check-earnings.ts",
     "check:release": "node --import ./scripts/check-env.mjs scripts/check-release.ts",
     "check:sms": "node --import ./scripts/check-env.mjs scripts/check-sms.ts",
-    "check:together": "node --import ./scripts/check-env.mjs scripts/check-together.ts"
+    "check:together": "node --import ./scripts/check-env.mjs scripts/check-together.ts",
+    "check:mcp": "node --import ./scripts/check-env.mjs scripts/check-mcp.ts",
+    "check:netease": "node --import ./scripts/check-env.mjs scripts/check-netease.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -25,6 +27,7 @@
     "dexie": "^4.2.1",
     "framer-motion": "^12.23.22",
     "lucide-react": "^0.545.0",
+    "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.8"

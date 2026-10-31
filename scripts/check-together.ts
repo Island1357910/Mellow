@@ -53,7 +53,7 @@ try {
   now += 120_000; await tickTogether(identity); assert.equal(calls, 2)
   assert.equal(togetherSnapshot(ns, character.id).note, '')
 
-  usePlayer.getState().load(ns)
+  await usePlayer.getState().load(ns)
   usePlayer.getState().patch({ tracks: [{ id: 'test-song', name: '当前歌曲', lyrics: '[00:01]真实歌词', src: 'https://example.test/song.mp3' }] })
   usePlayer.setState({ playing: true, seconds: 10 })
   await useTogether.getState().patch({ music: true })

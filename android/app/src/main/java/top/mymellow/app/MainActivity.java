@@ -15,6 +15,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // User-selected songs resolve their authorized URL asynchronously.
+        bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
         Window window = getWindow();
         WindowCompat.setDecorFitsSystemWindows(window, false);
         window.setStatusBarColor(Color.TRANSPARENT);
