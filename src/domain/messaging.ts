@@ -1,3 +1,4 @@
+import { togetherNoteFor } from '../lib/together.ts'
 import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
@@ -271,6 +272,7 @@ export async function replyInChat(input: {
     const life = await nearbyLifeNote(input.namespace, input.character)
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
     const storyBridge = await storyBridgeForSms(input.namespace, input.character)
+    const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -280,6 +282,7 @@ export async function replyInChat(input: {
       priority: storyBridge,
       note: [
         replyNote(input.chat),
+        sharedContent,
         input.triggerNote ?? '',
         input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
         input.triggerNote ? '' : glance,
@@ -382,7 +385,7 @@ export async function deliverSms(input: {
       history,
       fourthWall: input.fourthWall,
       priority: storyBridge,
-      note: [glance, explain, life].filter(Boolean).join('\n'),
+      note: [glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()

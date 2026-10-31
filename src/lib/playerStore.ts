@@ -9,6 +9,7 @@ export type Track = {
   id: string
   name: string
   artist?: string
+  lyrics?: string
   /** http(s) 链接，或 bag:键名 指向本地导入的音频 */
   src?: string
   /** 没有音频时用的合成音高 */
@@ -57,6 +58,13 @@ export const DISC_COLORS = ['#1A1A1A', '#5B3A4A', '#2F4A5C', '#E58FA6', '#7CC7AE
 const DEFAULT_CONFIG: PlayerConfig = { style: 'vinyl', card: '#FFFFFF', disc: '#1A1A1A', tracks: BUILTIN_TRACKS, repeatMode: 'one' }
 
 type PlayerState = {
+  index: number
+  playing: boolean
+  seconds: number
+  duration: number
+  volume: number
+  error: string
+  step: (delta: number) => void
   namespace: string
   config: PlayerConfig
   load: (namespace: string) => void
@@ -66,18 +74,28 @@ type PlayerState = {
 }
 
 export const usePlayer = create<PlayerState>((set, get) => ({
+  index: 0, playing: false, seconds: 0, duration: 0, volume: 3, error: '',
+  step: delta => {
+    const state = get(), length = state.config.tracks.length
+    const index = state.config.repeatMode === 'shuffle' && length > 1
+      ? (state.index + 1 + Math.floor(Math.random() * (length - 1))) % length
+      : (state.index + delta + length) % Math.max(1, length)
+    set({ index, seconds: 0, duration: 0, error: '' })
+  },
   namespace: '',
   config: DEFAULT_CONFIG,
   load: (namespace) => {
     if (get().namespace === namespace) return
-    set({ namespace, config: DEFAULT_CONFIG })
+    set({ namespace, config: DEFAULT_CONFIG, index: 0, playing: false, seconds: 0, duration: 0, error: '' })
     void storage.getBag<PlayerConfig>(namespace, 'player').then((row) => {
       if (row && get().namespace === namespace) set({ config: { ...DEFAULT_CONFIG, ...row, tracks: mergeTracks(row.tracks), repeatMode: row.repeatMode ?? DEFAULT_CONFIG.repeatMode } })
     })
   },
   patch: (patch) => {
     const config = { ...get().config, ...patch }
-    set({ config })
+    const currentId = get().config.tracks[get().index]?.id
+    const found = config.tracks.findIndex(t => t.id === currentId)
+    set({ config, index: Math.max(0, found), ...(found < 0 ? { seconds: 0, duration: 0 } : {}) })
     void storage.setBag(get().namespace, 'player', config)
   },
   addTrack: async (track, audio) => {

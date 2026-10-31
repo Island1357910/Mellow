@@ -1,3 +1,5 @@
+import { PlayerHost } from './PlayerHost.tsx'
+import { tickTogether } from '../../lib/togetherReplies.ts'
 import { Capacitor } from '@capacitor/core'
 import { APPLE_THEME } from '../../theme/apple.ts'
 import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
@@ -138,8 +140,19 @@ export function PhoneShell() {
     return () => window.clearInterval(timer)
   }, [ready, locked, identities, activeIdentityId, settings, presets])
 
+  useEffect(() => {
+    if (!ready || locked) return
+    const phone = identities.find(i => i.id === activeIdentityId)
+    if (!phone) return
+    const run = () => { if (document.visibilityState === 'visible') void tickTogether(phone) }
+    run()
+    const timer = window.setInterval(run, 15_000)
+    return () => window.clearInterval(timer)
+  }, [ready, locked, identities, activeIdentityId])
+
   return (
     <div className="stage">
+      {ready && identities.find(i => i.id === activeIdentityId) && <PlayerHost namespace={identities.find(i => i.id === activeIdentityId)!.namespace} />}
       <div
         className="device"
         data-palette={theme.customPalette || theme.id === 'theme_halloween' ? 'custom' : undefined}

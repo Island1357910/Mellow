@@ -1,7 +1,8 @@
+import { useMellow } from '../../store/useMellow.ts'
 import { ColorField } from '../apps/AppearanceEditor.tsx'
 import { Ellipsis, Link2, ListMusic, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Trash2, Upload, Volume1, Volume2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { CARD_COLORS, DISC_COLORS, isDark, resolveTrackSrc, usePlayer, type PlayerStyle, type RepeatMode } from '../../lib/playerStore.ts'
+import { useEffect, useState } from 'react'
+import { CARD_COLORS, DISC_COLORS, isDark, usePlayer, type PlayerStyle, type RepeatMode } from '../../lib/playerStore.ts'
 
 const REPEAT_MODES: Array<{ id: RepeatMode; label: string; icon: typeof Repeat1 }> = [
   { id: 'one', label: '单曲循环', icon: Repeat1 },
@@ -16,104 +17,20 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
   useEffect(() => load(props.namespace), [load, props.namespace])
   const tracks = config.tracks
   const repeatMode = config.repeatMode ?? 'one'
-  const [index, setIndex] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [volume, setVolume] = useState(3)
-  const [progress, setProgress] = useState(0)
-  const volumeRef = useRef(3)
-  const gainRef = useRef<GainNode | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const shuffleRef = useRef<number[]>([])
-  const advanceRef = useRef<(delta: number, keepPlaying?: boolean) => void>(() => {})
-  const at = tracks.length ? index % tracks.length : 0
-  const track = tracks[at]
-  const repeatMeta = REPEAT_MODES.find((item) => item.id === repeatMode) ?? REPEAT_MODES[0]
+  const index = usePlayer(s => s.index)
+  const playing = usePlayer(s => s.playing)
+  const volume = usePlayer(s => s.volume)
+  const seconds = usePlayer(s => s.seconds)
+  const duration = usePlayer(s => s.duration)
+  const error = usePlayer(s => s.error)
+  const progress = duration ? seconds / duration : 0
+  const track = tracks[index]
+  const repeatMeta = REPEAT_MODES.find(item => item.id === repeatMode) ?? REPEAT_MODES[0]
   const RepeatIcon = repeatMeta.icon
-
-  const nextIndex = (current: number, delta: number) => {
-    if (tracks.length <= 1) return current
-    if (repeatMode === 'shuffle') {
-      if (shuffleRef.current.length !== tracks.length) {
-        shuffleRef.current = tracks.map((_, idx) => idx).sort(() => Math.random() - 0.5)
-      }
-      const pos = shuffleRef.current.indexOf(current)
-      const nextPos = (pos + delta + shuffleRef.current.length) % shuffleRef.current.length
-      return shuffleRef.current[nextPos] ?? 0
-    }
-    return (current + delta + tracks.length) % tracks.length
-  }
-  const step = (delta: number, keepPlaying = false) => {
-    setProgress(0)
-    setIndex((value) => {
-      const next = nextIndex(value, delta)
-      return next
-    })
-    if (keepPlaying) setPlaying(true)
-  }
-  advanceRef.current = step
-
-  useEffect(() => {
-    if (!playing || !track) return
-    let cancelled = false
-    if (track.src) {
-      let audio: HTMLAudioElement | null = null
-      const onTime = () => {
-        if (audio && audio.duration) setProgress(audio.currentTime / audio.duration)
-      }
-      const onEnded = () => {
-        if (repeatMode === 'one') return
-        advanceRef.current(1, true)
-      }
-      void resolveTrackSrc(props.namespace, track.src).then((url) => {
-        if (cancelled || !url) return
-        audio = new Audio(url)
-        audio.loop = repeatMode === 'one'
-        audio.volume = volumeRef.current / 5
-        audio.addEventListener('timeupdate', onTime)
-        audio.addEventListener('ended', onEnded)
-        audioRef.current = audio
-        void audio.play().catch(() => setPlaying(false))
-      })
-      return () => {
-        cancelled = true
-        audio?.removeEventListener('timeupdate', onTime)
-        audio?.removeEventListener('ended', onEnded)
-        audio?.pause()
-        audioRef.current = null
-      }
-    }
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = track.tone ?? 196
-    gain.gain.value = volumeRef.current * 0.012
-    gainRef.current = gain
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.start()
-    const timer = window.setInterval(() => setProgress((value) => (value + 0.01) % 1), 600)
-    return () => {
-      window.clearInterval(timer)
-      gainRef.current = null
-      osc.stop()
-      void ctx.close()
-    }
-  }, [playing, track, props.namespace, repeatMode])
-
-  const changeVolume = (delta: number) => {
-    const next = Math.max(0, Math.min(5, volumeRef.current + delta))
-    volumeRef.current = next
-    setVolume(next)
-    if (gainRef.current) gainRef.current.gain.value = next * 0.012
-    if (audioRef.current) audioRef.current.volume = next / 5
-  }
-  const cycleRepeat = () => {
-    const atMode = REPEAT_MODES.findIndex((item) => item.id === repeatMode)
-    const next = REPEAT_MODES[(atMode + 1) % REPEAT_MODES.length]?.id ?? 'one'
-    shuffleRef.current = []
-    patch({ repeatMode: next })
-  }
+  const setPlaying = (update: (value: boolean) => boolean) => usePlayer.setState(s => ({ playing: update(s.playing), error: '' }))
+  const step = (delta: number) => usePlayer.getState().step(delta)
+  const changeVolume = (delta: number) => usePlayer.setState({ volume: Math.max(0, Math.min(5, volume + delta)) })
+  const cycleRepeat = () => patch({ repeatMode: REPEAT_MODES[(REPEAT_MODES.findIndex(item => item.id === repeatMode) + 1) % REPEAT_MODES.length].id })
   const dark = isDark(config.card)
   const ink = dark ? 'rgba(255,255,255,0.9)' : 'var(--m-text)'
   const soft = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.05)'
@@ -185,6 +102,7 @@ export function MusicPlayer(props: { namespace: string; onSettings: () => void }
         )}
       </div>
       <div className="shrink-0">
+        {error && <p role="status" className="text-[10px]">{error}</p>}
         <p className="truncate text-center text-[11px] leading-4">{name}{track?.artist && config.style === 'minimal' ? ` · ${track.artist}` : ''}</p>
         <span className="my-1 block h-px" style={{ background: soft }}>
           <span className="block h-full transition-[width] duration-500" style={{ width: `${Math.max(6, progress * 100)}%`, background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)' }} />
@@ -262,6 +180,7 @@ export function PlayerSheet(props: { onClose: () => void }) {
           <h2 className="text-[18px] font-semibold">播放器设置</h2>
           <button type="button" className="chip chip-pink" onClick={props.onClose}>完成</button>
         </div>
+        <button className="chip mt-3" onClick={() => { props.onClose(); useMellow.getState().openApp('connections') }}>和 char 一起听 / 一起读</button>
         <div role="tablist" aria-label="播放器设置分类" className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-white/80 p-1">
           {([['look', '外观'], ['list', `歌单 ${config.tracks.length}`], ['import', '导入']] as Array<[SheetTab, string]>).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} className="rounded-full py-1.5 text-xs transition-colors" style={{ background: tab === id ? '#F3A8BA' : 'transparent', color: tab === id ? '#fff' : 'var(--m-text-secondary)', fontWeight: tab === id ? 600 : 400 }} onClick={() => setTab(id)}>

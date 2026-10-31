@@ -1,3 +1,4 @@
+import { useTogether } from '../../lib/together.ts'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -24,6 +25,7 @@ import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
 
 const DM_TOOLS: Array<{ id: ToolId; label: string; tint: string; icon: ReactNode }> = [
+  { id: 'music', label: '一起听 / 读', tint: '#D5F0E4', icon: <Music size={20} /> },
   { id: 'album', label: '相册', tint: '#D7E7F8', icon: <Image size={20} /> },
   { id: 'sticker', label: '表情包', tint: '#F8E6C0', icon: <Smile size={20} /> },
   { id: 'redpacket', label: '红包', tint: '#FBD5D5', icon: <Mail size={20} /> },
@@ -34,7 +36,6 @@ const GROUP_TOOLS: Array<{ id: ToolId; label: string; tint: string; icon: ReactN
   ...DM_TOOLS,
   { id: 'party', label: '群派对', tint: '#E6DDF8', icon: <PartyPopper size={20} /> },
   { id: 'anon', label: '匿名', tint: '#E7E3EC', icon: <VenetianMask size={20} /> },
-  { id: 'music', label: '一起听歌', tint: '#D5F0E4', icon: <Music size={20} /> },
   { id: 'gift', label: '群礼物', tint: '#F3E3FB', icon: <Gift size={20} /> },
 ]
 
@@ -527,7 +528,11 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
       return
     }
     if (id === 'party') return send('发起了群派对，大家快来', 'party')
-    if (id === 'music') return send('邀请大家一起听：晚风', 'music')
+    if (id === 'music') {
+      await useTogether.getState().load(props.identity.namespace)
+      if (props.chat.kind === 'dm') await useTogether.getState().patch({ charId: props.chat.memberIds[0] ?? '' })
+      useMellow.getState().openApp('connections')
+    }
   }
 }
 
