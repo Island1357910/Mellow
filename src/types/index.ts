@@ -428,6 +428,7 @@ export interface AppSettings {
   installedApps: string[]
   /** appId -> emoji 或图片 data URL */
   appIcons: Record<string, string>
+  iconSets: Array<{ id: string; name: string; icons: Record<string, string> }>
   privacy: PrivacySettings
   backup: BackupSettings
   home: HomeLayout

@@ -11,7 +11,7 @@ import { downloadJson } from '../../lib/download.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
-import { themeFromUnknown } from '../../theme/themes.ts'
+import { themeFromUnknown, canDeleteTheme } from '../../theme/themes.ts'
 import type { Preset, PresetMode } from '../../types/index.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { Field, ModalPortal, PillNote, Screen, SectionTitle, SoftCard, Toggle } from '../ui/primitives.tsx'
@@ -127,6 +127,8 @@ const TABS: Array<{ id: TabId; label: string; tint: string; icon: ReactNode; pan
 ]
 
 function ThemeCard() {
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false), [deleteError, setDeleteError] = useState('')
   const settings = useMellow((state) => state.settings)
   const themes = useMellow((state) => state.themes)
   const patchSettings = useMellow((state) => state.patchSettings)
@@ -136,8 +138,7 @@ function ThemeCard() {
         <SectionTitle tone="lilac">主题</SectionTitle><p className="mb-3 text-xs">10 月 31 日全天使用「不寂寞万圣夜」，次日恢复原主题，平日也可手动选择。</p>
         <div className="grid grid-cols-4 gap-3">
           {themes.map((theme) => (
-            <button
-              key={theme.id}
+            <div key={theme.id} className="flex min-w-0 flex-col items-center gap-2"><button
               type="button"
               onClick={() => void patchSettings({ themeId: theme.id })}
               className="flex flex-col items-center gap-1"
@@ -149,10 +150,19 @@ function ThemeCard() {
                   ['--tw-ring-color' as string]: settings.themeId === theme.id ? theme.colors.accent : 'transparent',
                 }}
               />
-              <span className="text-[11px]">{theme.name}</span>
+              <span className="text-[11px] break-all">{theme.name}</span>
             </button>
+            {canDeleteTheme(theme.id) && <button type="button" className="text-[11px] underline" aria-label={'删除主题'+theme.name} onClick={() => setDeleteId(theme.id)}>删除</button>}
+            </div>
           ))}
         </div>
+        {deleteId && <div className="menu-card mt-3 space-y-2 text-xs" role="alertdialog" aria-label="确认删除个人主题"><p>删除「{themes.find(theme => theme.id === deleteId)?.name}」？正在使用时将恢复基础主题。</p><div className="flex gap-2"><button className="chip" disabled={deleting} onClick={() => {
+          setDeleting(true); setDeleteError('')
+          void storage.deleteTheme(deleteId).then(async () => {
+            if (useMellow.getState().settings.themeId === deleteId) await patchSettings({ themeId: 'theme_macaron' })
+            await reloadLibraries(); setDeleteId(null)
+          }).catch(error => setDeleteError(String(error))).finally(() => setDeleting(false))
+        }}>确认删除</button><button className="chip" disabled={deleting} onClick={() => setDeleteId(null)}>取消</button></div></div>}
         <div className="mt-4 grid grid-cols-2 gap-2">
           <label className="chip chip-lilac">
             <Upload size={13} />
@@ -168,6 +178,7 @@ function ThemeCard() {
                 void file.text().then(async (text) => {
                   const theme = themeFromUnknown(JSON.parse(text) as unknown)
                   if (!theme) throw new Error('这不是主题')
+                  theme.id = 'theme_user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
                   await storage.saveTheme(theme)
                   await reloadLibraries()
                   await patchSettings({ themeId: theme.id })
@@ -196,6 +207,7 @@ function ThemeCard() {
             导出当前主题
           </button>
         </div>
+        {deleteError && <p role="status" className="text-xs">{deleteError}</p>}
         <AppearanceEditor />
       </SoftCard>
   )

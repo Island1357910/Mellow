@@ -1,4 +1,5 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
+import { uid } from '../../lib/id.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { PHONE_APPS } from '../../data/apps.ts'
 import { AIAdapter } from '../../engine/AIAdapter.ts'
@@ -487,10 +488,13 @@ export function BackupPanel() {
 }
 
 export function IconPanel() {
+  const [setName, setSetName] = useState(''), [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const settings = useMellow((state) => state.settings)
   const patchSettings = useMellow((state) => state.patchSettings)
   const setIcon = (id: string, value: string) => {
-    const appIcons = { ...settings.appIcons }
+    const appIcons = { ...useMellow.getState().settings.appIcons }
     if (!value) delete appIcons[id]
     else appIcons[id] = value
     void patchSettings({ appIcons })
@@ -498,11 +502,27 @@ export function IconPanel() {
   return (
     <SoftCard>
       <SectionTitle tone="pink">应用图标</SectionTitle>
+      <div className="menu-card mb-4 space-y-3">
+        <p className="text-xs">将当前所有图标保存成一套，之后可以整套切换。删除套装不会改变正在使用的图标。</p>
+        <form className="flex gap-2" onSubmit={event => {
+          event.preventDefault(); if (!setName.trim() || saving) return
+          setSaving(true)
+          void patchSettings({ iconSets: [...useMellow.getState().settings.iconSets, { id: uid('icons'), name: setName.trim(), icons: { ...useMellow.getState().settings.appIcons } }] })
+            .then(() => { setSetName(''); setNote('图标套装已保存') }).catch(error => setNote(String(error))).finally(() => setSaving(false))
+        }}><input aria-label="图标套装名称" className="soft-input min-w-0 flex-1" placeholder="为这套图标取名" value={setName} maxLength={40} onChange={event => setSetName(event.target.value)}/><button className="chip shrink-0" disabled={!setName.trim() || saving}>保存整套</button></form>
+        {settings.iconSets.map(set => <div key={set.id} className="flex items-center gap-2"><span className="min-w-0 flex-1 break-all text-xs">{set.name}</span><button className="chip" disabled={saving} onClick={() => void patchSettings({ appIcons: { ...set.icons } }).then(() => setNote('已应用「'+set.name+'」')).catch(error => setNote(String(error)))}>应用</button><button className="chip" disabled={saving} onClick={() => setDeleteId(set.id)}>删除</button></div>)}
+        {deleteId && <div role="alertdialog" aria-label="确认删除图标套装" className="space-y-2 text-xs"><p>删除「{settings.iconSets.find(set => set.id === deleteId)?.name}」？当前使用的图标会保留。</p><div className="flex gap-2"><button className="chip" disabled={saving} onClick={() => {
+          setSaving(true)
+          void patchSettings({ iconSets: useMellow.getState().settings.iconSets.filter(item => item.id !== deleteId) }).then(() => { setDeleteId(null); setNote('图标套装已删除') }).catch(error => setNote(String(error))).finally(() => setSaving(false))
+        }}>确认删除</button><button className="chip" disabled={saving} onClick={() => setDeleteId(null)}>取消</button></div></div>}
+        <button className="chip" onClick={() => void patchSettings({ appIcons: {} }).then(() => setNote('已恢复默认应用图标')).catch(error => setNote(String(error)))}>恢复默认图标</button>
+        {note && <p role="status" className="text-xs">{note}</p>}
+      </div>
       <div className="space-y-2">
         {PHONE_APPS.map((app) => (
           <div key={app.id} className="flex items-center gap-2">
             <span className="w-14 truncate text-xs">{app.name}</span>
-            <input value={settings.appIcons[app.id]?.startsWith('data:') ? '' : settings.appIcons[app.id] ?? ''} onChange={(event) => setIcon(app.id, event.target.value)} placeholder="表情" className="soft-input w-16 px-2 py-1 text-center" />
+            <input aria-label={app.name+'图标'} value={settings.appIcons[app.id]?.startsWith('data:') ? '' : settings.appIcons[app.id] ?? ''} onChange={(event) => setIcon(app.id, event.target.value)} placeholder="表情" className="soft-input w-16 px-2 py-1 text-center" />
             <label className="chip chip-lilac px-2.5 py-1 text-[11px]">
               图片
               <input type="file" accept="image/*" className="hidden" onChange={(event) => {

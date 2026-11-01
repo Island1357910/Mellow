@@ -1,3 +1,6 @@
+import { TableHistory } from './TableHistory.tsx'
+import type { TableSummary } from '../../lib/tableHistory.ts'
+import { gomokuSituation, xiangqiSituation, unoSituation } from '../../lib/tableSituation.ts'
 import { TableConversation } from './TableConversation.tsx'
 import { addKeepsake, changeSharedLife, readSharedLife, sharedLifeNote } from '../../lib/sharedLife.ts'
 import { uid } from '../../lib/id.ts'
@@ -184,7 +187,7 @@ function Say(props: { names: string[]; namespace: string; onBack: () => void }) 
     setError('');setDraft('');setBusy(true)
     if(describer!==0){const good=text.replace(/\s/g,'')===card.word;setLog(l=>[...l,`你猜：${text}`,good?'猜对了！':'还没猜中，再给你一个提示。']);if(good){setDone(true);tableEvent('你说我猜：玩家猜中了'+card.word,true)}else { const hint=card.hints[hints.length]??'可以换个角度想想'; setHints(h=>[...h,hint]); tableEvent('玩家猜：'+text+'，还没猜中。公开新提示：'+hint) };setBusy(false);return}
     const next=[...hints,text];setHints(next);setLog(l=>[...l,`你：${text}`]);tableEvent('你说我猜：玩家给出公开提示：'+text)
-    try{for(const name of props.names.slice(1)){const guess=await hostAsk(`你是${name}，正在你说我猜。只能根据玩家实际给出的提示猜一个词，禁止知道答案。只回复一个词。`,next.join('；'),40);setLog(l=>[...l,`${name}：${guess}`]);if(guess.replace(/[。！\s]/g,'')===card.word){setDone(true);setLog(l=>[...l,'猜对了！']);tableEvent('你说我猜：'+name+'根据玩家提示猜中了'+card.word,true);break}}}catch(e){setError(e instanceof Error?e.message:'没有猜成，请再给一个提示重试')}finally{setBusy(false)}}
+    try{for(const name of props.names.slice(1)){const guess=await hostAsk(`你是${name}，正在你说我猜。只能根据玩家实际给出的提示猜一个词，禁止知道答案。只回复一个词。`,next.join('；'),40);setLog(l=>[...l,`${name}：${guess}`]);tableEvent('你说我猜公开猜测：'+name+'：'+guess);if(guess.replace(/[。！\s]/g,'')===card.word){setDone(true);setLog(l=>[...l,'猜对了！']);tableEvent('你说我猜：'+name+'根据玩家提示猜中了'+card.word,true);break}}}catch(e){setError(e instanceof Error?e.message:'没有猜成，请再给一个提示重试')}finally{setBusy(false)}}
   useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live){const publicHints=line.split('\n').filter(h=>h.trim()&&!h.includes(card.word));setHints(publicHints);tableEvent('你说我猜：'+props.names[describer]+'公布提示：'+publicHints.join('；'))}}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names,tableEvent])
   return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card text-sm leading-7">{hints.join('；')||'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{tableEvent('你说我猜新一轮开始，角色根据当前提示参与，不得透露词卡答案。',false,true);setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
 }
@@ -221,14 +224,15 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     if(discussionLock.current || (!automatic && (!speech.trim() || !seats[0]?.alive))) return
     discussionLock.current = true
     const context=[...discussion, ...(automatic ? ['第 '+day+' 天，'+log+'。请在场玩家依次主动发言。'] : ['你：'+speech.trim()])].slice(-20)
+    if (!automatic) tableEvent('狼人杀玩家公开发言：'+speech.trim())
     setSpeech('');setDiscussing(true);setDiscussion(context)
     const replies=await Promise.all(seats.filter((s,i)=>i>0&&s.alive).map(async seat=>{
       try{const line=await hostAsk('你是狼人杀玩家'+seat.name+'，身份'+seat.role+'（保密）。自己的查验：'+((checks[seat.name]??[]).join('；')||'无')+'。根据公开发言主动讨论或质疑，不能知道他人的底牌，不可透露系统信息。只写一句角色发言。',context.join('；'),140);return seat.name+'：'+line}
       catch(e){return seat.name+' 本次发言失败：'+(e instanceof Error?e.message:'请重试')}
     }))
-    if(alive.current){setDiscussion([...context,...replies]);setDiscussing(false)}
+    if(alive.current){setDiscussion([...context,...replies]);setDiscussing(false);tableEvent('狼人杀白天公开发言：'+replies.join('；'))}
     discussionLock.current = false
-  }, [speech, discussion, day, log, seats, checks])
+  }, [speech, discussion, day, log, seats, checks, tableEvent])
   useEffect(() => {
     if(phase !== 'day' || automaticDay.current === day) return
     automaticDay.current = day
@@ -308,6 +312,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     discussionLock.current = false
     for(const pick of votes)if(pick)tally[pick]=(tally[pick]??0)+1
     setDiscussion(d=>[...d,'本轮票数：'+Object.entries(tally).map(([n,c])=>n+' '+c+'票').join('、')])
+    tableEvent('狼人杀公开投票：'+Object.entries(tally).map(([n,c])=>n+' '+c+'票').join('、'))
     setDiscussing(false)
     const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]
     const out = top && Object.values(tally).filter((value) => value === top[1]).length === 1 ? top[0] : ''
@@ -415,7 +420,7 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
     if (winner(next)) {
       setGrid(next)
       setOver('你赢了')
-      tableEvent('玩家连成五子，赢下了这局',true)
+      tableEvent('玩家连成五子，赢下了这局。'+gomokuSituation(next,props.names),true)
       return
     }
     setTurn(1)
@@ -425,6 +430,7 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
     if (!move) {
       setGrid(next)
       setOver('下满了')
+      tableEvent('棋盘下满，平局。',true)
       setTurn(0)
       return
     }
@@ -433,7 +439,7 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
     setGrid(next)
     setTurn(0)
     setOver(winner(next) ? `${rival} 赢了` : '')
-    tableEvent(`玩家落在${row+1}行${col+1}列，${rival}落在${move[0]+1}行${move[1]+1}列。${winner(next)?rival+'赢了':''}`,Boolean(winner(next)))
+    tableEvent(`玩家落在${row+1}行${col+1}列，${rival}落在${move[0]+1}行${move[1]+1}列。${gomokuSituation(next,props.names)}`,Boolean(winner(next)))
   }
   return (
     <Screen title="五子棋" subtitle={over || (turn === 0 ? '轮到你落子' : `${rival} 在想…`)} onBack={props.onBack}>
@@ -467,7 +473,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
       if (winnerOf(after) === 'red') {
         setBoard(after)
         setOver('你赢了')
-        tableEvent('象棋：玩家赢了',true)
+        tableEvent('象棋：玩家赢了。'+xiangqiSituation(after,props.names),true)
         return
       }
       setTurn(1)
@@ -482,7 +488,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
       const done = applyMove(after, reply.r, reply.c, reply.tr, reply.tc)
       setBoard(done)
       setTurn(0)
-      tableEvent(`玩家从${pick[0]+1},${pick[1]+1}走到${row+1},${col+1}，${rival}完成回应。${winnerOf(done)?'本局结束':''}`,Boolean(winnerOf(done)))
+      tableEvent(`玩家从${pick[0]+1},${pick[1]+1}走到${row+1},${col+1}，${rival}从${reply.r+1},${reply.c+1}走到${reply.tr+1},${reply.tc+1}。${xiangqiSituation(done,props.names)}`,Boolean(winnerOf(done)))
       if (winnerOf(done) === 'black') setOver(`${rival} 赢了`)
       return
     }
@@ -515,7 +521,7 @@ function Uno(props: { names: string[]; onBack: () => void }) {
   const [wildAt, setWildAt] = useState<number | null>(null)
   useEffect(() => {
     if (match.winner !== null || match.turn === 0) return
-    const timer = window.setTimeout(() => {const info=people.find(p=>p.person.name===match.names[match.turn]);const next=runAi(match,mayYield(info));setMatch(next);tableEvent(next.note,next.winner!==null)}, 450)
+    const timer = window.setTimeout(() => {const info=people.find(p=>p.person.name===match.names[match.turn]);const next=runAi(match,mayYield(info));setMatch(next);tableEvent(next.note+'。'+unoSituation(next),next.winner!==null)}, 450)
     return () => window.clearTimeout(timer)
   }, [match,people,tableEvent])
   const top = topCard(match)
@@ -531,12 +537,12 @@ function Uno(props: { names: string[]; onBack: () => void }) {
     if (!next) return
     setWildAt(null)
     setMatch(next)
-    tableEvent(next.note,next.winner!==null)
+    tableEvent(next.note+'。'+unoSituation(next),next.winner!==null)
   }
   const draw = () => {
     const next = drawForTurn(match)
     setMatch(next)
-    tableEvent(next.note,next.winner!==null)
+    tableEvent(next.note+'。'+unoSituation(next),next.winner!==null)
   }
   const stuck = hand.every((card) => !canPlayFromHand(match, card))
   const names: Record<UnoColor,string> = {red:'红',yellow:'黄',green:'绿',blue:'蓝'}
@@ -553,7 +559,7 @@ function Uno(props: { names: string[]; onBack: () => void }) {
     <div className="uno-hand" data-holiday-preserve>{hand.map((card,index)=>{const playable=canPlayFromHand(match,card)&&match.turn===0&&match.winner===null;return <button key={card.id} type="button" className={playable?'uno-playing-card is-playable':'uno-playing-card'} data-color={card.color??'wild'} disabled={!playable} aria-label={(card.color?names[card.color]+'色':'万能')+' '+(UNO_LABEL[card.rank]??card.rank)+(playable?'，可出牌':'，不可出牌')} onClick={()=>play(index,null)}>{face(card)}</button>})}</div>
     {wildAt!==null&&<section className="menu-card mt-4"><h3 className="mb-3 text-sm font-semibold">为万能牌选择颜色</h3><div className="uno-color-options" data-holiday-preserve>{(Object.keys(UNO_COLOR) as UnoColor[]).map(color=><button key={color} className="uno-current-color" data-color={color} onClick={()=>play(wildAt,color)}>{names[color]}色</button>)}</div><button className="chip mt-3" onClick={()=>setWildAt(null)}>取消</button></section>}
     {(stuck||match.drawnCardId!==undefined)&&match.turn===0&&match.winner===null&&<button className="chip chip-solid mt-4" onClick={draw}>{match.drawnCardId!==undefined?'保留此牌并过牌':'摸一张'}</button>}
-    {match.winner!==null&&<button className="chip chip-solid mt-4" onClick={()=>{setWildAt(null);setMatch(freshMatch(props.names))}}>再来一局</button>}
+    {match.winner!==null&&<button className="chip chip-solid mt-4" onClick={()=>{setWildAt(null);const next=freshMatch(props.names);setMatch(next);tableEvent('UNO再来一局。'+unoSituation(next),false,true)}}>再来一局</button>}
     <details className="menu-card mt-4 text-xs leading-6"><summary>玩法说明</summary><p>同色、同数字或同功能可以出牌。摸牌后只能打出本次摸到的牌，或选择过牌。+4 仅在没有当前颜色时可出；不叠加罚牌。牌面同时显示颜色名称。</p></details>
   </Screen>
 }
@@ -571,10 +577,12 @@ export function TableApp(props: { onBack: () => void }) {
   const [chosen, setChosen] = useState<string[]>([])
   const [names, setNames] = useState<string[]>([])
   const [playing, setPlaying] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [recordSession, setRecordSession] = useState<TableSummary | null>(null)
   const [people,setPeople]=useState<Array<{person:Character;bond:number}>>([])
   const session=useRef(0),sessionKey=useRef('')
   useEffect(()=>()=>{session.current++},[])
-  useEffect(()=>{if(!playing||!phone)return;const receive=(event:Event)=>{const detail=(event as CustomEvent<{text:string;finished:boolean}>).detail;if(!detail.finished)return;void changeSharedLife(phone.namespace,state=>people.reduce((next,{person})=>addKeepsake(next,{charId:person.id,title:(GAMES.find(g=>g.id===game)?.name??'桌游')+'战绩',text:names.join('、')+'一起玩。'+detail.text,at:Date.now(),kind:'game',source:sessionKey.current+'_'+detail.text}),state)).then(()=>useMellow.getState().touchData()).catch(()=>undefined)};window.addEventListener('mellow-table-event',receive);return()=>window.removeEventListener('mellow-table-event',receive)},[playing,phone,people,game,names])
+  useEffect(()=>{if(!playing||!phone)return;const receive=(event:Event)=>{const detail=(event as CustomEvent<{text:string;finished:boolean;roundStart?:boolean}>).detail;if(detail.roundStart){sessionKey.current=uid('table_session');setRecordSession({id:sessionKey.current,game:GAMES.find(item=>item.id===game)?.name??'桌游',names,startedAt:Date.now()});return}if(!detail.finished)return;void changeSharedLife(phone.namespace,state=>people.reduce((next,{person})=>addKeepsake(next,{charId:person.id,title:(GAMES.find(g=>g.id===game)?.name??'桌游')+'战绩',text:names.join('、')+'一起玩。'+detail.text,at:Date.now(),kind:'game',source:sessionKey.current+'_'+detail.text}),state)).then(()=>useMellow.getState().touchData()).catch(()=>undefined)};window.addEventListener('mellow-table-event',receive);return()=>window.removeEventListener('mellow-table-event',receive)},[playing,phone,people,game,names])
   useEffect(() => {
     if (!phone) return
     let stop = false
@@ -613,7 +621,9 @@ export function TableApp(props: { onBack: () => void }) {
     if(session.current!==ticket)return
     setPeople(castPeople)
     hostVoice=voice+'\n同桌人设与关系：'+castPeople.map(({person,bond,recent,backstory,sharedNote})=>`${sharedNote}\n${person.name}：${person.personality}；${person.description}；亲密度${bond}/100。共同过往：${backstory}。近期短信（背景记忆，不是本局刚说的话）：${recent}。互动遵循性格和关系，适度给提示，不随意改变规则。`).join('\n')
-    setNames(cast(phone.name, chars, chosen, meta.min, meta.max))
+    const seatedNames = cast(phone.name, chars, chosen, meta.min, meta.max)
+    setNames(seatedNames)
+    setRecordSession({ id: sessionKey.current, game: meta.name, names: seatedNames, startedAt: Date.now() })
     setPlaying(true)
     if(castPeople.length)runAiJob(jobKey(phone.namespace,'table-relationship',String(ticket)),async()=>{
       try{
@@ -633,7 +643,7 @@ export function TableApp(props: { onBack: () => void }) {
     setGame(null)
   }
   let view = (
-    <Screen title="桌游" subtitle="围桌而坐，按顺序轮流" onBack={props.onBack}>
+    <Screen title="桌游" subtitle="围桌而坐，按顺序轮流" onBack={props.onBack} right={<button className="chip text-xs" onClick={() => setHistoryOpen(true)}>游玩历史</button>}>
       <div className="pick-card-grid">
         {GAMES.map((item) => (
           <PickCard
@@ -677,5 +687,5 @@ export function TableApp(props: { onBack: () => void }) {
   if (playing && game === 'uno') view = <Uno names={names} onBack={leave} />
   if (playing && game === 'gomoku') view = <Gomoku names={names} onBack={leave} />
   if (playing && game === 'xiangqi') view = <Xiangqi names={names} onBack={leave} />
-  return <TablePeople.Provider value={people}><div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}{playing&&<TableConversation key={game} game={meta?.name??''} names={names} people={people} ask={hostAsk}/>}</div></TablePeople.Provider>
+  return <TablePeople.Provider value={people}><div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}{historyOpen&&<TableHistory namespace={phone.namespace} onClose={() => setHistoryOpen(false)}/>}{playing&&recordSession&&<TableConversation namespace={phone.namespace} session={recordSession} key={recordSession.id} game={meta?.name??''} names={names} people={people} ask={hostAsk}/>}</div></TablePeople.Provider>
 }

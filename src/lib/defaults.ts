@@ -63,6 +63,7 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
     activeApiId: '',
     installedApps: [],
     appIcons: {},
+    iconSets: [],
     privacy: { enabled: false, hash: '', appLocks: {}, appHashes: {} },
     backup: { enabled: true, intervalHours: 168, lastSavedAt: 0, lastRemindedAt: 0 },
     home: defaultHome(),
@@ -108,6 +109,7 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
     modePresets: { ...MODE_PRESET_DEFAULTS, ...raw?.modePresets },
     installedApps: raw?.installedApps ?? [],
     appIcons: raw?.appIcons ?? {},
+    iconSets: Array.isArray(raw?.iconSets) ? raw.iconSets : [],
     privacy: normalizePrivacy({ ...base.privacy, ...raw?.privacy, appLocks: raw?.privacy?.appLocks ?? {}, appHashes: raw?.privacy?.appHashes ?? {} }),
     backup: normalizeBackup(raw?.backup, base.backup),
     home: {

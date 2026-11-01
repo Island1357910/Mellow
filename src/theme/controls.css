@@ -254,3 +254,17 @@ button:disabled { cursor: not-allowed; }
 
 .connections-shell .scroll{padding-bottom:36px}.connections-shell [role=tabpanel]{min-width:0}.connections-shell [role=tabpanel][hidden]{display:none!important}.connections-shell [role=tabpanel]>.menu-card{box-shadow:none;border:1px solid #8882;background:var(--m-surface,#fff)}.connections-shell .soft-input,.connections-shell .soft-select{max-width:100%;min-width:0}.connections-shell p{overflow-wrap:anywhere}.connections-nav button[aria-selected=true]{color:var(--m-text)!important}.connections-nav button[aria-selected=true] span{color:inherit!important}.shared-links .link-library-card{border:1px solid #8882;box-shadow:0 4px 12px #00000005}.link-library-card>button>svg{padding:9px;box-sizing:content-box;background:var(--m-primary);border-radius:14px;flex:none}.connections-shell details summary{list-style:none}.connections-shell details[open]>summary{margin-bottom:12px}
 .table-app>div{min-height:0;flex:1}
+
+/* Table conversation stays below the board; only the messages scroll. */
+.table-talk{display:flex;flex-direction:column;gap:8px;max-height:43%;min-height:155px;overflow:hidden;padding:10px 14px max(10px,env(safe-area-inset-bottom));flex-shrink:0}
+.table-talk-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;flex:1}
+.table-bubbles{display:flex;flex-direction:column;gap:10px;padding:4px 0}
+.table-message{align-self:flex-start;max-width:88%;min-width:50px;font-size:12px;line-height:1.7}
+.table-message small{display:block;font-size:10px;opacity:.65;margin:0 8px 3px}
+.table-message p{margin:0;background:var(--m-surface,#fff);padding:9px 12px;border-radius:4px 16px 16px 16px;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 2px 6px #00000008}
+.table-message.is-player{align-self:flex-end}.table-message.is-player p{background:var(--m-primary,#f8d0dc);border-radius:16px 4px 16px 16px}.table-message.is-player small{text-align:right}
+.table-reply{display:flex;gap:8px;flex:none}.table-reply input{font-size:14px;padding:9px 12px}
+.table-history-modal{display:flex;flex-direction:column;background:var(--m-background,#faf7f4);color:var(--m-text,#333);border-radius:24px;width:min(100%,440px);max-height:88vh;max-height:88dvh;min-height:50vh;overflow:hidden;box-shadow:0 20px 80px #0003}
+.table-history-modal>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px;border-bottom:1px solid #8882;flex:none;font-size:14px}
+.table-history-scroll{padding:16px;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain}
+.table-event{font-size:11px;line-height:1.8;padding:10px 0;color:var(--m-text-secondary);white-space:pre-wrap;overflow-wrap:anywhere}.table-event time{opacity:.6}

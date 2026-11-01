@@ -107,3 +107,8 @@ function stringFields<T extends Record<string, string>>(source: Record<string, u
   }
   return next
 }
+
+/** User-created/imported themes can be removed; built-in collections stay available. */
+export function canDeleteTheme(id: string): boolean {
+  return !BUNDLED_THEMES.some(theme => theme.id === id) && !id.startsWith('theme_shop_') && id !== 'theme_red_apple_love'
+}

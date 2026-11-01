@@ -1,4 +1,4 @@
-export type TableMoment = { text: string; finished?: boolean; roundStart?: boolean }
+export type TableMoment = { text: string; finished?: boolean; roundStart?: boolean; player?: boolean }
 
 /** One request at a time. New public events wait for the current reply. */
 export function createTableReactions(options: {
@@ -6,6 +6,7 @@ export function createTableReactions(options: {
   onLines: (lines: string[]) => void
   onBusy: (busy: boolean) => void
   onError: (message: string) => void
+  onReply?: (answer: string) => void
 }) {
   let pending: TableMoment[] = [], history: string[] = [], active = true, running = false
   let failed: TableMoment[] = []
@@ -21,9 +22,15 @@ export function createTableReactions(options: {
       const answer = await options.answer(batch, history.slice(-12))
       if (!active) return
       if (!answer.trim()) throw new Error('角色本次没有返回内容，请重试互动')
+      // A reply based on an older board must not appear after newer public moves.
+      if (pending.some(event => !event.player)) {
+        history = [...history, ...batch.map(event => `本局事件：${event.text}`)].slice(-24)
+        return
+      }
       history = [...history, ...batch.map(e => `本局事件：${e.text}`), answer].slice(-24)
       failed = []
       options.onLines([...history])
+      options.onReply?.(answer)
     } catch (error) {
       if (active) {
         failed = batch.slice(-12)

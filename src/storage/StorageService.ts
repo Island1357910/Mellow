@@ -5,7 +5,7 @@ import { sortChats } from '../lib/chats.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { normalizeSettings } from '../lib/defaults.ts'
 import { uid } from '../lib/id.ts'
-import { BUNDLED_THEMES } from '../theme/themes.ts'
+import { BUNDLED_THEMES, canDeleteTheme } from '../theme/themes.ts'
 import type {
   ApiMeta,
   ApiProfile,
@@ -314,6 +314,17 @@ class StorageService {
 
   async saveTheme(theme: Theme): Promise<void> {
     await this.meta.themes.put(theme)
+  }
+
+  async deleteTheme(id: string): Promise<void> {
+    if (!canDeleteTheme(id)) throw new Error('预设主题不能删除')
+    await this.meta.transaction('rw', [this.meta.settings, this.meta.themes], () =>
+      this.meta.settings.get('global').then(settings => {
+        const reset = settings?.themeId === id
+          ? this.meta.settings.put({ ...settings, themeId: 'theme_macaron' })
+          : Dexie.Promise.resolve()
+        return reset.then(() => this.meta.themes.delete(id))
+      }))
   }
 
   async listThemes(): Promise<Theme[]> {
