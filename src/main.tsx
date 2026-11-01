@@ -1,22 +1,13 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
-import { ensureFreshClient, watchForRemoteUpgrade } from './lib/upgrade.ts'
-import { setupNativeApp } from './lib/native.ts'
+import './lib/runtimeCompat.ts'
 import './index.css'
-import './theme/halloween.css'
-import './theme/controls.css'
-import './theme/apple.css'
 
-function start() {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  )
-  void ensureFreshClient()
-  watchForRemoteUpgrade()
-  void setupNativeApp()
+declare global {
+  interface Window {
+    __mellowStartup?: { ready: () => void; fail: (message: string) => void }
+  }
 }
 
-start()
+// Catch import/evaluation errors that occur before React can render its boundary.
+void import('./renderApp.tsx').then(app => app.start()).catch(error => {
+  window.__mellowStartup?.fail(error instanceof Error ? error.message : String(error))
+})

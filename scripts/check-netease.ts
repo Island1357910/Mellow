@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
-import { createDecipheriv } from 'node:crypto'
+import { createDecipheriv, createPublicKey } from 'node:crypto'
 import { accountAction, cleanCookie, sessionFromHeaders, weapi } from '../src/lib/neteaseProtocol.ts'
 import { accountSupported, forgetNeteaseAccount, neteaseAccountCall, readNeteaseAccount, saveNeteaseAccount } from '../src/lib/neteaseAccount.ts'
 
@@ -12,6 +12,15 @@ const decodeRequest = (body: unknown) => JSON.parse(decrypt(decrypt(new URLSearc
 const encrypted = await weapi({ test: '中文' })
 assert.deepEqual(decodeRequest(encrypted), { test: '中文' })
 assert.equal(encrypted.get('encSecKey')?.length, 256)
+const pub = createPublicKey({ key: Buffer.from('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB', 'base64'), format: 'der', type: 'spki' }).export({ format: 'jwk' })
+const modulus = BigInt('0x' + Buffer.from(pub.n!, 'base64url').toString('hex'))
+let base = BigInt('0x' + '61'.repeat(16)), exponent = 65537n, expected = 1n
+while (exponent) { if (exponent & 1n) expected = expected * base % modulus; base = base * base % modulus; exponent >>= 1n }
+assert.equal(encrypted.get('encSecKey'), expected.toString(16).padStart(256, '0'), 'compatibility RSA matches native bigint exactly')
+const bigint = Object.getOwnPropertyDescriptor(globalThis, 'BigInt')!
+Object.defineProperty(globalThis, 'BigInt', { configurable: true, value: undefined })
+try { assert.equal((await weapi({ test: '旧内核' })).get('encSecKey'), encrypted.get('encSecKey')) }
+finally { Object.defineProperty(globalThis, 'BigInt', bigint) }
 assert.throws(() => cleanCookie('MUSIC_U=x\r\nOther: bad'), /格式/)
 assert.equal(cleanCookie('MUSIC_U=fake-a; __csrf=csrf-a; ignored=secret'), 'MUSIC_U=fake-a; __csrf=csrf-a')
 assert.throws(() => sessionFromHeaders(new Headers({ Authorization: 'Bearer not-base64!' })), /失效/)

@@ -1,11 +1,12 @@
 // Web API interoperability, based on the publicly documented weapi format.
 // Reference: NeteaseCloudMusicApiEnhanced/api-enhanced (MIT, Binaryify).
+import JSBI from 'jsbi'
 type Row = Record<string, any>
 const ORIGIN = 'https://music.163.com'
 const SPKI = 'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB'
 const bytes = (s: string) => new TextEncoder().encode(s)
 const b64 = (data: Uint8Array) => btoa(String.fromCharCode(...data))
-let modulus: Promise<bigint> | undefined
+let modulus: Promise<JSBI> | undefined
 async function aes(text: string, key: string): Promise<string> {
   const k = await crypto.subtle.importKey('raw', bytes(key), 'AES-CBC', false, ['encrypt'])
   return b64(new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-CBC', iv: bytes('0102030405060708') }, k, bytes(text))))
@@ -16,11 +17,15 @@ export async function weapi(data: Row): Promise<URLSearchParams> {
   const key = [...random].map(n => alphabet[n % alphabet.length]).join('')
   modulus ??= crypto.subtle.importKey('spki', Uint8Array.from(atob(SPKI), c => c.charCodeAt(0)), { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['encrypt']).then(k => crypto.subtle.exportKey('jwk', k)).then(jwk => {
     const raw = atob(jwk.n!.replace(/-/g, '+').replace(/_/g, '/'))
-    return BigInt('0x' + [...raw].map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(''))
+    return JSBI.BigInt('0x' + [...raw].map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(''))
   })
   const n = await modulus
-  let base = BigInt('0x' + [...key].reverse().map(c => c.charCodeAt(0).toString(16)).join('')), exponent = 65537n, encrypted = 1n
-  while (exponent) { if (exponent & 1n) encrypted = encrypted * base % n; base = base * base % n; exponent >>= 1n }
+  let base = JSBI.BigInt('0x' + [...key].reverse().map(c => c.charCodeAt(0).toString(16)).join('')), exponent = 65537, encrypted = JSBI.BigInt(1)
+  while (exponent) {
+    if (exponent % 2) encrypted = JSBI.remainder(JSBI.multiply(encrypted, base), n)
+    base = JSBI.remainder(JSBI.multiply(base, base), n)
+    exponent = Math.floor(exponent / 2)
+  }
   return new URLSearchParams({ params: await aes(await aes(JSON.stringify(data), '0CoJUm6Qyw8W8jud'), key), encSecKey: encrypted.toString(16).padStart(256, '0') })
 }
 export class AccountError extends Error {

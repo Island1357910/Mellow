@@ -21,11 +21,22 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Serif+SC:wght@400;600&family=ZCOOL+XiaoWei&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
     <title>半糖 · Mellow</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="mellow-startup" style="position:fixed;inset:0;top:0;right:0;bottom:0;left:0;background:#fdfbf7;color:#3a3a3a;text-align:center;padding:20vh 24px 24px;font:16px/1.8 sans-serif;box-sizing:border-box">
+      <img src="%BASE_URL%apple-touch-icon.png" alt="" width="72" height="72" style="border-radius:22px" />
+      <h1 style="font-size:24px">半糖 Mellow</h1><p id="mellow-startup-message" role="status">正在打开小手机…</p>
+      <div id="mellow-startup-help" style="display:none"><p>请先尝试重新打开。若仍无法启动，可在手机应用商店更新 Android System WebView 或 Chrome，再打开半糖。不要卸载半糖或清除应用数据。</p>
+        <button type="button" onclick="location.reload()" style="padding:12px 24px;background:#b5e8d5;border:0;border-radius:18px;color:#294d41">重新打开</button>
+        <p><a href="https://mymellow.top/" target="_blank" rel="noopener" style="color:#526e5b">使用网页版（与 APP 的本地数据独立）</a></p>
+        <details><summary>启动诊断</summary><pre id="mellow-startup-diagnostic" style="font:11px/1.5 monospace;white-space:pre-wrap;word-break:break-all;text-align:left"></pre></details>
+      </div>
+    </div></div>
+    <script src="%BASE_URL%boot.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

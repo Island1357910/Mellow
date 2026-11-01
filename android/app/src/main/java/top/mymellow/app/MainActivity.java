@@ -1,10 +1,15 @@
 package top.mymellow.app;
 
 import android.graphics.Color;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -16,6 +21,11 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NeteaseDirectPlugin.class);
         super.onCreate(savedInstanceState);
+        if (bridge == null || bridge.getWebView() == null) {
+            showStartupHelp();
+            return;
+        }
+        bridge.getWebView().setBackgroundColor(Color.rgb(253, 251, 247));
         // User-selected songs resolve their authorized URL asynchronously.
         bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
         Window window = getWindow();
@@ -41,6 +51,32 @@ public class MainActivity extends BridgeActivity {
             return insets;
         });
         window.getDecorView().post(this::enterFullscreen);
+    }
+
+    private void showStartupHelp() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(android.view.Gravity.CENTER);
+        int padding = (int) (24 * getResources().getDisplayMetrics().density);
+        panel.setPadding(padding, padding, padding, padding);
+        panel.setBackgroundColor(Color.rgb(253, 251, 247));
+        TextView message = new TextView(this);
+        message.setText("半糖暂时无法启动\n\n请在手机应用商店更新 Android System WebView 或 Chrome，再重新打开。请勿卸载半糖或清除应用数据。\n\n手机：" + Build.MANUFACTURER + " " + Build.MODEL + "\nAndroid " + Build.VERSION.RELEASE);
+        message.setTextColor(Color.rgb(58, 58, 58));
+        message.setTextSize(17);
+        panel.addView(message);
+        Button retry = new Button(this);
+        retry.setText("重新打开");
+        retry.setOnClickListener(view -> recreate());
+        panel.addView(retry);
+        Button browser = new Button(this);
+        browser.setText("使用网页版（本地数据独立）");
+        browser.setOnClickListener(view -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://mymellow.top/"))); }
+            catch (android.content.ActivityNotFoundException error) { message.append("\n未找到可用浏览器。"); }
+        });
+        panel.addView(browser);
+        setContentView(panel);
     }
 
     @Override

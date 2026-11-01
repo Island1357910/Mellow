@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "./theme/halloween.css";
+@import "./theme/controls.css";
+@import "./theme/apple.css";
 @source not "../services";
 
 :root {
@@ -43,8 +46,12 @@ button {
 }
 
 .stage {
-  height: 100dvh;
+  height: 100vh;
   width: 100%;
+}
+
+@supports (height: 100dvh) {
+  .stage { height: 100dvh; }
 }
 
 .device {
@@ -68,6 +75,7 @@ button {
   overflow: hidden;
   width: 100%;
   height: 100%;
+  background-color: var(--m-background);
   background:
     radial-gradient(520px 280px at 8% 0%, color-mix(in srgb, var(--m-primary) 55%, transparent), transparent 70%),
     radial-gradient(480px 260px at 100% 8%, color-mix(in srgb, var(--m-secondary) 50%, transparent), transparent 68%),

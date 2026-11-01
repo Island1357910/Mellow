@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
@@ -21,7 +21,8 @@
     "check:shared-life": "node --import ./scripts/check-env.mjs scripts/check-shared-life.ts",
     "check:interactions": "node --import ./scripts/check-env.mjs scripts/check-interactions.ts",
     "check:table-input": "node --import ./scripts/check-env.mjs scripts/check-table-input.ts",
-    "check:connections": "node scripts/check-connection-tabs.mjs"
+    "check:connections": "node scripts/check-connection-tabs.mjs",
+    "check:compat": "node scripts/check-compat.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -29,23 +30,33 @@
     "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/share": "^8.0.3",
+    "abort-controller": "^3.0.0",
+    "core-js": "^3.51.0",
     "dexie": "^4.2.1",
     "framer-motion": "^12.23.22",
+    "jsbi": "^4.3.2",
     "lucide-react": "^0.545.0",
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "resize-observer-polyfill": "^1.5.1",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
+    "@csstools/postcss-cascade-layers": "^6.0.2",
+    "@csstools/postcss-color-mix-function": "^4.0.16",
+    "@csstools/postcss-oklab-function": "^5.0.16",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-legacy": "^8.2.3",
     "@vitejs/plugin-react": "^6.1.1",
+    "acorn": "^8.19.0",
     "fake-indexeddb": "^6.2.5",
     "oxlint": "^1.81.0",
+    "postcss": "^8.5.32",
     "tailwindcss": "^4.1.14",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"

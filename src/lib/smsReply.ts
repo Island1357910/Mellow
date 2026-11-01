@@ -10,9 +10,9 @@ function splitText(text: string, min: number, max: number): string[] {
   const hasSegmenter = typeof Intl.Segmenter === 'function'
   let atoms = hasSegmenter
     ? [...new Intl.Segmenter('zh-CN', { granularity: 'sentence' }).segment(text)].map(item => item.segment)
-    : text.split(/(?<=[。！？!?])\s*/u).filter(Boolean)
+    : text.match(/[^。！？!?]*[。！？!?]+|[^。！？!?]+$/gu) ?? [text]
   if (atoms.length < target && text.length > 110 && !/https?:\/\/|```/i.test(text)) {
-    atoms = atoms.flatMap(atom => atom.split(/(?<=[，；;,])\s*/u))
+    atoms = atoms.flatMap(atom => atom.match(/[^，；;,]*[，；;,]+|[^，；;,]+$/gu) ?? [atom])
   }
   // 无标点长文按词分组，避免把中文词、英文单词或 emoji 从中切开。
   if (hasSegmenter && atoms.length < target && text.length > 160 && !/https?:\/\/|```/i.test(text)) {
