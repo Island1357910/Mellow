@@ -13,8 +13,8 @@
 <body><main>
   <img class="logo" src="../apple-touch-icon.png" alt="半糖Logo">
   <small>半糖 · MELLOW</small><h1>把新日常，装进手机。</h1>
-  <p>1.1.3 · 壁纸导入与显示修复</p>
-  <section class="card"><h2>Android 更新包</h2><p>沿用原包名与签名，可以直接覆盖安装。</p><a class="download" href="./Mellow-1.1.3.apk" download="Mellow-1.1.3.apk">下载半糖 Mellow 1.1.3</a><a class="secondary" href="https://github.com/Island1357910/Mellow/releases/tag/android-v1.1.3" target="_blank" rel="noreferrer">备用下载与版本说明</a><a class="secondary" href="./Mellow-1.1.3.sha256.txt">查看 SHA-256 校验值</a><p class="notice">请勿先卸载旧版，以免丢失本机角色和聊天记录。更新前可以在「设置 → 数据」导出备份。</p></section>
-  <section class="card"><h2>这次更新了什么</h2><ul><li>修复壁纸导入后被主题背景遮住的问题，桌面与锁屏共用独立图片层。</li><li>修复大图无法显示、桌面横向翻页时壁纸被滚走的问题。</li><li>增加导入预览、读取状态和明确错误提示，读取完成后再重置选择器，可重复导入同一张图。</li><li>支持识别手机文件提供器缺失的图片类型，损坏图片不会覆盖原有壁纸。</li></ul><p class="notice">保留之前的旧版安卓启动兼容修复。直接覆盖安装即可，请勿先卸载旧版或清除应用数据。</p></section>
+  <p>1.1.4 · 本地数据库启动修复</p>
+  <section class="card"><h2>Android 更新包</h2><p>沿用原包名与签名，可以直接覆盖安装。</p><a class="download" href="./Mellow-1.1.4.apk" download="Mellow-1.1.4.apk">下载半糖 Mellow 1.1.4</a><a class="secondary" href="https://github.com/Island1357910/Mellow/releases/tag/android-v1.1.4" target="_blank" rel="noreferrer">备用下载与版本说明</a><a class="secondary" href="./Mellow-1.1.4.sha256.txt">查看 SHA-256 校验值</a><p class="notice">请勿先卸载旧版，以免丢失本机角色和聊天记录。更新前可以在「设置 → 数据」导出备份。</p></section>
+  <section class="card"><h2>这次更新了什么</h2><ul><li>修复部分旧内核启动时报「Transaction committed too early」的问题。</li><li>启动和糖币、订单等事务改用数据库自身的 Promise 链，避免原生异步回调带来的兼容风险。</li><li>首次初始化可补齐未完成的记录，保留已有身份、主题和个人预设。</li><li>启动失败时显示中文提示、诊断信息和「重新尝试启动」入口。</li></ul><p class="notice">直接覆盖安装即可，请勿先卸载旧版或清除应用数据。保留此前的壁纸和旧版安卓兼容修复。</p></section>
   <footer><a href="../">打开网页版半糖</a> · <a href="./mellow-netease-fc.zip" download>网易云服务维护包</a></footer>
 </main></body></html>

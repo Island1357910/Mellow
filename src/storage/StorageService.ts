@@ -28,6 +28,7 @@ import { normalizeFeedPosts } from '../lib/feed.ts'
 import { markBuildCurrent, needsDataUpgrade } from '../lib/upgrade.ts'
 import { decryptSecret, encryptSecret } from './crypto.ts'
 import { MetaDB, NamespaceDB } from './db.ts'
+import { initializeMeta } from './initializeMeta.ts'
 
 const EPHEMERAL_BAG_IDS = new Set([
   'circle-feed',
@@ -135,32 +136,7 @@ class StorageService {
 
   private async bootOnce(): Promise<BootSnapshot> {
     await this.meta.open()
-    await this.meta.transaction(
-      'rw',
-      this.meta.settings,
-      this.meta.identities,
-      this.meta.themes,
-      this.meta.presets,
-      async () => {
-        const existing = await this.meta.settings.get('global')
-        if (existing) return
-        const identity: Identity = {
-          id: uid('id'),
-          name: '我',
-          avatar: '🙂',
-          persona: '一个会在这台小手机里打字的人。',
-          namespace: 'mellow_main',
-          defaultForApps: {},
-          perAppOverride: {},
-          createdAt: Date.now(),
-        }
-        const settings = normalizeSettings({ activeIdentityId: identity.id })
-        await this.meta.identities.add(identity)
-        await this.meta.themes.bulkAdd(BUNDLED_THEMES)
-        await this.meta.presets.bulkAdd(OFFICIAL_PRESETS)
-        await this.meta.settings.add(settings)
-      },
-    )
+    await initializeMeta(this.meta)
     if (needsDataUpgrade()) await this.runDataUpgrade()
     await this.ensureBundled()
     markBuildCurrent()
@@ -435,23 +411,16 @@ class StorageService {
     const db = this.ns(namespace)
     const chats = await db.chats.filter((chat) => chat.memberIds.includes(id)).toArray()
     await db.permissions.where('charId').equals(id).delete()
-    await db.transaction('rw', db.chars, db.chats, db.messages, db.charState, db.notifyPrefs, async () => {
-      await db.chars.delete(id)
-      await db.charState.delete(id)
-      await db.notifyPrefs.delete(id)
-      for (const chat of chats) {
-        if (chat.kind === 'dm') {
-          await db.messages.where('chatId').equals(chat.id).delete()
-          await db.chats.delete(chat.id)
-          continue
-        }
-        await db.chats.put({ ...chat, memberIds: chat.memberIds.filter((memberId) => memberId !== id), updatedAt: Date.now() })
-        const groupMessages = await db.messages.where('chatId').equals(chat.id).toArray()
-        for (const message of groupMessages.filter((item) => item.charId === id)) {
-          await db.messages.delete(message.id)
-        }
-      }
-    })
+    await db.transaction('rw', db.chars, db.chats, db.messages, db.charState, db.notifyPrefs, () =>
+      Dexie.Promise.all<unknown>([
+        db.chars.delete(id), db.charState.delete(id), db.notifyPrefs.delete(id),
+        ...chats.map(chat => chat.kind === 'dm'
+          ? Dexie.Promise.all([db.messages.where('chatId').equals(chat.id).delete(), db.chats.delete(chat.id)])
+          : Dexie.Promise.all([
+              db.chats.put({ ...chat, memberIds: chat.memberIds.filter(memberId => memberId !== id), updatedAt: Date.now() }),
+              db.messages.where('chatId').equals(chat.id).and(message => message.charId === id).delete(),
+            ])),
+      ]))
   }
 
   async listChats(namespace: string): Promise<Chat[]> {
@@ -563,57 +532,57 @@ class StorageService {
   /** Commit virtual currency and an app state together, including across browser tabs. */
   async updateEconomy<T>(namespace: string, id: string, change: (state: T | null, coins: number) => { state: T; coins: number }): Promise<{ state: T; coins: number }> {
     const db = this.ns(namespace)
-    return db.transaction('rw', db.appData, async () => {
-      const state = (await db.appData.get(id))?.value as T | undefined
-      const saved = (await db.appData.get('coins'))?.value
+    return db.transaction('rw', db.appData, () => db.appData.bulkGet([id, 'coins']).then(([stateRow, coinsRow]) => {
+      const state = stateRow?.value as T | undefined
+      const saved = coinsRow?.value
       const coins = typeof saved === 'number' && Number.isFinite(saved) ? saved : 20
       const next = change(state ?? null, coins)
       if (!Number.isFinite(next.coins) || next.coins < 0) throw new Error('余额不足')
-      await db.appData.bulkPut([{ id, value: next.state }, { id: 'coins', value: next.coins }])
-      return next
-    })
+      return db.appData.bulkPut([{ id, value: next.state }, { id: 'coins', value: next.coins }]).then(() => next)
+    }))
   }
 
   async changeAppBags(namespace: string, ids: string[], change: (bags: Record<string, unknown>) => Record<string, unknown>): Promise<Record<string, unknown>> {
     const db = this.ns(namespace)
-    return db.transaction('rw', db.appData, async () => {
-      const rows = await db.appData.bulkGet(ids)
+    return db.transaction('rw', db.appData, () => db.appData.bulkGet(ids).then(rows => {
       const bags = Object.fromEntries(ids.map((id, i) => [id, rows[i]?.value ?? null]))
       const next = change(bags)
-      await db.appData.bulkPut(ids.map(id => ({ id, value: next[id] })))
-      return next
-    })
+      return db.appData.bulkPut(ids.map(id => ({ id, value: next[id] }))).then(() => next)
+    }))
   }
 
   async commitPaidChatMessage(namespace: string, chatId: string, message: ChatMessage, cost: number, bagId: string, change: (saved: unknown) => unknown): Promise<void> {
     if (!Number.isFinite(cost) || cost < 0) throw Error('礼物金额无效')
     const db = this.ns(namespace)
-    await db.transaction('rw', db.appData, db.messages, db.chats, async () => {
-      if (await db.messages.get(message.id)) return
-      const chat = await db.chats.get(chatId)
-      if (!chat || chat.blocked) throw Error('这个会话暂时不能送礼')
-      const savedCoins = (await db.appData.get('coins'))?.value
-      const coins = typeof savedCoins === 'number' && Number.isFinite(savedCoins) ? savedCoins : 20
-      if (coins < cost) throw Error(`糖币不够，还差 ${cost - coins} 枚`)
-      const next = change((await db.appData.get(bagId))?.value ?? null)
-      await db.appData.bulkPut([{ id: 'coins', value: coins - cost }, { id: bagId, value: next }])
-      await db.messages.put(message)
-      await db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: message.createdAt })
-    })
+    await db.transaction('rw', db.appData, db.messages, db.chats, () => db.messages.get(message.id).then(existing => {
+      if (existing) return
+      return db.chats.get(chatId).then(chat => {
+        if (!chat || chat.blocked) throw Error('这个会话暂时不能送礼')
+        return db.appData.bulkGet(['coins', bagId]).then(([coinsRow, bagRow]) => {
+          const savedCoins = coinsRow?.value
+          const coins = typeof savedCoins === 'number' && Number.isFinite(savedCoins) ? savedCoins : 20
+          if (coins < cost) throw Error(`糖币不够，还差 ${cost - coins} 枚`)
+          const next = change(bagRow?.value ?? null)
+          return db.appData.bulkPut([{ id: 'coins', value: coins - cost }, { id: bagId, value: next }])
+            .then(() => db.messages.put(message))
+            .then(() => db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: message.createdAt }))
+        })
+      })
+    }))
   }
 
   async purchaseDelivery(namespace:string,order:import('../lib/delivery.ts').Delivery,purchasedIds?:string[]):Promise<void>{
     const db=this.ns(namespace),cartId=order.shop==='duotao'?'cart_duotao':'cart_flash'
-    await db.transaction('rw',db.appData,async()=>{
-      const saved=(await db.appData.get('coins'))?.value
+    await db.transaction('rw',db.appData,()=>db.appData.bulkGet(['coins',cartId,'deliveries']).then(([coinsRow,cartRow,ordersRow])=>{
+      const saved=coinsRow?.value
       const coins=typeof saved==='number'&&Number.isFinite(saved)?saved:20
       if(!Number.isFinite(order.total)||order.total<0||coins<order.total)throw Error('余额不足')
-      const cart=((await db.appData.get(cartId))?.value??[]) as Array<{id:string;qty:number}>
+      const cart=(cartRow?.value??[]) as Array<{id:string;qty:number}>
       if(purchasedIds&&purchasedIds.some(id=>!cart.some(l=>l.id===id)))throw Error('购物车已经变化，请刷新后再结算')
-      const orders=((await db.appData.get('deliveries'))?.value??[]) as import('../lib/delivery.ts').Delivery[]
+      const orders=(ordersRow?.value??[]) as import('../lib/delivery.ts').Delivery[]
       if(orders.some(o=>o.id===order.id))return
-      await db.appData.bulkPut([{id:'coins',value:coins-order.total},{id:'deliveries',value:[order,...orders]},{id:cartId,value:purchasedIds?cart.filter(l=>!purchasedIds.includes(l.id)):[]}])
-    })
+      return db.appData.bulkPut([{id:'coins',value:coins-order.total},{id:'deliveries',value:[order,...orders]},{id:cartId,value:purchasedIds?cart.filter(l=>!purchasedIds.includes(l.id)):[]}])
+    }))
   }
 
   async deleteBag(namespace: string, id: string): Promise<void> {

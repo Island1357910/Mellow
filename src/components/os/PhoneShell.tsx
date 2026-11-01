@@ -55,6 +55,7 @@ export function PhoneShell() {
   const presets = useMellow((state) => state.presets)
   const [dragging, setDragging] = useState(false)
   const [backupAsk, setBackupAsk] = useState(false)
+  const [bootAttempt, setBootAttempt] = useState(0)
   const patchSettings = useMellow((state) => state.patchSettings)
   const identities = useMellow((state) => state.identities)
   const activeIdentityId = useMellow((state) => state.activeIdentityId)
@@ -102,13 +103,13 @@ export function PhoneShell() {
       if (!useMellow.getState().ready) {
         useMellow.setState({
           ready: true,
-          bootError: '启动偏慢或本地存储被浏览器拦住了。请刷新一次；仍不行就换 Chrome/Edge，或在 Cursor 内置浏览器里打开。',
+          bootError: '启动等待超时。请点击「重新尝试启动」；如果仍未打开，请提供「启动诊断」信息。不要卸载或清除应用数据。',
         })
       }
     }, 12_000)
     void boot().finally(() => window.clearTimeout(timer))
     return () => window.clearTimeout(timer)
-  }, [boot])
+  }, [boot, bootAttempt])
 
   useEffect(() => {
     if (!ready || locked) return
@@ -175,9 +176,9 @@ export function PhoneShell() {
         }}
       >
         <div className="relative min-h-0 flex-1">
-          <Wallpaper />
+          {ready && !bootError && <Wallpaper />}
           {!ready ? <Splash title="半糖" body="正在把这台小手机打开" /> : null}
-          {ready && bootError ? <Splash title="开不了机" body={bootError} /> : null}
+          {ready && bootError ? <Splash title="启动未完成" body={/Transaction committed too early|PrematureCommit/i.test(bootError) ? '本地数据库事务没有正常完成。请重新尝试启动，不要卸载或清除应用数据。' : bootError} detail={bootError} onRetry={() => { useMellow.setState({ ready: false, bootError: '' }); setBootAttempt(value => value + 1) }} /> : null}
           {ready && !bootError && locked ? <LockScreen /> : null}
           {ready && !bootError && !locked ? (
             <>
@@ -373,7 +374,7 @@ function HomeBar() {
   )
 }
 
-function Splash(props: { title: string; body: string }) {
+function Splash(props: { title: string; body: string; detail?: string; onRetry?: () => void }) {
   return (
     <div className="absolute inset-0 z-20 grid place-items-center px-8 text-center">
       <div>
@@ -381,7 +382,7 @@ function Splash(props: { title: string; body: string }) {
         <p className="mt-3 text-sm leading-6" style={{ color: 'var(--m-text-secondary)' }}>
           {props.body}
         </p>
-        <div className="mt-5 flex justify-center gap-1.5">
+        {props.onRetry ? <><button type="button" className="chip chip-solid mt-5" onClick={props.onRetry}>重新尝试启动</button><details className="mt-4 text-xs"><summary>启动诊断</summary><p className="readable mt-2 break-words">{props.detail}</p><p className="readable mt-2 break-all">{navigator.userAgent}</p></details></> : <div className="mt-5 flex justify-center gap-1.5">
           {[0, 1, 2].map((dot) => (
             <span
               key={dot}
@@ -389,7 +390,7 @@ function Splash(props: { title: string; body: string }) {
               style={{ background: 'var(--m-primary)', animationDelay: `${dot * 0.18}s` }}
             />
           ))}
-        </div>
+        </div>}
       </div>
     </div>
   )
