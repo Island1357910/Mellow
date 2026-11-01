@@ -37,7 +37,7 @@ import { effectiveTheme } from '../../theme/seasonal.ts'
 import { themeStyle } from '../../theme/applyTheme.ts'
 import { ControlCenter } from './ControlCenter.tsx'
 import { HomeScreen } from './HomeScreen.tsx'
-import { LockScreen } from './LockScreen.tsx'
+import { LockScreen, Wallpaper } from './LockScreen.tsx'
 import { NotificationLayer } from './NotificationLayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
 
@@ -160,7 +160,8 @@ export function PhoneShell() {
         data-season={theme.id === 'theme_halloween' ? 'halloween' : undefined}
         data-font={fontReady ? 'custom' : undefined}
         data-effect={theme.effect}
-        style={{ ...themeStyle(theme), ...(fontReady ? { '--m-font': 'MellowCustom, sans-serif' } : {}), ...(theme.wallpaper ? { backgroundImage: 'url(' + JSON.stringify(theme.wallpaper) + ')', backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}
+        data-wallpaper={theme.wallpaper ? 'custom' : undefined}
+        style={{ ...themeStyle(theme), ...(fontReady ? { '--m-font': 'MellowCustom, sans-serif' } : {}) }}
         onDragOver={(event) => {
           event.preventDefault()
           setDragging(true)
@@ -174,6 +175,7 @@ export function PhoneShell() {
         }}
       >
         <div className="relative min-h-0 flex-1">
+          <Wallpaper />
           {!ready ? <Splash title="半糖" body="正在把这台小手机打开" /> : null}
           {ready && bootError ? <Splash title="开不了机" body={bootError} /> : null}
           {ready && !bootError && locked ? <LockScreen /> : null}

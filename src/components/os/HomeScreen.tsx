@@ -10,7 +10,6 @@ import type { DecorCard } from '../../types/index.ts'
 import { AppGlyph } from './AppGlyph.tsx'
 import { MemoWidget, MoodWidget, PhotoFrame, StampWidget, TodoWidget } from './HomeWidgets.tsx'
 import { MusicPlayer, PlayerSheet } from './MusicPlayer.tsx'
-import { Wallpaper } from './LockScreen.tsx'
 import { SecretLock } from './SecretLock.tsx'
 import { SimBrowser } from './SimBrowser.tsx'
 
@@ -165,7 +164,6 @@ export function HomeScreen() {
         event.stopPropagation()
       }}
     >
-      <Wallpaper />
       <div
         className={settling ? 'home-track is-settle' : 'home-track'}
         style={{ transform: `translate3d(calc(${-page * 100}% + ${dragX}px), 0, 0)` }}

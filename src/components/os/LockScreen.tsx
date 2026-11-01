@@ -65,7 +65,6 @@ export function LockScreen() {
   if (privacy.enabled && privacy.hash) {
     return (
       <div className="absolute inset-0 z-20 overflow-hidden">
-        <Wallpaper />
         <AnimatePresence mode="wait">
           {!showPin ? (
             <LockFace key="face" now={now} onSwipeUp={() => setShowPin(true)} />
@@ -88,13 +87,13 @@ export function LockScreen() {
 
   return (
     <div className="absolute inset-0 z-10 overflow-hidden">
-      <Wallpaper />
       <LockFace now={now} onSwipeUp={unlock} hint="上滑解锁" />
     </div>
   )
 }
 
 export function Wallpaper() {
+  const wallpaper = useMellow(state => state.themes.find(theme => theme.id === state.settings.themeId)?.wallpaper ?? '')
   return (
     <>
       <div
@@ -104,6 +103,7 @@ export function Wallpaper() {
             'linear-gradient(180deg, color-mix(in srgb, var(--m-primary) 38%, var(--m-background)) 0%, var(--m-background) 44%, color-mix(in srgb, var(--m-secondary) 32%, var(--m-background)) 100%)',
         }}
       />
+      {wallpaper && <img src={wallpaper} alt="" className="wallpaper-photo pointer-events-none absolute inset-0" aria-hidden="true" data-holiday-preserve />}
       <div
         className="wallpaper-wash pointer-events-none absolute inset-0 opacity-70"
         style={{

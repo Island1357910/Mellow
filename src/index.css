@@ -50,6 +50,14 @@ button {
   width: 100%;
 }
 
+.wallpaper-photo { display: none; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.device[data-wallpaper="custom"] .wallpaper-photo {
+  display: block;
+}
+.device[data-wallpaper="custom"] .wallpaper-wash,
+.device[data-wallpaper="custom"] .halloween-wallpaper-pattern,
+.device[data-wallpaper="custom"] .apple-atmosphere { display: none !important; }
+
 @supports (height: 100dvh) {
   .stage { height: 100dvh; }
 }
