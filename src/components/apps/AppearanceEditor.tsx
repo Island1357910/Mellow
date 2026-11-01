@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { useEffect, useState } from 'react'
 import type { Theme, ThemeColors } from '../../types/index.ts'
 import { BUNDLED_THEMES } from '../../theme/themes.ts'
@@ -44,7 +45,7 @@ export function AppearanceEditor() {
     <h3 className="font-semibold">自由设计工作台</h3><p className="text-xs leading-5">选色、8 位色码、透明度、背景图片和 CSS 都可以自行设置。保存为个人主题后，可随时切换或导出。</p>
     <input aria-label="主题名称" className="soft-input" value={draft.name} onChange={e => patch({ name: e.target.value })} />
     <div className="grid grid-cols-2 gap-3">{(Object.keys(LABELS) as Array<keyof ThemeColors>).map(k => <ColorField key={k} label={LABELS[k]} value={draft.colors[k]} onChange={v => patch({ colors: { ...draft.colors, [k]: v } })} />)}</div>
-    <label className="block text-xs">圆角（px）<input className="soft-input mt-1" type="number" min="0" max="64" value={parseInt(draft.radius.lg) || 0} onChange={e => patch({ radius: { ...draft.radius, lg: `${Math.max(0, Math.min(64, Number(e.target.value)))}px` } })} /></label>
+    <label className="block text-xs">圆角（px）<NumericInput className="soft-input mt-1" min={0} max={64} value={parseInt(draft.radius.lg) || 0} onValueChange={radius => patch({ radius: { ...draft.radius, lg: `${radius}px` } })} /></label>
     <label className="block text-xs">背景图片<input type="file" accept="image/*" className="file-picker mt-2 block w-full" onChange={e => { void readFile(e.target.files?.[0], false); e.target.value = '' }} /></label>
     <button className="chip" onClick={() => patch({ wallpaper: '' })}>清除背景图</button>
     <label className="block text-xs">导入字体（TTF / OTF / WOFF / WOFF2）<input type="file" accept=".ttf,.otf,.woff,.woff2" className="file-picker mt-2 block w-full" onChange={e => { void readFile(e.target.files?.[0], true); e.target.value = '' }} /></label>

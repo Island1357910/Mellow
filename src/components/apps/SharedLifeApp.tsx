@@ -1,3 +1,4 @@
+import { HorizontalTabs } from '../ui/HorizontalTabs.tsx'
 import './shared-life.css'
 import { useEffect, useRef, useState } from 'react'
 import { Armchair, BookHeart, CalendarDays, Camera, ChevronRight, Gift, Heart, Home, MessageCircle, Plus, Sprout, Users } from 'lucide-react'
@@ -30,7 +31,7 @@ const APPOINTMENT_LABEL = { proposed: '待你确认', planned: '已约好', comp
 
 export function SharedLifeApp({ onBack }: { onBack: () => void }) {
   const phone = useMellow(s => s.identities.find(i => i.id === s.activeIdentityId))
-  return <div className="sms-shell shared-life-shell h-full min-h-0"><Screen title="共度" subtitle="把日常，过成我们的故事" onBack={onBack}>{phone && <SharedLifePanel key={phone.namespace} namespace={phone.namespace}/>}</Screen></div>
+  return <div className="sms-shell shared-life-shell h-full min-h-0"><Screen allowHorizontalScroll title="共度" subtitle="把日常，过成我们的故事" onBack={onBack}>{phone && <SharedLifePanel key={phone.namespace} namespace={phone.namespace}/>}</Screen></div>
 }
 
 export function SharedLifePanel({ namespace, initialCharId }: { namespace: string; initialCharId?: string }) {
@@ -103,7 +104,7 @@ export function SharedLifePanel({ namespace, initialCharId }: { namespace: strin
     <label className="life-person-picker"><span>和谁共度</span><select aria-label="共度角色" disabled={busy || !ready} value={charId} onChange={e => pickPerson(e.target.value)}><option value="">选择一个人</option>{people.map(p => <option key={p.id} value={p.id}>{p.remark || p.name}</option>)}</select></label>
     {!people.length && ready && <div className="life-empty">先在短信或创作里添加一位现代角色。</div>}
     {person && <>
-      <nav className="life-tabs" aria-label="共同生活分类">{TABS.map(({ id, label, Icon }) => <button key={id} aria-pressed={tab === id} className={tab === id ? 'is-active' : ''} onClick={() => { setTab(id); setNote('') }}><Icon size={16}/>{label}</button>)}</nav>
+      <HorizontalTabs className="life-tabs" label="共同生活分类">{TABS.map(({ id, label, Icon }) => <button key={id} aria-pressed={tab === id} className={tab === id ? 'is-active' : ''} onClick={() => { setTab(id); setNote('') }}><Icon size={16}/>{label}</button>)}</HorizontalTabs>
       {busy && <p role="status" className="life-feedback">{person.name} 正在回应…</p>}
       {note && <p role="status" className="life-feedback">{note}</p>}
 

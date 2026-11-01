@@ -53,3 +53,7 @@
 .life-memory p { font-size: 10px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow-y: auto; }
 .shared-life-panel button:disabled { opacity: .45; }
 .shared-life-panel input[type=datetime-local] { min-width: 0; max-width: 100%; box-sizing: border-box; }
+
+/* Horizontal panning must also be allowed by the outer scroll container. */
+.device .shared-life-shell .scroll, .device .life-tabs, .device .life-tabs button { touch-action: pan-x pan-y; }
+.life-tabs { max-width: 100%; min-width: 0; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; user-select: none; }

@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { RedeemPanel } from './RedeemPanel.tsx'
 import { APP_VERSION } from '../../lib/buildInfo.ts'
 import { AppearanceEditor } from './AppearanceEditor.tsx'
@@ -389,15 +390,11 @@ function RoleCard() {
         />
         <label className="mt-2 block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
           主动发消息间隔（分钟）
-          <input
-            type="number"
+          <NumericInput
             min={0}
             max={10080}
-            value={settings.proactiveMinutes || ''}
-            onChange={(event) => {
-              const raw = event.target.value.trim()
-              void patchSettings({ proactiveMinutes: raw ? Math.max(1, Math.min(10080, Number(raw) || 0)) : 0 })
-            }}
+            value={settings.proactiveMinutes}
+            onValueChange={proactiveMinutes => void patchSettings({ proactiveMinutes })}
             placeholder="0 表示关闭"
             className="soft-input mt-1 w-full text-sm"
           />

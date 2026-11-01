@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export function Screen(props: {
   title: string
+  allowHorizontalScroll?: boolean
   subtitle?: string
   onBack?: () => void
   right?: ReactNode
@@ -34,7 +35,7 @@ export function Screen(props: {
         </div>
         <div className="flex shrink-0 items-center">{props.right}</div>
       </header>
-      <div className="scroll min-h-0 flex-1 px-4 pb-16">{props.children}</div>
+      <div className="scroll min-h-0 flex-1 px-4 pb-16" style={props.allowHorizontalScroll ? { touchAction: 'pan-x pan-y' } : undefined}>{props.children}</div>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { useEffect, useMemo, useState } from 'react'
 import { PHONE_APPS } from '../../data/apps.ts'
 import { AIAdapter } from '../../engine/AIAdapter.ts'
@@ -462,7 +463,7 @@ export function BackupPanel() {
       <Toggle label="到时间提醒保存" hint="只是提醒，不会悄悄上传" on={backup.enabled} onChange={(enabled) => void patchSettings({ backup: { ...backup, enabled } })} />
       <label className="mt-2 block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
         每隔多少小时提醒
-        <input type="number" min={1} max={8760} value={backup.intervalHours} onChange={(event) => void patchSettings({ backup: { ...backup, intervalHours: Number(event.target.value) || 168 } })} className="soft-input mt-1 w-full" />
+        <NumericInput min={1} max={8760} value={backup.intervalHours} onValueChange={intervalHours => void patchSettings({ backup: { ...backup, intervalHours } })} className="soft-input mt-1 w-full" />
       </label>
       <p className="preset-hint mt-1">默认 168 小时（约 7 天）。只在本机提醒，不会自动上传。</p>
       <div className="mt-3 flex gap-2">

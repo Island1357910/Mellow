@@ -1,6 +1,7 @@
+import { TableConversation } from './TableConversation.tsx'
 import { addKeepsake, changeSharedLife, readSharedLife, sharedLifeNote } from '../../lib/sharedLife.ts'
 import { uid } from '../../lib/id.ts'
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { askLine, readJson } from '../../lib/ask.ts'
 import { modePresetId } from '../../lib/defaults.ts'
@@ -39,17 +40,16 @@ function hostAsk(system: string, user: string, maxTokens?: number) {
 }
 
 const TablePeople = createContext<Array<{ person: Character; bond: number }>>([])
-function tableEvent(text:string,finished=false){window.dispatchEvent(new CustomEvent('mellow-table-event',{detail:{text,finished}}))}
-function mayYield(info:{person:Character;bond:number}|undefined){return Boolean(info&&info.bond>=50&&!/好胜|争强|不服输|认真/.test(info.person.personality)&&Math.random()<.22)}
-function TableConversation({ game }: { game: string }) {
-  const people = useContext(TablePeople)
-  const [draft,setDraft]=useState(''),[lines,setLines]=useState<string[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('')
-  const historyRef=useRef<string[]>([]),lock=useRef(false),mounted=useRef(true)
-  const react=async(text:string,automatic=false)=>{if(!text.trim()||lock.current)return;lock.current=true;setBusy(true);setError('');const history=[...historyRef.current,`${automatic?'本局事件':'玩家'}：${text}`].slice(-20);historyRef.current=history;setLines(history)
-    try { const answer=await hostAsk(`正在玩${game}，你扮演同桌角色。${people.map(({person,bond})=>`${person.name}：${person.personality}；设定：${person.description}；与玩家亲密度：${bond}/100`).join('\n')}。按人设和关系回应刚刚的游戏事件或玩家的话，亲近的人可逗弄、安慰、暗示或适度放水，好胜者仍认真比赛。只写一两句同桌对话，禁止替玩家行动或声称改变了未执行的棋局。不能获知隐藏牌或未公开身份。`,history.slice(-12).join('\n'),200,);if(mounted.current){historyRef.current=[...history,answer];setLines(historyRef.current)} } catch(e){if(mounted.current)setError(e instanceof Error?e.message:'互动暂时没接上，请重试')}finally{lock.current=false;if(mounted.current)setBusy(false)}}
-  useEffect(()=>{mounted.current=true;const receive=(event:Event)=>{void react(String((event as CustomEvent<{text:string}>).detail.text),true)};window.addEventListener('mellow-table-event',receive);return()=>{mounted.current=false;window.removeEventListener('mellow-table-event',receive)}},[game,people])
-  return <section className="table-talk"><details open><summary>桌边互动</summary><div className="mt-2 max-h-32 space-y-2 overflow-y-auto text-xs leading-6" aria-live="polite">{lines.map((l,i)=><p key={i}>{l}</p>)}</div><form className="mt-2 flex gap-2" onSubmit={e=>{e.preventDefault();const text=draft.trim();if(text&&!lock.current){setDraft('');void react(text)}}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="和同桌聊聊、求个提示…"/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中':'说话'}</button></form>{error&&<p role="status" className="mt-2 text-xs">{error}</p>}</details></section>
+function dispatchTableEvent(text:string,finished=false,roundStart=false){window.dispatchEvent(new CustomEvent('mellow-table-event',{detail:{text,finished,roundStart}}))}
+function useTableEvent() {
+  const active = useRef(true)
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
+  return useCallback((text: string, finished = false, roundStart = false) => {
+    if (active.current) dispatchTableEvent(text, finished, roundStart)
+  }, [])
 }
+
+function mayYield(info:{person:Character;bond:number}|undefined){return Boolean(info&&info.bond>=50&&!/好胜|争强|不服输|认真/.test(info.person.personality)&&Math.random()<.22)}
 
 const NPCS = ['店员', '邻居', '路人', '晚班', '楼对面', '花店']
 const SOUPS = [
@@ -100,6 +100,7 @@ function runAi(match: UnoMatch, yielding=false): UnoMatch {
 }
 
 function Soup(props: { names: string[]; namespace: string; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const dataRevision = useMellow((state) => state.dataRevision)
   const hostIndex = 1
   const [soup] = useState(() => SOUPS[Math.floor(Math.random() * SOUPS.length)] ?? SOUPS[0])
@@ -139,6 +140,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
         const updated = saved.turns.map((item, index) => (index === turnIndex ? { ...item, a: clean } : item))
         await storage.setBag(props.namespace, bagKey, { turns: updated })
         setTurns(updated)
+        tableEvent(`海龟汤公开问答：${who}问：${q}；${host}答：${clean}`)
       } catch (e) {
         const failure=e instanceof Error?e.message:'主持人暂时没有接上'
         const updated=nextTurns.map((item,index)=>index===turnIndex?{...item,a:'本次回答失败：'+failure+'。请重新提问。'}:item)
@@ -160,7 +162,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
           </article>
         ))}
       </div>
-      {open ? <div className="mt-3"><PillNote tone="lilac">{soup.truth}</PillNote></div> : <button type="button" className="chip mt-3" onClick={() => setOpen(true)}>公布汤底</button>}
+      {open ? <div className="mt-3"><PillNote tone="lilac">{soup.truth}</PillNote></div> : <button type="button" className="chip mt-3" onClick={() => { setOpen(true); tableEvent('海龟汤已公布汤底：'+soup.truth,true) }}>公布汤底</button>}
       {asker === 0 ? (
         <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void ask() }}>
           <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="是不是…" className="soft-input" />
@@ -174,16 +176,17 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
 }
 
 function Say(props: { names: string[]; namespace: string; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const [round,setRound]=useState(0),[card,setCard]=useState(()=>pickAt(SAYS)??SAYS[0]!),[hints,setHints]=useState<string[]>([]),[draft,setDraft]=useState(''),[log,setLog]=useState<string[]>([]),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('')
   const describer=round%props.names.length
   const act=async()=>{const text=draft.trim();if(!text||busy||done)return
     if(describer===0&&text.includes(card.word)){setError('提示不能包含答案');return}
     setError('');setDraft('');setBusy(true)
-    if(describer!==0){const good=text.replace(/\s/g,'')===card.word;setLog(l=>[...l,`你猜：${text}`,good?'猜对了！':'还没猜中，再给你一个提示。']);if(good){setDone(true);tableEvent('你说我猜：玩家猜中了'+card.word,true)}else setHints(h=>[...h,card.hints[h.length]??'可以换个角度想想']);setBusy(false);return}
-    const next=[...hints,text];setHints(next);setLog(l=>[...l,`你：${text}`])
+    if(describer!==0){const good=text.replace(/\s/g,'')===card.word;setLog(l=>[...l,`你猜：${text}`,good?'猜对了！':'还没猜中，再给你一个提示。']);if(good){setDone(true);tableEvent('你说我猜：玩家猜中了'+card.word,true)}else { const hint=card.hints[hints.length]??'可以换个角度想想'; setHints(h=>[...h,hint]); tableEvent('玩家猜：'+text+'，还没猜中。公开新提示：'+hint) };setBusy(false);return}
+    const next=[...hints,text];setHints(next);setLog(l=>[...l,`你：${text}`]);tableEvent('你说我猜：玩家给出公开提示：'+text)
     try{for(const name of props.names.slice(1)){const guess=await hostAsk(`你是${name}，正在你说我猜。只能根据玩家实际给出的提示猜一个词，禁止知道答案。只回复一个词。`,next.join('；'),40);setLog(l=>[...l,`${name}：${guess}`]);if(guess.replace(/[。！\s]/g,'')===card.word){setDone(true);setLog(l=>[...l,'猜对了！']);tableEvent('你说我猜：'+name+'根据玩家提示猜中了'+card.word,true);break}}}catch(e){setError(e instanceof Error?e.message:'没有猜成，请再给一个提示重试')}finally{setBusy(false)}}
-  useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live)setHints(line.split('\n').filter(h=>h.trim()&&!h.includes(card.word)))}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names])
-  return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card text-sm leading-7">{hints.join('；')||'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
+  useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live){const publicHints=line.split('\n').filter(h=>h.trim()&&!h.includes(card.word));setHints(publicHints);tableEvent('你说我猜：'+props.names[describer]+'公布提示：'+publicHints.join('；'))}}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names,tableEvent])
+  return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card text-sm leading-7">{hints.join('；')||'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{tableEvent('你说我猜新一轮开始，角色根据当前提示参与，不得透露词卡答案。',false,true);setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
 }
 
 function rolesFor(count: number): string[] {
@@ -199,6 +202,7 @@ type WolfSeat = { name: string; role: string; alive: boolean }
 type NightStep = 'wolf' | 'seer' | 'witch' | 'resolve'
 
 function Wolf(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const [seats, setSeats] = useState<WolfSeat[]>(() => rolesFor(props.names.length).map((role, index) => ({ name: props.names[index] ?? `座位${index}`, role, alive: true })))
   const [phase, setPhase] = useState<'night' | 'day' | 'end'>('night')
   const [nightStep, setNightStep] = useState<NightStep>('wolf')
@@ -210,16 +214,28 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
   const [day, setDay] = useState(1)
   const [speech,setSpeech]=useState(''),[discussion,setDiscussion]=useState<string[]>([]),[discussing,setDiscussing]=useState(false)
   const [checks,setChecks]=useState<Record<string,string[]>>({})
-  const discuss=async()=>{
-    if(!speech.trim()||discussing||!seats[0]?.alive)return
-    const text=speech.trim(),context=[...discussion,`你：${text}`].slice(-20)
+  const discussionLock = useRef(false), alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+  const automaticDay = useRef(0)
+  const discuss=useCallback(async(automatic=false)=>{
+    if(discussionLock.current || (!automatic && (!speech.trim() || !seats[0]?.alive))) return
+    discussionLock.current = true
+    const context=[...discussion, ...(automatic ? ['第 '+day+' 天，'+log+'。请在场玩家依次主动发言。'] : ['你：'+speech.trim()])].slice(-20)
     setSpeech('');setDiscussing(true);setDiscussion(context)
     const replies=await Promise.all(seats.filter((s,i)=>i>0&&s.alive).map(async seat=>{
-      try{const line=await hostAsk(`你是狼人杀玩家${seat.name}，身份${seat.role}（保密）。自己的查验：${(checks[seat.name]??[]).join('；')||'无'}。根据公开发言讨论，不能知道他人的底牌，不可透露系统信息。只写一句角色发言。`,context.join('；'),140);return `${seat.name}：${line}`}
-      catch(e){return `${seat.name} 本次发言失败：${e instanceof Error?e.message:'请重试'}`}
+      try{const line=await hostAsk('你是狼人杀玩家'+seat.name+'，身份'+seat.role+'（保密）。自己的查验：'+((checks[seat.name]??[]).join('；')||'无')+'。根据公开发言主动讨论或质疑，不能知道他人的底牌，不可透露系统信息。只写一句角色发言。',context.join('；'),140);return seat.name+'：'+line}
+      catch(e){return seat.name+' 本次发言失败：'+(e instanceof Error?e.message:'请重试')}
     }))
-    setDiscussion([...context,...replies]);setDiscussing(false)
-  }
+    if(alive.current){setDiscussion([...context,...replies]);setDiscussing(false)}
+    discussionLock.current = false
+  }, [speech, discussion, day, log, seats, checks])
+  useEffect(() => {
+    if(phase !== 'day' || automaticDay.current === day) return
+    automaticDay.current = day
+    tableEvent('狼人杀第 '+day+' 天：'+log+'。只能讨论公开信息。')
+    void discuss(true)
+    // A daytime speech round starts once per day, independently of player speech.
+  }, [phase, day, log, discuss, tableEvent])
   const me = seats[0]
   const living = seats.filter((seat) => seat.alive)
   const outFlags = seats.map((seat) => !seat.alive)
@@ -278,7 +294,8 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
   }
 
   const vote = async (name: string) => {
-    if (discussing) return
+    if (discussionLock.current || discussing) return
+    discussionLock.current = true
     setDiscussing(true)
     const tally: Record<string, number> = me?.alive ? { [name]: 1 } : {}
     const votes=await Promise.all(seats.filter(seat=>seat.alive&&seat.name!==me?.name).map(async seat=>{
@@ -287,6 +304,8 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
       try{const answer=await hostAsk(`你是狼人杀玩家${seat.name}，身份${seat.role}。自己的查验：${(checks[seat.name]??[]).join('；')||'无'}。${seat.role==='狼人'?'狼队友：'+seats.filter(s=>s.role==='狼人').map(s=>s.name).join('、'):''}根据公开发言投票，不能知道其他人的底牌。只回复候选人的名字。`,JSON.stringify({candidates:options.map(s=>s.name),discussion:discussion.slice(-20)}),40);pick=options.find(s=>s.name===answer.trim())??pick}catch{/* 请求失败仍可使用本地投票继续游戏 */}
       return pick?.name
     }))
+    if (!alive.current) return
+    discussionLock.current = false
     for(const pick of votes)if(pick)tally[pick]=(tally[pick]??0)+1
     setDiscussion(d=>[...d,'本轮票数：'+Object.entries(tally).map(([n,c])=>n+' '+c+'票').join('、')])
     setDiscussing(false)
@@ -304,6 +323,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
       tableEvent(wolves===0?'狼人杀：村子赢了':'狼人杀：狼人赢了',true)
       return
     }
+    tableEvent('狼人杀公开投票结果：'+(out?out+' 被投出。':'平票，无人出局。')+'即将进入夜间，简短回应投票，不评论夜间秘密。')
     setPhase('night')
     setNightStep('wolf')
     setDay(value=>value+1)
@@ -364,7 +384,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
       {phase === 'night' && nightStep === 'resolve' ? (
         <button type="button" className="chip chip-solid mt-3" onClick={() => resolveNight(wolfTarget ? [wolfTarget] : [])}>天亮</button>
       ) : null}
-      {phase === 'day'&&<section className="menu-card mt-3"><div className="space-y-2 text-xs leading-6">{discussion.map((l,i)=><p key={i}>{l}</p>)}</div><form className="mt-2 flex gap-2" onSubmit={e=>{e.preventDefault();void discuss()}}><input className="soft-input min-w-0" value={speech} onChange={e=>setSpeech(e.target.value)} placeholder="发言、质疑或询问其他玩家"/><button className="chip shrink-0" disabled={discussing||!me.alive||!speech.trim()}>{discussing?'发言中':'发言'}</button></form></section>}
+      {phase === 'day'&&<section className="menu-card mt-3"><div className="space-y-2 text-xs leading-6">{discussion.map((l,i)=><p key={i}>{l}</p>)}</div><form className="mt-2 flex gap-2" onSubmit={e=>{e.preventDefault();void discuss()}}><input className="soft-input min-w-0" value={speech} onChange={e=>setSpeech(e.target.value)} placeholder="发言、质疑或询问其他玩家"/><button className="chip shrink-0" disabled={discussing||!me.alive||!speech.trim()}>{discussing?'发言中':'发言'}</button></form>{!discussing&&<button type="button" className="chip mt-2" onClick={()=>void discuss(true)}>再听一轮讨论</button>}</section>}
       {phase === 'day' ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {!me.alive&&<button className="chip" disabled={discussing} onClick={()=>void vote('')}>观看其他人的投票</button>}{living.map((seat) => <button key={seat.name} type="button" className="chip" disabled={discussing||!me.alive} onClick={() => void vote(seat.name)}>投 {seat.name}</button>)}
@@ -378,6 +398,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
 }
 
 function Gomoku(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const rival = props.names[1] ?? '对面'
   const people=useContext(TablePeople)
   const rivalInfo=people.find(p=>p.person.name===rival)
@@ -430,6 +451,7 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
 }
 
 function Xiangqi(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const rival = props.names[1] ?? '对面'
   const [board, setBoard] = useState<Board>(() => setupBoard())
   const [pick, setPick] = useState<[number, number] | null>(null)
@@ -445,6 +467,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
       if (winnerOf(after) === 'red') {
         setBoard(after)
         setOver('你赢了')
+        tableEvent('象棋：玩家赢了',true)
         return
       }
       setTurn(1)
@@ -452,6 +475,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
       if (!reply) {
         setBoard(after)
         setOver('对方无棋可走')
+        tableEvent('象棋：对方无棋可走，本局结束',true)
         setTurn(0)
         return
       }
@@ -485,6 +509,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
 }
 
 function Uno(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
   const people=useContext(TablePeople)
   const [match, setMatch] = useState<UnoMatch>(() => freshMatch(props.names))
   const [wildAt, setWildAt] = useState<number | null>(null)
@@ -492,7 +517,7 @@ function Uno(props: { names: string[]; onBack: () => void }) {
     if (match.winner !== null || match.turn === 0) return
     const timer = window.setTimeout(() => {const info=people.find(p=>p.person.name===match.names[match.turn]);const next=runAi(match,mayYield(info));setMatch(next);tableEvent(next.note,next.winner!==null)}, 450)
     return () => window.clearTimeout(timer)
-  }, [match,people])
+  }, [match,people,tableEvent])
   const top = topCard(match)
   const hand = match.hands[0] ?? []
   const play = (index: number, color: UnoColor | null) => {
@@ -652,5 +677,5 @@ export function TableApp(props: { onBack: () => void }) {
   if (playing && game === 'uno') view = <Uno names={names} onBack={leave} />
   if (playing && game === 'gomoku') view = <Gomoku names={names} onBack={leave} />
   if (playing && game === 'xiangqi') view = <Xiangqi names={names} onBack={leave} />
-  return <TablePeople.Provider value={people}><div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}{playing&&<TableConversation key={game} game={meta?.name??''}/>}</div></TablePeople.Provider>
+  return <TablePeople.Provider value={people}><div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}{playing&&<TableConversation key={game} game={meta?.name??''} names={names} people={people} ask={hostAsk}/>}</div></TablePeople.Provider>
 }

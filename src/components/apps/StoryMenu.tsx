@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { ColorField } from './AppearanceEditor.tsx'
 import { ChevronDown, Download, Image, Plus, Trash2, Upload } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
@@ -48,19 +49,13 @@ function Num(props: { label: string; value: number; min: number; max?: number; s
   return (
     <label className="text-[11px]" style={dim}>
       {props.label}
-      <input
-        type="number"
+      <NumericInput
         min={props.min}
         max={props.max}
         step={props.step ?? 1}
         value={props.value}
         className="soft-input mt-1 px-2 py-1.5 text-center"
-        onChange={(event) => {
-          const raw = Number(event.target.value)
-          const base = Number.isFinite(raw) ? raw : props.min
-          const floored = Math.max(props.min, base)
-          props.onChange(props.max == null ? floored : Math.min(props.max, floored))
-        }}
+        onValueChange={props.onChange}
       />
     </label>
   )

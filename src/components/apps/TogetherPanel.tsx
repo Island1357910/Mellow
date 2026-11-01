@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { useEffect, useMemo, useState } from 'react'
 import { storage } from '../../storage/StorageService.ts'
 import { useTogether, bookPages, lyricAt, bindTogetherSource } from '../../lib/together.ts'
@@ -76,7 +77,7 @@ export function TogetherPanel({ namespace }: { namespace: string }) {
         if (Number(response.headers.get('content-length')) > 6_000_000) throw Error('正文文件过大')
         await importBook(await response.text())
       })}>读取正文直链</button>
-      {config.book && <div className="space-y-2"><p className="text-sm font-medium">{config.book.title} · {page + 1} / {pages.length} 页</p><article className="max-h-80 overflow-auto whitespace-pre-wrap rounded-2xl bg-white/50 p-3 text-sm leading-7" key={page}>{pages[page]}</article><div className="flex gap-2"><button className="chip" disabled={page === 0} onClick={() => void patch({ book: { ...config.book!, page: page - 1 } })}>上一页</button><button className="chip" disabled={page >= pages.length - 1} onClick={() => void patch({ book: { ...config.book!, page: page + 1 } })}>下一页</button><input aria-label="跳转阅读页" type="number" className="soft-input w-20" min={1} max={pages.length} value={page + 1} onChange={e => { const at = Number(e.target.value); if (at >= 1 && at <= pages.length) void patch({ book: { ...config.book!, page: at - 1 } }) }} /></div></div>}
+      {config.book && <div className="space-y-2"><p className="text-sm font-medium">{config.book.title} · {page + 1} / {pages.length} 页</p><article className="max-h-80 overflow-auto whitespace-pre-wrap rounded-2xl bg-white/50 p-3 text-sm leading-7" key={page}>{pages[page]}</article><div className="flex gap-2"><button className="chip" disabled={page === 0} onClick={() => void patch({ book: { ...config.book!, page: page - 1 } })}>上一页</button><button className="chip" disabled={page >= pages.length - 1} onClick={() => void patch({ book: { ...config.book!, page: page + 1 } })}>下一页</button><NumericInput aria-label="跳转阅读页" className="soft-input w-20" min={1} max={pages.length} value={page + 1} onValueChange={at => void patch({ book: { ...config.book!, page: at - 1 } })} /></div></div>}
     </div></details>
     {(status || note) && <p role="status" className="whitespace-pre-wrap text-xs leading-6">{note}{note && status ? '\n' : ''}{status}</p>}
     <p className="text-[11px] leading-5 opacity-70">保持小手机打开才能自动同步和发言。切换应用可继续播放；关闭网页、锁屏或系统挂起后不保证运行。普通外部网页和其他音乐 App 的内容需要可用的读取服务，不能仅凭网址直接感知。</p>

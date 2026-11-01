@@ -1,3 +1,4 @@
+import { NumericInput } from '../ui/NumericInput.tsx'
 import { useConnectionsTab } from '../../lib/connectionsTabs.ts'
 import { useTogether } from '../../lib/together.ts'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -1160,13 +1161,12 @@ function Num(props: { label: string; value: number; min: number; max: number; on
   return (
     <label className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>
       {props.label}
-      <input
-        type="number"
+      <NumericInput
         min={props.min}
         max={props.max}
         value={props.value}
         className="soft-input mt-1 px-2 py-1.5 text-center"
-        onChange={(event) => props.onChange(Math.max(props.min, Math.min(props.max, Number(event.target.value) || props.min)))}
+        onValueChange={props.onChange}
       />
     </label>
   )
