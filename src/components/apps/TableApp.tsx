@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { addKeepsake, changeSharedLife, readSharedLife, sharedLifeNote } from '../../lib/sharedLife.ts'
+import { uid } from '../../lib/id.ts'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
-import { askLine } from '../../lib/ask.ts'
+import { askLine, readJson } from '../../lib/ask.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { aiMove as goAi, emptyGrid, winner, type Grid, type Stone } from '../../lib/gomoku.ts'
@@ -33,7 +35,20 @@ let hostVoice = ''
 
 function hostAsk(system: string, user: string, maxTokens?: number) {
   const extra = hostVoice.trim()
-  return askLine(extra ? `${extra}\n${system}` : system, user, maxTokens)
+  return askLine(extra ? `${extra}\n${system}` : system, user, Math.max(768,maxTokens??300),45_000)
+}
+
+const TablePeople = createContext<Array<{ person: Character; bond: number }>>([])
+function tableEvent(text:string,finished=false){window.dispatchEvent(new CustomEvent('mellow-table-event',{detail:{text,finished}}))}
+function mayYield(info:{person:Character;bond:number}|undefined){return Boolean(info&&info.bond>=50&&!/好胜|争强|不服输|认真/.test(info.person.personality)&&Math.random()<.22)}
+function TableConversation({ game }: { game: string }) {
+  const people = useContext(TablePeople)
+  const [draft,setDraft]=useState(''),[lines,setLines]=useState<string[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const historyRef=useRef<string[]>([]),lock=useRef(false),mounted=useRef(true)
+  const react=async(text:string,automatic=false)=>{if(!text.trim()||lock.current)return;lock.current=true;setBusy(true);setError('');const history=[...historyRef.current,`${automatic?'本局事件':'玩家'}：${text}`].slice(-20);historyRef.current=history;setLines(history)
+    try { const answer=await hostAsk(`正在玩${game}，你扮演同桌角色。${people.map(({person,bond})=>`${person.name}：${person.personality}；设定：${person.description}；与玩家亲密度：${bond}/100`).join('\n')}。按人设和关系回应刚刚的游戏事件或玩家的话，亲近的人可逗弄、安慰、暗示或适度放水，好胜者仍认真比赛。只写一两句同桌对话，禁止替玩家行动或声称改变了未执行的棋局。不能获知隐藏牌或未公开身份。`,history.slice(-12).join('\n'),200,);if(mounted.current){historyRef.current=[...history,answer];setLines(historyRef.current)} } catch(e){if(mounted.current)setError(e instanceof Error?e.message:'互动暂时没接上，请重试')}finally{lock.current=false;if(mounted.current)setBusy(false)}}
+  useEffect(()=>{mounted.current=true;const receive=(event:Event)=>{void react(String((event as CustomEvent<{text:string}>).detail.text),true)};window.addEventListener('mellow-table-event',receive);return()=>{mounted.current=false;window.removeEventListener('mellow-table-event',receive)}},[game,people])
+  return <section className="table-talk"><details open><summary>桌边互动</summary><div className="mt-2 max-h-32 space-y-2 overflow-y-auto text-xs leading-6" aria-live="polite">{lines.map((l,i)=><p key={i}>{l}</p>)}</div><form className="mt-2 flex gap-2" onSubmit={e=>{e.preventDefault();const text=draft.trim();if(text&&!lock.current){setDraft('');void react(text)}}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="和同桌聊聊、求个提示…"/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中':'说话'}</button></form>{error&&<p role="status" className="mt-2 text-xs">{error}</p>}</details></section>
 }
 
 const NPCS = ['店员', '邻居', '路人', '晚班', '楼对面', '花店']
@@ -71,10 +86,10 @@ function cast(player: string, chars: Character[], chosen: string[], min: number,
   return names.slice(0, max)
 }
 
-function runAi(match: UnoMatch): UnoMatch {
+function runAi(match: UnoMatch, yielding=false): UnoMatch {
   let next = match
   for (let guard = 0; guard < 1 && next.winner === null && next.turn !== 0; guard += 1) {
-    const choice = aiChoice(next)
+    const choice = yielding ? null : aiChoice(next)
     if (!choice) {
       next = drawForTurn(next)
       continue
@@ -105,7 +120,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
   const ask = () => {
     const q = draft.trim()
     if (!q || busy) return
-    const local = soup.yes.some((word) => q.includes(word)) ? '是' : soup.no.some((word) => q.includes(word)) ? '不是' : '无关'
+    const local = '主持人正在判断…'
     const who = props.names[asker] ?? '我'
     const turnIndex = turns.length
     const nextTurns = [...turns, { who, q, a: local }]
@@ -117,14 +132,18 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
     const truth = soup.truth
     runAiJob(jobKey(props.namespace, 'table-soup', `${sessionId}-${turnIndex}`), async () => {
       try {
-        const line = await hostAsk(`你是海龟汤主持人 ${host}。汤面：${surface}。汤底只有你知道：${truth}。只回答「是」「不是」或「无关」，可以再加四个字。不要揭晓汤底。`, `${who} 问：${q}`, 40)
-        const clean = line.replace(/[。！!]/g, '').slice(0, 12)
-        if (!/是|不|无关/.test(clean)) return
+        const line = await hostAsk(`你是海龟汤主持人 ${host}。汤面：${surface}。汤底只有你知道：${truth}。先回答「是」「不是」或「无关」，再用符合人设的短句回应，亲近时可给不剧透的提示。不要揭晓汤底。`, `${who} 问：${q}`, 40)
+        const clean = line.trim().slice(0, 180)
+        if (!/是|不|无关/.test(clean)) throw Error('主持人未给出明确判断')
         const saved = (await storage.getBag<{ turns: Array<{ who: string; q: string; a: string }> }>(props.namespace, bagKey)) ?? { turns: nextTurns }
         const updated = saved.turns.map((item, index) => (index === turnIndex ? { ...item, a: clean } : item))
         await storage.setBag(props.namespace, bagKey, { turns: updated })
-      } catch {
-        // 本地答案已经写上
+        setTurns(updated)
+      } catch (e) {
+        const failure=e instanceof Error?e.message:'主持人暂时没有接上'
+        const updated=nextTurns.map((item,index)=>index===turnIndex?{...item,a:'本次回答失败：'+failure+'。请重新提问。'}:item)
+        await storage.setBag(props.namespace,bagKey,{turns:updated})
+        setTurns(updated)
       }
     })
   }
@@ -155,129 +174,16 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
 }
 
 function Say(props: { names: string[]; namespace: string; onBack: () => void }) {
-  const dataRevision = useMellow((state) => state.dataRevision)
-  const count = props.names.length
-  const [round, setRound] = useState(0)
-  const [card] = useState(() => SAYS[Math.floor(Math.random() * SAYS.length)] ?? SAYS[0])
-  const [hintIndex, setHintIndex] = useState(0)
-  const [guesserOffset, setGuesserOffset] = useState(1)
-  const [draft, setDraft] = useState('')
-  const [note, setNote] = useState('')
-  const npcGuessed = useRef('')
-  const describer = round % count
-  const guesser = (describer + guesserOffset) % count
-  const phase = hintIndex < (card?.hints.length ?? 0) ? 'hint' : 'guess'
-  const activeSeat = phase === 'hint' ? describer : guesser
-
-  const nextRound = () => {
-    npcGuessed.current = ''
-    setRound((value) => value + 1)
-    setHintIndex(0)
-    setGuesserOffset(1)
-    setNote('')
-    setDraft('')
-  }
-
-  const giveHint = async (text: string) => {
-    if (!text.trim() || text.includes(card.word)) {
-      setNote(text.includes(card.word) ? '这个词不能说出来' : '')
-      return
-    }
-    setNote(`${props.names[describer] ?? '描述者'}：${text.trim()}`)
-    setDraft('')
-    setHintIndex((value) => value + 1)
-  }
-
-  const tryGuess = async (text: string) => {
-    const clean = text.trim()
-    if (!clean) return
-    if (clean === card.word) {
-      setNote(`${props.names[guesser] ?? '玩家'} 猜对了：${card.word}`)
-      return
-    }
-    if (guesserOffset < count - 1) {
-      setGuesserOffset((value) => value + 1)
-      setNote(`${props.names[guesser] ?? '玩家'} 没猜中，换下一位`)
-      setDraft('')
-      return
-    }
-    setNote(`这一轮没人猜中。词是 ${card.word}`)
-  }
-
-  useEffect(() => {
-    if (phase !== 'hint' || describer === 0) return
-    const timer = window.setTimeout(() => {
-      setHintIndex((value) => Math.min(value + 1, card.hints.length))
-      setNote(`${props.names[describer] ?? '描述者'}：${card.hints[hintIndex] ?? '……'}`)
-    }, 900)
-    return () => window.clearTimeout(timer)
-  }, [phase, describer, hintIndex, card.hints])
-
-  useEffect(() => {
-    void storage.getBag<{ note: string; guesserOffset?: number }>(props.namespace, `table_say_${round}`).then((saved) => {
-      if (saved?.note) setNote(saved.note)
-      if (typeof saved?.guesserOffset === 'number') setGuesserOffset(saved.guesserOffset)
-    })
-  }, [props.namespace, round, dataRevision])
-
-  useEffect(() => {
-    if (phase !== 'guess' || guesser === 0) return
-    const key = `${round}-${guesserOffset}-${hintIndex}`
-    if (npcGuessed.current === key) return
-    npcGuessed.current = key
-    const hints = card.hints.slice(0, hintIndex).join('，')
-    const word = card.word
-    const guesserName = props.names[guesser] ?? '玩家'
-    runAiJob(jobKey(props.namespace, 'table-say', key), async () => {
-      try {
-        const line = await hostAsk('你说我猜。只回答一个中文词，不要解释。', `提示：${hints}`, 20)
-        const guess = line.replace(/[。\s]/g, '').slice(0, 8)
-        let message = ''
-        let nextOffset = guesserOffset
-        if (guess === word) message = `${guesserName} 猜对了：${word}`
-        else if (guesserOffset < count - 1) {
-          nextOffset = guesserOffset + 1
-          message = `${guesserName} 猜：${guess || '……'}，不对`
-        } else message = `这一轮结束。词是 ${word}`
-        await storage.setBag(props.namespace, `table_say_${round}`, { note: message, guesserOffset: nextOffset })
-      } catch {
-        await storage.setBag(props.namespace, `table_say_${round}`, { note: `${guesserName} 还在想…` })
-      }
-    })
-  }, [phase, guesser, guesserOffset, hintIndex, round, count, card.word, card.hints, props.names, props.namespace])
-
-  if (!card) return null
-
-  return (
-    <Screen title="你说我猜" subtitle={phase === 'hint' ? `${props.names[describer] ?? ''} 描述` : `${props.names[guesser] ?? ''} 猜词`} onBack={props.onBack}>
-      <RoundTable
-        names={props.names}
-        turn={activeSeat}
-        caption={phase === 'hint' ? '描述者按顺序给提示，不能说出原词' : '其他人轮流猜词'}
-      />
-      {describer === 0 && phase === 'hint' ? (
-        <PillNote tone="butter" compact>你在描述：{card.word}</PillNote>
-      ) : (
-        <article className="menu-card text-sm leading-6">{card.hints.slice(0, hintIndex).join('，') || '还没有提示'}</article>
-      )}
-      {describer === 0 && phase === 'hint' ? (
-        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void giveHint(draft) }}>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="给一句提示" className="soft-input" />
-          <button type="submit" className="chip chip-solid shrink-0">说</button>
-        </form>
-      ) : null}
-      {guesser === 0 && phase === 'guess' ? (
-        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void tryGuess(draft) }}>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="我猜是" className="soft-input" />
-          <button type="submit" className="chip chip-solid shrink-0">猜</button>
-        </form>
-      ) : null}
-      {note ? <div className="mt-3"><PillNote tone="lilac" inline>{note}</PillNote></div> : null}
-      {note.includes('猜对了') || note.includes('词是') ? (
-        <button type="button" className="chip chip-solid mt-3" onClick={nextRound}>下一轮</button>
-      ) : null}
-    </Screen>
-  )
+  const [round,setRound]=useState(0),[card,setCard]=useState(()=>pickAt(SAYS)??SAYS[0]!),[hints,setHints]=useState<string[]>([]),[draft,setDraft]=useState(''),[log,setLog]=useState<string[]>([]),[busy,setBusy]=useState(false),[done,setDone]=useState(false),[error,setError]=useState('')
+  const describer=round%props.names.length
+  const act=async()=>{const text=draft.trim();if(!text||busy||done)return
+    if(describer===0&&text.includes(card.word)){setError('提示不能包含答案');return}
+    setError('');setDraft('');setBusy(true)
+    if(describer!==0){const good=text.replace(/\s/g,'')===card.word;setLog(l=>[...l,`你猜：${text}`,good?'猜对了！':'还没猜中，再给你一个提示。']);if(good){setDone(true);tableEvent('你说我猜：玩家猜中了'+card.word,true)}else setHints(h=>[...h,card.hints[h.length]??'可以换个角度想想']);setBusy(false);return}
+    const next=[...hints,text];setHints(next);setLog(l=>[...l,`你：${text}`])
+    try{for(const name of props.names.slice(1)){const guess=await hostAsk(`你是${name}，正在你说我猜。只能根据玩家实际给出的提示猜一个词，禁止知道答案。只回复一个词。`,next.join('；'),40);setLog(l=>[...l,`${name}：${guess}`]);if(guess.replace(/[。！\s]/g,'')===card.word){setDone(true);setLog(l=>[...l,'猜对了！']);tableEvent('你说我猜：'+name+'根据玩家提示猜中了'+card.word,true);break}}}catch(e){setError(e instanceof Error?e.message:'没有猜成，请再给一个提示重试')}finally{setBusy(false)}}
+  useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live)setHints(line.split('\n').filter(h=>h.trim()&&!h.includes(card.word)))}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names])
+  return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card text-sm leading-7">{hints.join('；')||'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
 }
 
 function rolesFor(count: number): string[] {
@@ -302,6 +208,18 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
   const [saveLeft, setSaveLeft] = useState(true)
   const [poisonLeft, setPoisonLeft] = useState(true)
   const [day, setDay] = useState(1)
+  const [speech,setSpeech]=useState(''),[discussion,setDiscussion]=useState<string[]>([]),[discussing,setDiscussing]=useState(false)
+  const [checks,setChecks]=useState<Record<string,string[]>>({})
+  const discuss=async()=>{
+    if(!speech.trim()||discussing||!seats[0]?.alive)return
+    const text=speech.trim(),context=[...discussion,`你：${text}`].slice(-20)
+    setSpeech('');setDiscussing(true);setDiscussion(context)
+    const replies=await Promise.all(seats.filter((s,i)=>i>0&&s.alive).map(async seat=>{
+      try{const line=await hostAsk(`你是狼人杀玩家${seat.name}，身份${seat.role}（保密）。自己的查验：${(checks[seat.name]??[]).join('；')||'无'}。根据公开发言讨论，不能知道他人的底牌，不可透露系统信息。只写一句角色发言。`,context.join('；'),140);return `${seat.name}：${line}`}
+      catch(e){return `${seat.name} 本次发言失败：${e instanceof Error?e.message:'请重试'}`}
+    }))
+    setDiscussion([...context,...replies]);setDiscussing(false)
+  }
   const me = seats[0]
   const living = seats.filter((seat) => seat.alive)
   const outFlags = seats.map((seat) => !seat.alive)
@@ -314,6 +232,7 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     if (wolves === 0 || wolves >= others) {
       setPhase('end')
       setLog(wolves === 0 ? '村子赢了。' : '狼人赢了。')
+      tableEvent(wolves===0?'狼人杀：村子赢了':'狼人杀：狼人赢了',true)
       return true
     }
     setLog(message)
@@ -326,10 +245,9 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     setSeats(next)
     setNightStep('wolf')
     setWolfTarget(null)
-    setSeen('')
+    // 保留已经查验的信息，直到本局结束
     if (checkWin(next, unique.length ? `天亮了。${unique.join('、')} 没有起来。` : '天亮了。这一夜是安静的。')) return
     setPhase('day')
-    setDay((value) => value + 1)
   }
 
   const finishWolfStep = (target: string | null) => {
@@ -359,14 +277,19 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     finishWolfStep(pickAt(victims)?.name ?? null)
   }
 
-  const vote = (name: string) => {
-    const tally: Record<string, number> = { [name]: 1 }
-    for (const seat of seats) {
-      if (!seat.alive || seat.name === me?.name) continue
-      const options = seats.filter((item) => item.alive && item.name !== seat.name && (seat.role !== '狼人' || item.role !== '狼人'))
-      const pick = pickAt(options)
-      if (pick) tally[pick.name] = (tally[pick.name] ?? 0) + 1
-    }
+  const vote = async (name: string) => {
+    if (discussing) return
+    setDiscussing(true)
+    const tally: Record<string, number> = me?.alive ? { [name]: 1 } : {}
+    const votes=await Promise.all(seats.filter(seat=>seat.alive&&seat.name!==me?.name).map(async seat=>{
+      const options=seats.filter(item=>item.alive&&item.name!==seat.name&&(seat.role!=='狼人'||item.role!=='狼人'))
+      let pick=pickAt(options)
+      try{const answer=await hostAsk(`你是狼人杀玩家${seat.name}，身份${seat.role}。自己的查验：${(checks[seat.name]??[]).join('；')||'无'}。${seat.role==='狼人'?'狼队友：'+seats.filter(s=>s.role==='狼人').map(s=>s.name).join('、'):''}根据公开发言投票，不能知道其他人的底牌。只回复候选人的名字。`,JSON.stringify({candidates:options.map(s=>s.name),discussion:discussion.slice(-20)}),40);pick=options.find(s=>s.name===answer.trim())??pick}catch{/* 请求失败仍可使用本地投票继续游戏 */}
+      return pick?.name
+    }))
+    for(const pick of votes)if(pick)tally[pick]=(tally[pick]??0)+1
+    setDiscussion(d=>[...d,'本轮票数：'+Object.entries(tally).map(([n,c])=>n+' '+c+'票').join('、')])
+    setDiscussing(false)
     const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]
     const out = top && Object.values(tally).filter((value) => value === top[1]).length === 1 ? top[0] : ''
     const next = seats.map((seat) => (seat.name === out ? { ...seat, alive: false } : seat))
@@ -378,11 +301,13 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
     if (wolves === 0 || (wolves > 0 && wolves >= others)) {
       setPhase('end')
       setLog(wolves === 0 ? `${out || '这一轮'}之后，村子赢了。` : '狼人赢了。')
+      tableEvent(wolves===0?'狼人杀：村子赢了':'狼人杀：狼人赢了',true)
       return
     }
     setPhase('night')
     setNightStep('wolf')
-    setLog(`第 ${day + 1} 夜。狼人请睁眼。`)
+    setDay(value=>value+1)
+    setLog(`${out?out+' 被投票出局。':'平票，无人出局。'}第 ${day + 1} 夜。狼人请睁眼。`)
   }
 
   if (!me) return null
@@ -410,18 +335,18 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
           ))}
         </div>
       ) : null}
-      {phase === 'night' && nightStep === 'wolf' && me.role !== '狼人' ? (
+      {phase === 'night' && nightStep === 'wolf' && (!me.alive || me.role !== '狼人') ? (
         <button type="button" className="chip chip-solid mt-3" onClick={autoWolfKill}>狼人行动（自动）</button>
       ) : null}
       {phase === 'night' && nightStep === 'seer' && me.alive && me.role === '预言家' ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {living.filter((seat) => seat.name !== me.name).map((seat) => (
-            <button key={seat.name} type="button" className="chip" onClick={() => { setSeen(`${seat.name} 是 ${seat.role}`); finishSeerStep() }}>{seat.name}</button>
+            <button key={seat.name} type="button" className="chip" onClick={() => { setSeen(previous=>previous+`${previous?'；':''}${seat.name} 是 ${seat.role}`); finishSeerStep() }}>{seat.name}</button>
           ))}
         </div>
       ) : null}
-      {phase === 'night' && nightStep === 'seer' && me.role !== '预言家' ? (
-        <button type="button" className="chip mt-3" onClick={finishSeerStep}>预言家行动（自动）</button>
+      {phase === 'night' && nightStep === 'seer' && (!me.alive || me.role !== '预言家') ? (
+        <button type="button" className="chip mt-3" onClick={()=>{const seer=seats.find(s=>s.alive&&s.role==='预言家'),target=pickAt(seats.filter(s=>s.alive&&s.name!==seer?.name));if(seer&&target)setChecks(previous=>({...previous,[seer.name]:[...(previous[seer.name]??[]),target.name+' 是'+(target.role==='狼人'?'狼人':'好人')]}));finishSeerStep()}}>预言家行动（自动）</button>
       ) : null}
       {phase === 'night' && nightStep === 'witch' && me.alive && me.role === '女巫' ? (
         <div className="mt-3 space-y-2">
@@ -433,15 +358,16 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
           <button type="button" className="chip" onClick={() => finishWitchStep(false, null)}>不用药</button>
         </div>
       ) : null}
-      {phase === 'night' && nightStep === 'witch' && me.role !== '女巫' ? (
-        <button type="button" className="chip mt-3" onClick={() => finishWitchStep(false, null)}>女巫行动（自动）</button>
+      {phase === 'night' && nightStep === 'witch' && (!me.alive || me.role !== '女巫') ? (
+        <button type="button" className="chip mt-3" onClick={()=>{const witch=seats.find(s=>s.alive&&s.role==='女巫');const save=Boolean(saveLeft&&wolfTarget&&(wolfTarget===witch?.name||Math.random()<.6));const poison=!save&&poisonLeft&&Math.random()<.15?pickAt(seats.filter(s=>s.alive&&s.name!==witch?.name&&s.name!==wolfTarget))?.name??null:null;if(save)setSaveLeft(false);if(poison)setPoisonLeft(false);finishWitchStep(save,poison)}}>女巫行动（自动）</button>
       ) : null}
       {phase === 'night' && nightStep === 'resolve' ? (
         <button type="button" className="chip chip-solid mt-3" onClick={() => resolveNight(wolfTarget ? [wolfTarget] : [])}>天亮</button>
       ) : null}
+      {phase === 'day'&&<section className="menu-card mt-3"><div className="space-y-2 text-xs leading-6">{discussion.map((l,i)=><p key={i}>{l}</p>)}</div><form className="mt-2 flex gap-2" onSubmit={e=>{e.preventDefault();void discuss()}}><input className="soft-input min-w-0" value={speech} onChange={e=>setSpeech(e.target.value)} placeholder="发言、质疑或询问其他玩家"/><button className="chip shrink-0" disabled={discussing||!me.alive||!speech.trim()}>{discussing?'发言中':'发言'}</button></form></section>}
       {phase === 'day' ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {living.map((seat) => <button key={seat.name} type="button" className="chip" onClick={() => vote(seat.name)}>投 {seat.name}</button>)}
+          {!me.alive&&<button className="chip" disabled={discussing} onClick={()=>void vote('')}>观看其他人的投票</button>}{living.map((seat) => <button key={seat.name} type="button" className="chip" disabled={discussing||!me.alive} onClick={() => void vote(seat.name)}>投 {seat.name}</button>)}
         </div>
       ) : null}
       {phase === 'end' ? (
@@ -453,7 +379,10 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
 
 function Gomoku(props: { names: string[]; onBack: () => void }) {
   const rival = props.names[1] ?? '对面'
+  const people=useContext(TablePeople)
+  const rivalInfo=people.find(p=>p.person.name===rival)
   const [grid, setGrid] = useState<Grid>(() => emptyGrid())
+  const [zoomed,setZoomed]=useState(false)
   const [over, setOver] = useState('')
   const [turn, setTurn] = useState(0)
   const play = (row: number, col: number) => {
@@ -465,10 +394,13 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
     if (winner(next)) {
       setGrid(next)
       setOver('你赢了')
+      tableEvent('玩家连成五子，赢下了这局',true)
       return
     }
     setTurn(1)
-    const move = goAi(next, 2)
+    const mercy = mayYield(rivalInfo)
+    const empty=next.flatMap((line,r)=>line.flatMap((stone,c)=>stone?[]:[[r,c] as [number,number]]))
+    const move = mercy ? pickAt(empty) : goAi(next, 2)
     if (!move) {
       setGrid(next)
       setOver('下满了')
@@ -480,17 +412,19 @@ function Gomoku(props: { names: string[]; onBack: () => void }) {
     setGrid(next)
     setTurn(0)
     setOver(winner(next) ? `${rival} 赢了` : '')
+    tableEvent(`玩家落在${row+1}行${col+1}列，${rival}落在${move[0]+1}行${move[1]+1}列。${winner(next)?rival+'赢了':''}`,Boolean(winner(next)))
   }
   return (
     <Screen title="五子棋" subtitle={over || (turn === 0 ? '轮到你落子' : `${rival} 在想…`)} onBack={props.onBack}>
       <RoundTable compact variant="board" names={props.names.slice(0, 2)} turn={turn} badges={['黑子', '白子']} caption="黑白轮流，先连五子者胜" />
-      <div className="strategy-board gomoku-board" data-holiday-preserve>
+      <div className="mb-3 flex items-center justify-between text-xs"><span>15 × 15 · 225 个落点</span><button className="chip" onClick={()=>setZoomed(!zoomed)}>{zoomed?'查看全盘':'放大棋盘'}</button></div>
+      <div className="max-w-full overflow-auto" data-no-swipe><div className="strategy-board gomoku-board" style={zoomed?{width:480,minWidth:480}:undefined} data-holiday-preserve>
         {grid.map((line, row) => line.map((stone, col) => (
           <button key={`${row}-${col}`} type="button" aria-label={`第${row + 1}行第${col + 1}列`} className="strategy-cell" onClick={() => play(row, col)}>
             {stone ? <span className={stone===1?'go-stone is-black':'go-stone is-white'} /> : null}
           </button>
         )))}
-      </div>
+      </div></div>
     </Screen>
   )
 }
@@ -524,6 +458,7 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
       const done = applyMove(after, reply.r, reply.c, reply.tr, reply.tc)
       setBoard(done)
       setTurn(0)
+      tableEvent(`玩家从${pick[0]+1},${pick[1]+1}走到${row+1},${col+1}，${rival}完成回应。${winnerOf(done)?'本局结束':''}`,Boolean(winnerOf(done)))
       if (winnerOf(done) === 'black') setOver(`${rival} 赢了`)
       return
     }
@@ -550,13 +485,14 @@ function Xiangqi(props: { names: string[]; onBack: () => void }) {
 }
 
 function Uno(props: { names: string[]; onBack: () => void }) {
+  const people=useContext(TablePeople)
   const [match, setMatch] = useState<UnoMatch>(() => freshMatch(props.names))
   const [wildAt, setWildAt] = useState<number | null>(null)
   useEffect(() => {
     if (match.winner !== null || match.turn === 0) return
-    const timer = window.setTimeout(() => setMatch(current => runAi(current)), 450)
+    const timer = window.setTimeout(() => {const info=people.find(p=>p.person.name===match.names[match.turn]);const next=runAi(match,mayYield(info));setMatch(next);tableEvent(next.note,next.winner!==null)}, 450)
     return () => window.clearTimeout(timer)
-  }, [match])
+  }, [match,people])
   const top = topCard(match)
   const hand = match.hands[0] ?? []
   const play = (index: number, color: UnoColor | null) => {
@@ -570,10 +506,12 @@ function Uno(props: { names: string[]; onBack: () => void }) {
     if (!next) return
     setWildAt(null)
     setMatch(next)
+    tableEvent(next.note,next.winner!==null)
   }
   const draw = () => {
     const next = drawForTurn(match)
     setMatch(next)
+    tableEvent(next.note,next.winner!==null)
   }
   const stuck = hand.every((card) => !canPlayFromHand(match, card))
   const names: Record<UnoColor,string> = {red:'红',yellow:'黄',green:'绿',blue:'蓝'}
@@ -608,6 +546,10 @@ export function TableApp(props: { onBack: () => void }) {
   const [chosen, setChosen] = useState<string[]>([])
   const [names, setNames] = useState<string[]>([])
   const [playing, setPlaying] = useState(false)
+  const [people,setPeople]=useState<Array<{person:Character;bond:number}>>([])
+  const session=useRef(0),sessionKey=useRef('')
+  useEffect(()=>()=>{session.current++},[])
+  useEffect(()=>{if(!playing||!phone)return;const receive=(event:Event)=>{const detail=(event as CustomEvent<{text:string;finished:boolean}>).detail;if(!detail.finished)return;void changeSharedLife(phone.namespace,state=>people.reduce((next,{person})=>addKeepsake(next,{charId:person.id,title:(GAMES.find(g=>g.id===game)?.name??'桌游')+'战绩',text:names.join('、')+'一起玩。'+detail.text,at:Date.now(),kind:'game',source:sessionKey.current+'_'+detail.text}),state)).then(()=>useMellow.getState().touchData()).catch(()=>undefined)};window.addEventListener('mellow-table-event',receive);return()=>window.removeEventListener('mellow-table-event',receive)},[playing,phone,people,game,names])
   useEffect(() => {
     if (!phone) return
     let stop = false
@@ -629,12 +571,39 @@ export function TableApp(props: { onBack: () => void }) {
       return [...current, id]
     })
   }
-  const start = () => {
+  const start = async () => {
     if (!meta) return
+    const ticket=++session.current
+    sessionKey.current=uid('table_session')
+    const chats=await storage.listChats(phone.namespace)
+    const shared=await readSharedLife(phone.namespace)
+    const castPeople=await Promise.all(chars.filter(c=>chosen.includes(c.id)).map(async person=>{
+      const saved=await storage.getBag<number>(phone.namespace,'assess_bond_'+person.id),previous=await storage.getBag<number>(phone.namespace,'table_bond_'+person.id)
+      const intimacy=(await storage.getCharState(phone.namespace,person.id))?.bond.intimacy??0
+      const chat=chats.find(c=>c.kind==='dm'&&c.memberIds.includes(person.id))
+      const recent=chat?(await storage.listMessages(phone.namespace,chat.id)).filter(m=>!m.hidden&&m.kind!=='system').slice(-12).map(m=>(m.role==='user'?phone.name:person.name)+'：'+m.content.slice(0,140)).join('\n'):''
+      const relation=shared.characters[person.id]?.relationship
+      return {person,bond:relation?(relation.familiarity+relation.trust)/2:previous??saved??(intimacy<=1?intimacy*100:intimacy),recent,backstory:chat?.backstory??'',sharedNote:await sharedLifeNote(phone.namespace,person.id)}
+    }))
+    if(session.current!==ticket)return
+    setPeople(castPeople)
+    hostVoice=voice+'\n同桌人设与关系：'+castPeople.map(({person,bond,recent,backstory,sharedNote})=>`${sharedNote}\n${person.name}：${person.personality}；${person.description}；亲密度${bond}/100。共同过往：${backstory}。近期短信（背景记忆，不是本局刚说的话）：${recent}。互动遵循性格和关系，适度给提示，不随意改变规则。`).join('\n')
     setNames(cast(phone.name, chars, chosen, meta.min, meta.max))
     setPlaying(true)
+    if(castPeople.length)runAiJob(jobKey(phone.namespace,'table-relationship',String(ticket)),async()=>{
+      try{
+        const raw=await askLine('根据角色人设、共同过往和最近实际对话评估角色与玩家的亲密程度，不能只凭聊天条数加分，争执冷淡可降分。只返回JSON数组，每项{"id":"原角色id","bond":0至100的整数}。',JSON.stringify(castPeople.map(({person,bond,recent,backstory})=>({id:person.id,name:person.name,personality:person.personality,previousBond:bond,recent,backstory}))),768,45_000)
+        const parsed=readJson(raw)
+        if(!Array.isArray(parsed))return
+        const updated=castPeople.map(row=>{const value=parsed.find(p=>p&&p.id===row.person.id)?.bond;return {...row,bond:typeof value==='number'&&Number.isFinite(value)?Math.max(0,Math.min(100,Math.round(value))):row.bond}})
+        for(const row of updated)await storage.setBag(phone.namespace,'table_bond_'+row.person.id,row.bond)
+        if(session.current===ticket)setPeople(updated)
+      }catch{/* 接口不可用时保留已有关系，棋局仍可继续 */}
+    })
   }
+
   const leave = () => {
+    session.current++
     setPlaying(false)
     setGame(null)
   }
@@ -672,7 +641,7 @@ export function TableApp(props: { onBack: () => void }) {
                 ? '也可以不选，全部用路人坐下。'
                 : '这个游戏只能两个人玩。'}
           </p>
-          <button type="button" className="chip chip-solid mt-2" onClick={start}>开始</button>
+          <button type="button" className="chip chip-solid mt-2" onClick={()=>void start()}>开始</button>
         </div>
       ) : <div className="mt-3"><PillNote tone="lilac">先选一个游戏</PillNote></div>}
     </Screen>
@@ -683,5 +652,5 @@ export function TableApp(props: { onBack: () => void }) {
   if (playing && game === 'uno') view = <Uno names={names} onBack={leave} />
   if (playing && game === 'gomoku') view = <Gomoku names={names} onBack={leave} />
   if (playing && game === 'xiangqi') view = <Xiangqi names={names} onBack={leave} />
-  return <div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}</div>
+  return <TablePeople.Provider value={people}><div className="sms-shell table-app h-full min-h-0" style={candyStyle('#C9B6E8', '#F8D0DC', '#D5F0E4')}>{view}{playing&&<TableConversation key={game} game={meta?.name??''}/>}</div></TablePeople.Provider>
 }

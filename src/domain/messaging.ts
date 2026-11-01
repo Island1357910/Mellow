@@ -1,3 +1,8 @@
+import { walletTask } from '../lib/wallet.ts'
+import { sharedLifeNote, rememberGift, normalizeSharedLife, addKeepsake, SHARED_LIFE_KEY, type SharedLife } from '../lib/sharedLife.ts'
+import { observeSharedLifeTurn } from '../lib/sharedLifeAi.ts'
+import { runAiJob, jobKey } from '../engine/aiJobs.ts'
+import { mapMemoryNote } from '../lib/mapMemory.ts'
 import { togetherNoteFor } from '../lib/together.ts'
 import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
@@ -118,6 +123,7 @@ export async function postUserText(input: {
     quoteText: input.quoteText ?? null,
   }
   await storage.putMessage(input.namespace, userMessage)
+  if(userMessage.kind==='gift'){const parts=userMessage.content.replace(/^\[[^\]]+\]\s*/,'').split('｜');const name=parts[1]?.trim();if(name){const people=await storage.listModernCharacters(input.namespace);for(const id of input.chat.memberIds){const person=people.find(p=>p.id===id);if(person&&(input.chat.kind==='dm'||parts[2]?.includes('所有')||parts[2]?.includes('全体')||parts[2]?.includes(person.name)))await rememberGift(input.namespace,{id:userMessage.id+':'+id,charId:id,name})}}}
   await touchChat(input.namespace, input.chat, userMessage.content, 0, userMessage.kind)
   const fresh = await storage.getChat(input.namespace, input.chat.id)
   if (fresh?.proactiveLastAt) await storage.putChat(input.namespace, { ...fresh, proactiveLastAt: undefined })
@@ -129,6 +135,29 @@ export async function postUserText(input: {
     meta: { chatId: input.chat.id },
   })
   return userMessage
+}
+
+export async function postPaidGiftMessage(input: { namespace: string; identity: Identity; chat: Chat; text: string; cost: number; requestId: string }): Promise<void> {
+  const people = await storage.listModernCharacters(input.namespace)
+  const parts = input.text.replace(/^\[[^\]]+\]\s*/, '').split('｜')
+  const name = parts[1]?.trim()
+  if (!name) throw Error('请选择一份礼物')
+  const recipients = input.chat.memberIds.filter(id => {
+    const p = people.find(p => p.id === id)
+    return p && !p.blocked && (input.chat.kind === 'dm' || /全体|所有/.test(parts[2] ?? '') || parts[2]?.includes(p.nickname || p.name))
+  })
+  if (!recipients.length) throw Error('没有可以接收礼物的人')
+  const message = { ...textMessage({ chatId: input.chat.id, role: 'user', kind: 'gift', content: input.text.trim(), charId: null }), id: input.requestId }
+  await walletTask(input.namespace,()=>storage.commitPaidChatMessage(input.namespace, input.chat.id, message, input.cost, SHARED_LIFE_KEY, saved => {
+    let s = normalizeSharedLife(saved as SharedLife | null)
+    for (const charId of recipients) {
+      const id = message.id + ':' + charId
+      s = addKeepsake({ ...s, gifts: [{ id, charId, name, from: 'player', at: message.createdAt, status: 'received', uses: [] }, ...s.gifts] }, { charId, title: name, text: `你送给 TA 的${name}。`, at: message.createdAt, kind: 'gift', source: id })
+    }
+    return s
+  }))
+  eventBus.emit({ type: 'send_message', app: 'messages', identityId: input.identity.id, meta: { chatId: input.chat.id } })
+  useMellow.getState().touchData()
 }
 
 export async function createGroupChat(namespace: string, title: string, memberIds: string[], ownerId: string): Promise<Chat> {
@@ -283,6 +312,8 @@ export async function replyInChat(input: {
       note: [
         replyNote(input.chat),
         sharedContent,
+        await mapMemoryNote(input.namespace,input.character.id),
+        await sharedLifeNote(input.namespace,input.character.id),
         input.triggerNote ?? '',
         input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
         input.triggerNote ? '' : glance,
@@ -320,6 +351,7 @@ export async function replyInChat(input: {
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
     void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
+    if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})
     return last
   } catch (error) {
     const message =
@@ -361,6 +393,7 @@ export async function deliverSms(input: {
     charId: null,
   })
   await storage.putMessage(input.namespace, userMessage)
+  if(userMessage.kind==='gift'){const parts=userMessage.content.replace(/^\[[^\]]+\]\s*/,'').split('｜');const name=parts[1]?.trim();if(name){const people=await storage.listModernCharacters(input.namespace);for(const id of input.chat.memberIds){const person=people.find(p=>p.id===id);if(person&&(input.chat.kind==='dm'||parts[2]?.includes('所有')||parts[2]?.includes('全体')||parts[2]?.includes(person.name)))await rememberGift(input.namespace,{id:userMessage.id+':'+id,charId:id,name})}}}
   let chat = await touchChat(input.namespace, input.chat, userMessage.content, 0, userMessage.kind)
   await noteRemoteChat(input.namespace, input.character.id, true)
   eventBus.emit({
@@ -385,7 +418,7 @@ export async function deliverSms(input: {
       history,
       fourthWall: input.fourthWall,
       priority: storyBridge,
-      note: [glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
+      note: [await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const stored = await storage.readApi()
     const key = await storage.readApiKey()

@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto'
 import { AccountError, accountAction, sessionFromHeaders } from './netease.mjs'
 globalThis.crypto ??= webcrypto
 const allowedOrigins = new Set(['https://mymellow.top', 'https://www.mymellow.top'])
-const actions = new Set(['qr_start', 'qr_check', 'profile', 'playlists', 'playlist', 'song'])
+const actions = new Set(['qr_start', 'qr_check', 'profile', 'playlists', 'playlist', 'song', 'search'])
 const counters = new Map()
 function rateLimit(ip) {
   const now = Date.now(), old = counters.get(ip)

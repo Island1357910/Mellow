@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory=$true)][string]$JavaPath,
   [Parameter(Mandatory=$true)][string]$ApkSignerJar,
   [Parameter(Mandatory=$true)][string]$InputApk,
-  [string]$Version = '1.0.7'
+  [string]$Version = '1.1.0'
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)

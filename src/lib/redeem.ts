@@ -23,13 +23,33 @@ export async function restoreRedeemTheme(namespace:string){
   const saved=await storage.getBag<RedeemState>(namespace,'redeem_codes_v1')
   if(saved?.claims?.opening_apple_2026?.themeId===APPLE_THEME.id)await storage.saveTheme(APPLE_THEME)
 }
-export async function redeemCode(namespace:string,code:string,now=Date.now()){
+const ACCOUNT_NAMESPACE='mellow_account_rewards'
+export async function accountRewards(): Promise<RedeemState> {
+  const migrated:RedeemState={claims:{}}
+  for(const identity of await storage.listIdentities()){
+    const legacy=await storage.getBag<RedeemState>(identity.namespace,'redeem_codes_v1')
+    Object.assign(migrated.claims,legacy?.claims??{})
+  }
+  const result=await storage.updateEconomy<RedeemState>(ACCOUNT_NAMESPACE,'redeem_codes_v1',(saved,coins)=>({state:{claims:{...migrated.claims,...saved?.claims}},coins}))
+  return result.state
+}
+
+export async function claimAccountReward(namespace:string,id:string,now=Date.now()){
+  const unlocked=await accountRewards(),reward=unlocked.claims[id]
+  if(!reward)throw Error('请先兑换这个礼物')
   const result=await walletTask(namespace,()=>storage.updateEconomy<RedeemState>(namespace,'redeem_codes_v1',(saved,coins)=>{
-    const reward=codeReward(code,now)
     const state=saved??{claims:{}}
-    if(state.claims[reward.id])throw Error('这个身份已领取过该兑换码')
-    return {state:{claims:{...state.claims,[reward.id]:{at:now,coins:reward.coins,themeId:reward.themeId}}},coins:coins+reward.coins}
+    if(state.claims[id])throw Error('当前身份已经领取过这个礼物')
+    return {state:{claims:{...state.claims,[id]:{...reward,at:now}}},coins:coins+reward.coins}
   }))
   await restoreRedeemTheme(namespace)
   return result
+}
+export async function redeemCode(namespace:string,code:string,now=Date.now()){
+  const reward=codeReward(code,now)
+  await walletTask(ACCOUNT_NAMESPACE,async()=>{
+    const state=await accountRewards()
+    if(!state.claims[reward.id])await storage.updateEconomy<RedeemState>(ACCOUNT_NAMESPACE,'redeem_codes_v1',(latest,coins)=>({state:{claims:{...latest?.claims,[reward.id]:{at:now,coins:reward.coins,themeId:reward.themeId}}},coins}))
+  })
+  return claimAccountReward(namespace,reward.id,now)
 }

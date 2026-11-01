@@ -305,7 +305,7 @@ export const useMellow = create<MellowState>((set, get) => ({
   pushNotice: async (input) => {
     if (input.kind === 'message') {
       if (shouldSuppressMessage(get().settings)) return
-      if (input.chatId && input.chatId === get().viewingChatId) return
+      if (get().activeApp === 'messages' && !get().locked && input.chatId && input.chatId === get().viewingChatId) return
       if (input.charId && input.identityId) {
         const identity = get().identities.find((item) => item.id === input.identityId)
         if (identity) {
@@ -317,9 +317,7 @@ export const useMellow = create<MellowState>((set, get) => ({
     }
     const notice: Notice = { ...input, id: uid('ntc'), createdAt: Date.now() }
     set((current) => ({ notices: [notice, ...current.notices].slice(0, 3) }))
-    window.setTimeout(() => {
-      useMellow.getState().dismissNotice(notice.id)
-    }, 4600)
+    // 横幅自身管理自动消失时间，输入快捷回复时暂停倒计时。
   },
 
   dismissNotice: (id) => set((current) => ({ notices: current.notices.filter((item) => item.id !== id) })),

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { deliverSms } from '../../domain/messaging.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -9,7 +9,7 @@ export function NotificationLayer() {
   const notices = useMellow((state) => state.notices)
   if (notices.length === 0) return null
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-12 z-50 space-y-2 px-3">
+    <div className="pointer-events-none absolute inset-x-0 top-[max(12px,env(safe-area-inset-top))] z-[100] space-y-2 px-3">
       {notices.map((notice) => (
         <Banner key={notice.id} notice={notice} />
       ))}
@@ -24,6 +24,8 @@ function Banner(props: { notice: Notice }) {
   const [replying, setReplying] = useState(false)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [error,setError]=useState('')
+  useEffect(()=>{if(replying||sending)return;const timer=window.setTimeout(()=>dismissNotice(props.notice.id),6500);return()=>window.clearTimeout(timer)},[props.notice.id,replying,sending,dismissNotice])
   const notice = props.notice
 
   const dismiss = async (markRead: boolean) => {
@@ -38,17 +40,18 @@ function Banner(props: { notice: Notice }) {
   }
 
   return (
-    <article className="pointer-events-auto rounded-3xl bg-white/90 p-3 shadow-[var(--m-shadow)] backdrop-blur">
+    <article role="status" aria-live="polite" className="pointer-events-auto rounded-3xl bg-white/90 p-3 shadow-[var(--m-shadow)] backdrop-blur">
       <button
         type="button"
         className="block w-full text-left"
         onClick={() => {
           if (notice.chatId) requestOpenChat({ chatId: notice.chatId, identityId: notice.identityId })
+          else if (notice.appId) useMellow.getState().openApp(notice.appId)
           dismissNotice(notice.id)
         }}
       >
         <span className="flex items-baseline justify-between gap-3">
-          <span className="truncate text-sm font-medium">{notice.title}</span>
+          <span className="truncate text-sm font-medium">{notice.kind==='message'?'短信 · ':''}{notice.title}</span>
           <span className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>
             刚刚
           </span>
@@ -67,6 +70,7 @@ function Banner(props: { notice: Notice }) {
           {notice.kind === 'message' ? '已读' : '知道了'}
         </button>
       </div>
+      {error&&<p role="alert" className="mt-2 text-xs">{error}</p>}
       {replying ? (
         <form
           className="mt-2 flex gap-2"
@@ -75,8 +79,10 @@ function Banner(props: { notice: Notice }) {
             const value = text.trim()
             if (!value || sending) return
             setSending(true)
+            setError('')
             void quickReply(notice, value)
               .then(() => dismissNotice(notice.id))
+              .catch(e=>setError(e instanceof Error?e.message:'发送失败，请重试'))
               .finally(() => setSending(false))
           }}
         >

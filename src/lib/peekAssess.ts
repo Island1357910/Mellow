@@ -63,5 +63,6 @@ export async function assessCharOpen(input: {
   }
 
   if (!apps.includes('sms')) apps = ['sms', ...apps]
+  await storage.setBag(input.namespace,'assess_bond_'+input.character.id,bond)
   return { apps, line, bond }
 }

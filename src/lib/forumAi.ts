@@ -1,4 +1,5 @@
-import { askLine, readJson } from './ask.ts'
+import { realTimeContext } from './realTime.ts'
+import { askLine as baseAskLine, readJson } from './ask.ts'
 import { passerby } from './feed.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -205,3 +206,5 @@ export async function replyForumCommentAi(input: {
   ))
   await storage.setBag(input.namespace, 'forum', next)
 }
+
+function askLine(system:string,user:string,maxTokens?:number){return baseAskLine(realTimeContext()+'\n'+system,user,maxTokens)}

@@ -1,3 +1,4 @@
+import { searchSocial } from '../../lib/socialSearch.ts'
 import { Heart, MessageCircle, Search, UserPlus, Check, Bookmark, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
@@ -36,6 +37,8 @@ export function StarApp(props: { onBack: () => void }) {
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [tab, setTab] = useState<'all' | 'follow' | 'saved' | 'mine'>('all')
   const [query, setQuery] = useState('')
+  const [searchRows,setSearchRows]=useState<FeedPost[]|null>(null),[searching,setSearching]=useState(false)
+  const search=async()=>{if(!query.trim()||searching||!phone)return;setSearching(true);setNote('');try{const rows=await searchSocial('star',query);setSearchRows(rows);setTab('all');setBlogger(null);const saved=await storage.getBag<FeedPost[]>(phone.namespace,'star_feed')??[];const next=[...rows,...saved].slice(0,80);await saveFeed(phone.namespace,next);setPosts(next)}catch(e){setNote(e instanceof Error?e.message:'搜索失败')}finally{setSearching(false)}}
   const [follows, setFollows] = useState<string[]>([])
   const [bookmarks, setBookmarks] = useState<string[]>([])
   const [blogger, setBlogger] = useState<string | null>(null)
@@ -93,7 +96,7 @@ export function StarApp(props: { onBack: () => void }) {
 
   useEffect(() => {
     let alive = true
-    setSocialReady(false); setFollows([]); setBookmarks([]); setBlogger(null); setQuery('')
+    setSocialReady(false); setFollows([]); setBookmarks([]); setBlogger(null); setQuery(''); setSearchRows(null)
     if (phone) void Promise.all([storage.getBag<string[]>(phone.namespace, 'star_follows'), storage.getBag<string[]>(phone.namespace, 'star_bookmarks')]).then(([following, saved]) => {
       if (alive) {setFollows(following ?? []); setBookmarks(saved ?? []); setSocialReady(true)}
     })
@@ -103,9 +106,10 @@ export function StarApp(props: { onBack: () => void }) {
   if (!phone) return null
   const persist = (next: FeedPost[]) => {
     setPosts(next)
+    setSearchRows(current=>current?current.map(p=>next.find(n=>n.id===p.id)??p):null)
     void saveFeed(phone.namespace, next)
   }
-  const visible = posts.filter(item => (blogger ? item.handle === blogger : tab === 'mine' ? item.mine : tab === 'follow' ? follows.includes(item.handle) : tab === 'saved' ? bookmarks.includes(item.id) : true) && (!query.trim() || [item.text,item.author,item.handle].join(' ').toLowerCase().includes(query.trim().toLowerCase())))
+  const visible = (searchRows??posts).filter(item => (blogger ? item.handle === blogger : tab === 'mine' ? item.mine : tab === 'follow' ? follows.includes(item.handle) : tab === 'saved' ? bookmarks.includes(item.id) : true))
   const bloggers = Array.from(new Map(posts.filter(p => !p.mine).map(p => [p.handle, p])).values())
   const profile = blogger ? bloggers.find(p => p.handle === blogger) : null
   const toggleFollow = (handle: string) => {
@@ -231,7 +235,7 @@ export function StarApp(props: { onBack: () => void }) {
         ) : null}
         {!opened && !writing ? (
           <>
-            <label className="star-search mb-3 flex items-center gap-2 rounded-2xl border border-current/10 px-3 py-2"><Search size={17}/><input aria-label="搜索星博" className="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none" placeholder="搜索内容、话题、博主" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button className="text-xs" onClick={()=>setQuery('')}>清除</button>}</label>
+            <form onSubmit={e=>{e.preventDefault();void search()}} className="star-search mb-3 flex items-center gap-2 rounded-2xl border border-current/10 px-3 py-2"><Search size={17}/><input aria-label="搜索星博" className="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none" placeholder="搜索内容、话题、博主" value={query} onChange={e=>setQuery(e.target.value)}/><button className="chip shrink-0" disabled={searching||!query.trim()}>{searching?'生成中':'搜索'}</button>{searchRows&&<button type="button" className="text-xs" onClick={()=>{setQuery('');setSearchRows(null)}}>清除</button>}</form><p className="mb-3 text-[10px] opacity-60">输入关键词生成相关的虚构话题</p>
             {profile ? <section className="menu-card mb-3"><div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">{profile.author}</h2><p className="mt-1 text-xs">@{profile.handle} · {posts.filter(p=>p.handle===profile.handle).length} 条动态</p></div>{followButton(profile.handle)}</div><button className="chip mt-3" onClick={()=>setBlogger(null)}>返回信息流</button></section> : <div className="mb-3 flex gap-2 overflow-x-auto text-xs"><span className="flex shrink-0 items-center gap-1"><TrendingUp size={14}/>热门话题</span>{['今日碎片','城市夜话','生活'].map(topic=><button key={topic} className="shrink-0" onClick={()=>{setTab('all');setQuery(topic)}}>#{topic}#</button>)}</div>}
             <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/70 p-1 text-xs">
               {([['all', '推荐'], ['follow', '关注'], ['saved', '收藏'], ['mine', '我']] as const).map(([id, label]) => (
@@ -240,7 +244,7 @@ export function StarApp(props: { onBack: () => void }) {
             </div>
             <button type="button" className="chip mb-3" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? '正在看…' : '刷一刷'}</button>
             {note ? <PillNote tone="pink" compact>{note}</PillNote> : null}
-            <div className="mb-3 flex items-center justify-between text-xs"><span>{query ? '当前信息流搜索结果' : tab === 'follow' ? '已关注博主的动态' : tab === 'saved' ? '收藏的动态' : '最新动态'} · {visible.length} 条</span></div>
+            <div className="mb-3 flex items-center justify-between text-xs"><span>{searchRows ? '相关话题' : tab === 'follow' ? '已关注博主的动态' : tab === 'saved' ? '收藏的动态' : '最新动态'} · {visible.length} 条</span></div>
             {tab === 'follow' && !blogger && !query && <section className="menu-card mb-3"><h3 className="mb-3 text-xs font-semibold">发现博主</h3><div className="space-y-3">{bloggers.slice(0,6).map(person=><div key={person.handle} className="flex items-center justify-between gap-2"><button className="min-w-0 truncate text-sm" onClick={()=>setBlogger(person.handle)}>{person.author} <span className="text-xs opacity-70">@{person.handle}</span></button>{followButton(person.handle)}</div>)}</div></section>}
             <div className="space-y-2">
               {visible.length === 0 ? <PillNote tone="pink">{query?'没有找到匹配的内容或博主':tab==='follow'?'关注博主后，这里会出现他们的动态':tab==='saved'?'收藏喜欢的动态，留着以后再看':'这里还安静'}</PillNote> : visible.map((item) => (

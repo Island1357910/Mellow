@@ -1,7 +1,9 @@
+import { rememberGift } from './sharedLife.ts'
+import { useMellow } from '../store/useMellow.ts'
 import { ensureDirectChat } from '../domain/messaging.ts'
 import { askLine } from './ask.ts'
 import { uid } from './id.ts'
-import { spendCoins } from './wallet.ts'
+import { walletTask } from './wallet.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
 
@@ -14,6 +16,7 @@ export interface Goods {
   blurb: string
   emoji: string
   cat: string
+  merchant?: string
   level?: string
   trait?: string
 }
@@ -30,6 +33,7 @@ export interface DeliveryItem {
 }
 
 export interface Delivery {
+  merchant?: string
   id: string
   shop: ShopId
   items: DeliveryItem[]
@@ -67,6 +71,12 @@ export const FLASH: Goods[] = [
   { id: 'dumpling', name: '煎饺', price: 12, blurb: '夜宵', emoji: '🥟', cat: '夜宵' },
   { id: 'oden', name: '关东煮', price: 11, blurb: '热气', emoji: '🍢', cat: '夜宵' },
 ]
+
+export function merchantOf(item: Goods,shop:ShopId):string {
+ if(item.merchant)return item.merchant
+ const names:Record<string,string>=shop==='flash'?{'奶茶':'云朵茶饮','正餐':'巷里家常菜','甜品':'糖粒烘焙','夜宵':'夜猫小食'}:{'居家':'木间生活馆','礼物':'花与信礼品铺','衣服':'柔风衣橱','文具':'纸上文具社'}
+ return names[item.cat]??(shop==='flash'?'街角私房厨房':'多淘创意小铺')
+}
 
 const pending = new Set<string>()
 
@@ -114,11 +124,12 @@ export async function writeCart(namespace: string, shop: ShopId, lines: CartLine
 }
 
 export async function addLine(namespace: string, shop: ShopId, goodsId: string): Promise<CartLine[]> {
-  const cart = await readCart(namespace, shop)
-  const found = cart.find((line) => line.id === goodsId)
-  const next = found ? cart.map((line) => (line.id === goodsId ? { ...line, qty: line.qty + 1 } : line)) : [...cart, { id: goodsId, qty: 1 }]
-  await writeCart(namespace, shop, next)
-  return next
+  return walletTask(namespace,async()=>{
+    const cart=await readCart(namespace,shop),found=cart.find(l=>l.id===goodsId)
+    const next=found?cart.map(l=>l.id===goodsId?{...l,qty:l.qty+1}:l):[...cart,{id:goodsId,qty:1}]
+    await writeCart(namespace,shop,next)
+    return next
+  })
 }
 
 export async function readDeliveries(namespace: string): Promise<Delivery[]> {
@@ -136,6 +147,7 @@ export function stageOf(order: Delivery, now: number): string {
 
 export function arriveLabel(order: Delivery, now: number): string {
   if (now >= order.arrivesAt) return '已经到了'
+  if(order.shop==='flash')return `约 ${Math.max(1,Math.ceil((order.arrivesAt-now)/60000))} 分钟送达`
   const days = Math.max(1, Math.ceil((order.arrivesAt - now) / 86_400_000))
   return `大约 ${days} 天到`
 }
@@ -148,13 +160,16 @@ export async function checkout(input: {
   recipientName: string
   told: boolean
   note: string
+  merchant?: string
+  purchasedIds?: string[]
 }): Promise<Delivery> {
   const total = input.items.reduce((sum, item) => sum + item.price * item.qty, 0)
-  await spendCoins(input.namespace, total)
+  if(!input.items.length||input.items.some(i=>!Number.isInteger(i.qty)||i.qty<1||!Number.isFinite(i.price)||i.price<0))throw Error('订单商品无效')
   const now = Date.now()
   const order: Delivery = {
     id: uid('order'),
     shop: input.shop,
+    merchant: input.merchant,
     items: input.items,
     total,
     recipient: input.recipient,
@@ -162,12 +177,10 @@ export async function checkout(input: {
     told: input.told,
     note: input.note.trim(),
     createdAt: now,
-    arrivesAt: now + (2 + Math.random()) * 86_400_000,
+    arrivesAt: now + (input.shop==='flash' ? (20+Math.random()*20)*60_000 : (2+Math.random())*86_400_000),
     reacted: false,
   }
-  const all = await readDeliveries(input.namespace)
-  await storage.setBag(input.namespace, 'deliveries', [order, ...all])
-  await writeCart(input.namespace, input.shop, [])
+  await walletTask(input.namespace,()=>storage.purchaseDelivery(input.namespace,order,input.purchasedIds))
   return order
 }
 
@@ -192,6 +205,9 @@ async function say(namespace: string, person: Character, text: string): Promise<
     updatedAt: message.createdAt,
     unread: fresh.unread + 1,
   })
+  const state=useMellow.getState(),identity=state.identities.find(i=>i.namespace===namespace)
+  if(identity&&!fresh.muted)await state.pushNotice({kind:'message',title:person.name,body:text,appId:'messages',identityId:identity.id,charId:person.id,chatId:chat.id,priority:4})
+  await state.refreshInbox()
 }
 
 export async function tickDeliveries(namespace: string, chars: Character[]): Promise<boolean> {
@@ -225,6 +241,7 @@ export async function tickDeliveries(namespace: string, chars: Character[]): Pro
       text = fallback
     }
     try {
+      for(const [index,item] of order.items.entries())await rememberGift(namespace,{id:order.id+':'+index,charId:person.id,name:item.name+(item.qty>1?' ×'+item.qty:'')})
       await say(namespace, person, text)
       extra.push({
         id: uid('moment'),

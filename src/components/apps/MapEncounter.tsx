@@ -1,7 +1,8 @@
+import { sharedLifeNote } from '../../lib/sharedLife.ts'
 import { ArrowLeft, History, MapPin, Send, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { askLine, readJson } from '../../lib/ask.ts'
-import { storage } from '../../storage/StorageService.ts'
+import { storage, defaultCharState } from '../../storage/StorageService.ts'
 import type { Character } from '../../types/index.ts'
 
 type Line = { speaker: string; text: string; at: number }
@@ -28,12 +29,22 @@ export function MapEncounter({ namespace, place, people, player, onExit }: { nam
     setLines(next)
     try{
       await storage.setBag(namespace,key,next)
-      const raw=await askLine(`你在主持一个现代城市的视觉小说场景。写自然、有具体动作的短对白或旁白，不替玩家发言、不替玩家作决定。角色只能知道自己在场见闻。当前交谈对象：${person?person.name+'；性格：'+person.personality+'；设定：'+person.description:'无，写环境与路人可见行为'}。仅返回 JSON：{"speaker":"人物名或旁白","text":"80至180字，推进眼前的小事","choices":["下一步可选行动1","下一步可选行动2","下一步可选行动3"]}。`,JSON.stringify({realTime:new Date().toLocaleString('zh-CN'),place:place.name,kind:place.kind,note:place.note,history:next.slice(-14)}),500)
+      const chat=person?(await storage.listChats(namespace)).find(c=>c.kind==='dm'&&c.memberIds.includes(person.id)):undefined
+      const recent=chat?(await storage.listMessages(namespace,chat.id)).filter(m=>!m.hidden&&m.kind!=='system').slice(-12).map(m=>({speaker:m.role==='user'?player:person!.name,text:m.content})):[]
+      const shared=person?await sharedLifeNote(namespace,person.id):''
+      const raw=await askLine(`${shared}\n你在主持一个现代城市的视觉小说场景。写自然、有具体动作的短对白或旁白，不替玩家发言、不替玩家作决定。角色只能知道自己在场见闻。recentSms 是你和玩家已有短信，保持关系与约定连续，不要当成现场刚说的话。当前交谈对象：${person?person.name+'；性格：'+person.personality+'；设定：'+person.description:'无，写环境与路人可见行为'}。仅返回 JSON：{"speaker":"人物名或旁白","text":"80至180字，推进眼前的小事","choices":["下一步可选行动1","下一步可选行动2","下一步可选行动3"]}。`,JSON.stringify({realTime:new Date().toLocaleString('zh-CN'),place:place.name,kind:place.kind,note:place.note,recentSms:recent,history:next.slice(-14)}),500)
       const parsed=readJson(raw) as {speaker?:unknown;text?:unknown;choices?:unknown}
       if(typeof parsed.text!=='string'||!parsed.text.trim())throw Error('这段对话没有生成完整，请再试一次')
       const response={speaker:typeof parsed.speaker==='string'?parsed.speaker:'旁白',text:parsed.text.slice(0,1200),at:Date.now()}
       const result=[...next,response].slice(-60)
       await storage.setBag(namespace,key,result)
+      if(person){
+        const memoryKey='map_memory_'+person.id
+        const previous=await storage.getBag<{lines:Line[]}>(namespace,memoryKey)
+        await storage.setBag(namespace,memoryKey,{place:place.name,at:Date.now(),lines:[...(previous?.lines??[]),next[next.length-1]!,response].slice(-24)})
+        const internal=await storage.getCharState(namespace,person.id)??defaultCharState(person.id)
+        await storage.saveCharState(namespace,{...internal,location:place.name,updatedAt:Date.now()})
+      }
       if(alive.current){setLines(result);if(Array.isArray(parsed.choices))setChoices(parsed.choices.filter((c):c is string=>typeof c==='string'&&Boolean(c.trim())).slice(0,3))}
     }catch(e){if(alive.current){setNote(e instanceof Error?e.message:'场景暂时没能继续');setDraft(action)}}
     finally{lock.current=false;if(alive.current)setBusy(false)}

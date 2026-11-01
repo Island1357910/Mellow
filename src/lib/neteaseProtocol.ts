@@ -96,6 +96,14 @@ export async function accountAction(action: string, input: Row, cookie: string, 
     if (data.code !== 200 || !Array.isArray(data.playlist)) throw new AccountError('暂时无法读取歌单', 502)
     return { user, more: Boolean(data.more), playlists: data.playlist.map((p: Row) => ({ id: String(p.id), name: String(p.name), count: Number(p.trackCount) || 0, mine: String(p.creator?.userId) === user.id })) }
   }
+  if (action === 'search') {
+    const keywords = typeof input.keywords === 'string' ? input.keywords.trim().slice(0, 100) : ''
+    if (!keywords) throw new AccountError('请输入歌名或歌手')
+    const offset = Math.max(0, Math.min(10000, Math.floor(Number(input.offset) || 0)))
+    const { data } = await request('/api/cloudsearch/pc', { s: keywords, type: 1, limit: 30, offset, total: true }, cookie)
+    if (data.code !== 200 || !data.result) throw new AccountError('搜索暂时不可用，请稍后重试', 502)
+    return { total: Number(data.result.songCount) || 0, songs: (data.result.songs ?? []).map((s: Row) => ({ id: String(s.id), name: String(s.name), artist: (s.ar ?? s.artists ?? []).map((a: Row) => String(a.name)).join(' / ') })) }
+  }
   if (action === 'playlist') {
     const id = numeric(input.id), offset = Math.max(0, Math.min(10000, Number(input.offset) || 0))
     const { data } = await request('/api/v6/playlist/detail', { id, n: 1000, s: 0 }, cookie)

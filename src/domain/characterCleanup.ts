@@ -1,3 +1,4 @@
+import { changeSharedLife } from '../lib/sharedLife.ts'
 import { deleteSave, loadConfig, saveConfig } from '../engine/story.ts'
 import { readWorld, writeWorld } from '../lib/worldbook.ts'
 import type { FeedPost } from '../lib/feed.ts'
@@ -23,6 +24,7 @@ async function purgeWorldbook(namespace: string, charId: string): Promise<void> 
 }
 
 async function purgeAppData(namespace: string, charId: string): Promise<void> {
+  await changeSharedLife(namespace,s=>{const characters={...s.characters};delete characters[charId];return {...s,characters,appointments:s.appointments.filter(a=>a.charId!==charId),events:s.events.filter(e=>e.charId!==charId),contacts:s.contacts.filter(c=>c.charId!==charId),gifts:s.gifts.filter(g=>g.charId!==charId),visits:s.visits.filter(v=>v.charId!==charId),keepsakes:s.keepsakes.filter(k=>k.charId!==charId)}})
   await storage.deleteBag(namespace, `peek_${charId}`)
   await storage.deleteBag(namespace, `char_diary_${charId}`)
   await storage.deleteBag(namespace, `char_searches_${charId}`)

@@ -132,7 +132,7 @@ function ThemeCard() {
   const reloadLibraries = useMellow((state) => state.reloadLibraries)
   return (
       <SoftCard>
-        <SectionTitle tone="lilac">主题</SectionTitle><a className="chip mb-3" href="?themePreview=red-apple">临时预览红苹果爱恋</a><p className="mb-3 text-xs">10 月 31 日全天使用「不寂寞万圣夜」，次日恢复原主题，平日也可手动选择。</p>
+        <SectionTitle tone="lilac">主题</SectionTitle><p className="mb-3 text-xs">10 月 31 日全天使用「不寂寞万圣夜」，次日恢复原主题，平日也可手动选择。</p>
         <div className="grid grid-cols-4 gap-3">
           {themes.map((theme) => (
             <button

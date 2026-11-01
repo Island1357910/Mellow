@@ -1,7 +1,8 @@
+import { SharedLifeApp } from '../apps/SharedLifeApp.tsx'
+import { tickSharedLife } from '../../lib/sharedLifeTick.ts'
 import { PlayerHost } from './PlayerHost.tsx'
 import { tickTogether } from '../../lib/togetherReplies.ts'
 import { Capacitor } from '@capacitor/core'
-import { APPLE_THEME } from '../../theme/apple.ts'
 import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
 import { ConnectionsApp } from '../apps/ConnectionsApp.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -60,9 +61,7 @@ export function PhoneShell() {
   const touchData = useMellow((state) => state.touchData)
   const [today, setToday] = useState(() => new Date())
   useEffect(() => { const timer = window.setInterval(() => setToday(new Date()), 30_000); return () => window.clearInterval(timer) }, [])
-  const [previewApple,setPreviewApple] = useState(()=>new URLSearchParams(window.location.search).get('themePreview')==='red-apple')
-  const theme = previewApple ? APPLE_THEME : effectiveTheme(themeOf({ themes, settings }), today)
-  const exitThemePreview = () => { const url=new URL(window.location.href);url.searchParams.delete('themePreview');window.history.replaceState(window.history.state,'',url);setPreviewApple(false) }
+  const theme = effectiveTheme(themeOf({ themes, settings }), today)
   const [fontReady, setFontReady] = useState(false)
   useEffect(() => {
     setFontReady(false)
@@ -134,6 +133,7 @@ export function PhoneShell() {
         void tickProactive({ identity: phone, settings, presets }).catch(() => undefined)
       }
       void tickNearbyLife({ namespace: phone.namespace, identity: phone, settings, presets }).catch(() => undefined)
+      void tickSharedLife({identity:phone,settings,presets}).catch(()=>undefined)
     }
     run()
     const timer = window.setInterval(run, 60_000)
@@ -198,7 +198,6 @@ export function PhoneShell() {
             </>
           ) : null}
           {theme.customCss ? <style>{'@scope (.device) { ' + theme.customCss + ' }'}</style> : null}
-          {previewApple&&<button type="button" className="theme-preview-exit" onClick={exitThemePreview}>红苹果爱恋预览 · 恢复原主题</button>}
           {!Capacitor.isNativePlatform() && <StatusBar showClock={(!locked || !ready) && activeApp !== 'messages'} />}
           <div
             className="pointer-events-none absolute inset-0 z-[15]"
@@ -251,6 +250,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
   }
 
   switch (props.id) {
+    case 'life':
+      return <SharedLifeApp onBack={props.onBack} />
     case 'messages':
       return <MessagesApp onBack={props.onBack} />
     case 'offline':

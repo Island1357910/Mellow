@@ -1,3 +1,4 @@
+import { realTimeContext } from './realTime.ts'
 import { AIAdapter } from '../engine/AIAdapter.ts'
 import { askLine, readJsonArray } from './ask.ts'
 import { uid } from './id.ts'
@@ -115,7 +116,7 @@ function parsePosts(raw: unknown, chars: StarPerson[], player: string): FeedPost
             id: uid('cmt'),
             author: commentAuthor,
             text: body.slice(0, 80),
-            at: now - index * 1_800_000 + at * 600_000,
+            at: now - index * 1_800_000 - (at + 1) * 60_000,
           } satisfies FeedComment]
         })
       : []
@@ -138,7 +139,7 @@ async function starComplete(system: string, user: string, maxTokens: number): Pr
   const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
   const result = await adapter.complete({
     messages: [
-      { role: 'system', content: system },
+      { role: 'system', content: realTimeContext()+'\n'+system },
       { role: 'user', content: user },
     ],
     temperature: 0.95,

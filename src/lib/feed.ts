@@ -231,7 +231,7 @@ export function randomCommenters(except: string, count = 2): FeedComment[] {
       id: uid('cmt'),
       author: randomStarNick(used),
       text: REPLIES[(index + hash(except)) % REPLIES.length] ?? '看见了。',
-      at: at + (index + 1) * 600_000,
+      at: at - (count - index) * 60_000,
     })
   }
   return rows

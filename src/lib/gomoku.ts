@@ -3,7 +3,7 @@ export type Grid = Stone[][]
 
 const DIRS: Array<[number, number]> = [[1, 0], [0, 1], [1, 1], [1, -1]]
 
-export function emptyGrid(size = 9): Grid {
+export function emptyGrid(size = 15): Grid {
   return Array.from({ length: size }, () => Array<Stone>(size).fill(0))
 }
 

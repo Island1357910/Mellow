@@ -1,7 +1,8 @@
-import { Globe, Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
+import { BookHeart, Globe, Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
 import { useMellow } from '../../store/useMellow.ts'
 
 const ICONS = {
+  life: BookHeart,
   themes: Sparkles,
   connections: Globe,
   messages: MessageCircle,
@@ -31,8 +32,8 @@ const ICONS = {
   worldforge: Hammer,
 }
 
-export function AppGlyph(props: { id: string; tint: string; size?: number }) {
-  const custom = useMellow((state) => state.settings.appIcons[props.id])
+export function AppGlyph(props: { id: string; tint: string; size?: number; ignoreCustom?: boolean }) {
+  const custom = useMellow((state) => props.ignoreCustom ? undefined : state.settings.appIcons[props.id])
   const Icon = ICONS[props.id as keyof typeof ICONS] ?? MessageCircle
   const box = props.size ?? 54
   return (

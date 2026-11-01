@@ -1,7 +1,9 @@
+import { HomeLifePanel } from './HomeLifePanel.tsx'
 import { ShoppingBag } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { askLine, readJson } from '../../lib/ask.ts'
 import {
+  merchantOf,
   DUOTAO,
   FLASH,
   addLine,
@@ -43,7 +45,8 @@ function ShopApp(props: {
 }) {
   const phone = usePhone()
   const paying = useRef(false)
-  const [tab, setTab] = useState<'browse' | 'cart' | 'orders'>('browse')
+  const [tab, setTab] = useState<'browse' | 'cart' | 'orders' | 'life'>('browse')
+  const [merchant,setMerchant]=useState(''),[checkoutStore,setCheckoutStore]=useState('')
   const [cat, setCat] = useState('全部')
   const [detail, setDetail] = useState<Goods | null>(null)
   const [query, setQuery] = useState('')
@@ -92,10 +95,14 @@ function ShopApp(props: {
   const shelf = [...props.goods, ...catalog]
   const cats = ['全部', ...Array.from(new Set(shelf.map((item) => item.cat)))]
   const goodsOf = (id: string) => shelf.find((item) => item.id === id)
-  const lines = cart.map((line) => ({ ...line, goods: goodsOf(line.id) })).filter((line) => line.goods)
+  const allLines = cart.map((line) => ({ ...line, goods: goodsOf(line.id) })).filter((line) => line.goods)
+  const cartStores=Array.from(new Set(allLines.map(l=>merchantOf(l.goods!,props.shop))))
+  const payStore=cartStores.includes(checkoutStore)?checkoutStore:cartStores[0]??''
+  const lines=allLines.filter(l=>merchantOf(l.goods!,props.shop)===payStore)
+  const stores=Array.from(new Set(shelf.map(g=>merchantOf(g,props.shop))))
   const total = lines.reduce((sum, line) => sum + (line.goods?.price ?? 0) * line.qty, 0)
-  const count = lines.reduce((sum, line) => sum + line.qty, 0)
-  const shown = shelf.filter((item) => (cat === '全部' || item.cat === cat) && (!query.trim() || item.name.includes(query.trim())))
+  const count = allLines.reduce((sum, line) => sum + line.qty, 0)
+  const shown = shelf.filter((item) => (!merchant||merchantOf(item,props.shop)===merchant) && (cat === '全部' || item.cat === cat) && (!query.trim() || item.name.includes(query.trim())))
   const pin = (item: Goods) => {
     if (catalog.some((row) => row.id === item.id)) return
     const next = [item, ...catalog]
@@ -162,13 +169,15 @@ function ShopApp(props: {
       const order = await checkout({
         namespace: phone.namespace,
         shop: props.shop,
+        merchant: payStore,
+        purchasedIds: lines.map(l=>l.id),
         items: lines.map((line) => ({ name: line.goods?.name ?? '', qty: line.qty, price: line.goods?.price ?? 0 })),
         recipient: who,
         recipientName,
         told: who !== 'self' && told,
         note,
       })
-      setCart([])
+      setCart(await readCart(phone.namespace,props.shop))
       setOrders((current) => [order, ...current])
       setCoins(await readCoins(phone.namespace))
       setNote('')
@@ -181,14 +190,15 @@ function ShopApp(props: {
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle(props.tint, '#F8D0DC', '#D5F0E4')}>
       <Screen title={props.title} subtitle={`余额 ${coins} 枚 · 购物车 ${count}`} onBack={props.onBack}>
-        <div className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white/70 p-1 text-xs">
-          {([['browse', '逛'], ['cart', `购物车${count ? ` ${count}` : ''}`], ['orders', '订单']] as const).map(([id, label]) => (
+        <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/70 p-1 text-xs">
+          {([['browse', '逛'], ['cart', `购物车${count ? ` ${count}` : ''}`], ['orders', '订单'],['life','生活']] as const).map(([id, label]) => (
             <button key={id} type="button" className="rounded-full py-1.5" style={{ background: tab === id ? props.tint : 'transparent' }} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
+        {tab==='life'&&<HomeLifePanel namespace={phone.namespace} onBalance={setCoins}/>}
         {tab === 'browse' ? (
           <>
-            <form className="menu-card mb-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void seek() }}>
+            <details className="menu-card mb-3"><summary className="cursor-pointer text-sm">没找到想要的？请店员找货</summary><form className="mt-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void seek() }}>
               <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>想要货单上没有的，说一声</p>
               <div className="flex gap-2">
                 <input value={wish} onChange={(event) => setWish(event.target.value)} placeholder={props.shop === 'duotao' ? '比如一只旧唱片机' : '比如热的姜茶'} className="soft-input" />
@@ -209,7 +219,7 @@ function ShopApp(props: {
                 </div>
               ) : null}
               {error ? <PillNote tone="peach" inline>{error}</PillNote> : null}
-            </form>
+            </form></details>
             <div className="shop-editorial mb-4 rounded-3xl p-5" style={{ background: `linear-gradient(135deg, ${props.tint}, var(--m-secondary))` }}><p className="text-[10px] tracking-[.2em]">{props.shop === 'duotao' ? 'MELLOW SELECT / 好物甄选' : 'FRESH & WARM / 好好吃饭'}</p><h2 className="mt-2 text-2xl font-semibold">{props.shop === 'duotao' ? '把日子过得有质感' : '热乎的，现在就想吃'}</h2><p className="mt-2 text-xs">{props.shop === 'duotao' ? '居家器物 · 随心礼物 · 每件都有故事' : '暖胃正餐 · 午后甜品 · 夜宵小食'}</p></div>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={props.shop === 'duotao' ? '搜一件' : '想吃什么'} className="soft-input mb-3" />
             <div className="mb-3 flex flex-wrap gap-1.5">
@@ -217,7 +227,9 @@ function ShopApp(props: {
                 <button key={item} type="button" className="chip" style={cat === item ? { background: props.tint } : undefined} onClick={() => setCat(item)}>{item}</button>
               ))}
             </div>
-            {props.layout === 'grid' ? (
+            {!merchant&&<div className="mb-4 space-y-3">{stores.map(store=>{const products=shelf.filter(g=>merchantOf(g,props.shop)===store);return <button key={store} className="merchant-card" onClick={()=>{setMerchant(store);setCat('全部')}}><div className="merchant-cover"><ShoppingBag size={28}/></div><span><strong>{store}</strong><small>{products.length} 件在售 · {props.shop==='flash'?'约30分钟送达':'品牌好物'}</small><span className="merchant-previews">{products.slice(0,3).map(g=><span key={g.id}>{g.name} <b>{g.price}枚</b></span>)}</span></span><span>进店 ›</span></button>})}</div>}
+            {merchant&&<div className="merchant-heading"><button className="chip" onClick={()=>{setMerchant('');setCat('全部')}}>‹ 全部商家</button><h2>{merchant}</h2><p>本店可选多件商品一起结算</p></div>}
+            {merchant && (props.layout === 'grid' ? (
               <div className="grid grid-cols-2 gap-3">
                 {shown.map((item) => (
                   <article key={item.id} className="menu-card">
@@ -244,12 +256,13 @@ function ShopApp(props: {
                   </li>
                 ))}
               </ul>
-            )}
+            ))}
             {shown.length === 0 ? <PillNote tone="butter">没有找到</PillNote> : null}
           </>
         ) : null}
         {tab === 'cart' ? (
           <div className="space-y-3">
+            <nav className="flex flex-wrap gap-2">{cartStores.map(store=><button className={store===payStore?'chip chip-solid':'chip'} key={store} onClick={()=>setCheckoutStore(store)}>{store}</button>)}</nav><p className="text-xs">{payStore ? `当前结算：${payStore}，本店商品一起购买` : '先去商家逛逛'}</p>
             {lines.length === 0 ? <PillNote tone="butter">购物车是空的</PillNote> : lines.map((line) => (
               <div key={line.id} className="menu-card flex items-center gap-3">
                 {line.goods && <ProductPicture item={line.goods} className="h-12 w-12 shrink-0 rounded-xl" />}
@@ -275,7 +288,7 @@ function ShopApp(props: {
               ) : null}
               <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="留言，可以空着" className="soft-input mt-3" />
               <p className="mt-3 text-sm">合计 {total} 枚</p>
-              <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>下单后大约两三天送到。不会立刻出现在门口。</p>
+              <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{props.shop==='flash'?'本店合单配送，约20～40分钟送达。':'本店商品合单发货，约两三天送达。'}</p>
               {error ? <div className="mt-2"><PillNote tone="peach" inline>{error}</PillNote></div> : null}
               <button type="button" className="chip chip-solid mt-3" disabled={!lines.length || coins < total} onClick={() => void pay()}>{coins < total && lines.length ? `还差 ${total - coins} 枚` : '结账'}</button>
             </section>
@@ -285,7 +298,7 @@ function ShopApp(props: {
           <div className="space-y-2">
             {orders.length === 0 ? <PillNote tone="butter">还没有订单</PillNote> : orders.map((order) => (
               <article key={order.id} className="menu-card">
-                <p className="text-sm font-medium">{order.items.map((item) => `${item.name}×${item.qty}`).join('、')}</p>
+                <p className="mb-2 text-xs opacity-65">{order.merchant??props.title}</p><p className="text-sm font-medium">{order.items.map((item) => `${item.name}×${item.qty}`).join('、')}</p>
                 <p className="mt-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>送给 {order.recipientName} · {order.total} 枚</p>
                 <p className="mt-2 text-sm">{stageOf(order, now)} · {arriveLabel(order, now)}</p>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/5">

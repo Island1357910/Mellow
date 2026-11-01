@@ -1,0 +1,1 @@
+export function realTimeContext(){const now=new Date();return `现实时间：${now.toLocaleString('zh-CN',{hour12:false})}，星期${'日一二三四五六'[now.getDay()]}，时区${Intl.DateTimeFormat().resolvedOptions().timeZone}。涉及今天、节日、季节、早晚、周末时必须依此创作。虚构社交内容不冒充已核实新闻。`}

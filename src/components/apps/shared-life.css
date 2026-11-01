@@ -1,0 +1,55 @@
+.shared-life-panel { --life-green: #637b68; --life-line: color-mix(in srgb, var(--m-text) 10%, transparent); }
+.life-hero { position: relative; overflow: hidden; padding: 26px 22px; border-radius: 26px; background: linear-gradient(135deg, #e2eadb, #f5ecdf 70%, #eeddd7); color: #394c3d; }
+.life-hero > svg { position: absolute; right: 22px; top: 26px; opacity: .6; }
+.life-eyebrow { font-size: 9px; letter-spacing: .2em; opacity: .65; }
+.life-hero h2 { margin-top: 15px; font-size: 23px; font-weight: 600; letter-spacing: -.04em; }
+.life-hero p { margin-top: 9px; font-size: 11px; line-height: 1.8; opacity: .75; }
+.life-person-picker { display: flex; align-items: center; gap: 16px; padding: 13px 16px; border: 1px solid var(--life-line); border-radius: 17px; background: var(--m-surface, #fff); }
+.life-person-picker > span { font-size: 11px; opacity: .65; flex: none; }
+.life-person-picker select { width: 100%; min-width: 0; background: transparent; font-size: 13px; outline: none; }
+.life-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 3px 0 9px; scrollbar-width: none; }
+.life-tabs button { display: flex; flex: none; align-items: center; gap: 5px; padding: 10px 13px; font-size: 11px; border-radius: 14px; background: var(--m-surface, #fff); border: 1px solid var(--life-line); }
+.life-tabs button.is-active { background: var(--m-secondary); border-color: transparent; }
+.life-card { padding: 18px; border-radius: 21px; border: 1px solid var(--life-line); background: var(--m-surface, #fff); }
+.life-card h3 { font-size: 15px; font-weight: 600; line-height: 1.6; }
+.life-card > p { margin-top: 8px; font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.life-card blockquote { margin-top: 12px; padding: 10px 12px; border-left: 2px solid #a9bca5; background: #7e967509; font-size: 12px; line-height: 1.9; white-space: pre-wrap; }
+.life-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.life-card time, .life-timeline time { font-size: 10px; opacity: .6; }
+.life-card-top time { text-align: right; }
+.life-tag { display: inline-block; padding: 4px 8px; border-radius: 8px; background: color-mix(in srgb, var(--m-secondary) 45%, transparent); font-size: 10px; }
+.life-section-title { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; list-style: none; }
+.life-caption { font-size: 10px !important; line-height: 1.9 !important; opacity: .6; }
+.life-feedback { padding: 12px 15px; border-radius: 14px; background: var(--m-secondary); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.life-empty { display: grid; justify-items: center; gap: 14px; padding: 35px 20px; border: 1px dashed var(--life-line); border-radius: 22px; text-align: center; font-size: 12px; line-height: 1.9; opacity: .65; }
+.life-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.life-feature-button { display: flex; align-items: center; width: 100%; gap: 12px; text-align: left; padding: 18px; border-radius: 20px; background: var(--m-secondary); font-size: 13px; }
+.life-feature-button > span { flex: 1; }
+.life-feature-button small { display: block; font-size: 10px; margin-top: 6px; line-height: 1.8; opacity: .65; }
+.life-timeline { margin-top: 16px; padding-left: 13px; border-left: 1px solid var(--life-line); }
+.life-timeline li { position: relative; margin: 0 0 18px 0; padding-left: 10px; }
+.life-timeline li:before { content: ''; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #a3b39f; left: -16px; top: 6px; }
+.life-timeline p { margin-top: 7px; font-size: 12px; line-height: 1.9; white-space: pre-wrap; }
+.life-invitations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 16px; }
+.life-invitations button { padding: 19px 8px; font-size: 12px; background: color-mix(in srgb, var(--m-secondary) 40%, transparent); border-radius: 14px; }
+.life-visit-lines { display: grid; gap: 12px; max-height: 430px; overflow: auto; margin-top: 18px; }
+.life-line { max-width: 92%; padding: 12px; border-radius: 15px; background: color-mix(in srgb, var(--m-secondary) 35%, transparent); }
+.life-line small { display: block; font-size: 10px; opacity: .55; margin-bottom: 5px; }
+.life-line p { font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.life-line.is-player { margin-left: auto; background: color-mix(in srgb, var(--m-primary) 30%, transparent); }
+.life-line.is-record { max-width: 100%; text-align: center; background: transparent; opacity: .7; }
+.life-gift-use small { display: block; font-size: 10px; opacity: .6; }
+.life-relationship { display: grid; gap: 22px; margin-top: 24px; }
+.life-relationship-track { height: 5px; background: var(--life-line); margin: 10px 0 7px; border-radius: 9px; overflow: hidden; }
+.life-relationship-track span { display: block; height: 100%; border-radius: inherit; background: #96ad96; transition: width .4s; }
+.life-relationship small { font-size: 10px; opacity: .55; }
+.life-memory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+.life-memory { overflow: hidden; border-radius: 17px; background: var(--m-surface, #fff); border: 1px solid var(--life-line); }
+.life-memory img { width: 100%; max-height: 220px; object-fit: cover; }
+.life-memory-art { display: grid; place-items: center; min-height: 100px; background: linear-gradient(140deg, #dde6d7, #f1e4d9); color: #73826e; }
+.life-memory > div:last-child { padding: 12px; }
+.life-memory h3 { font-size: 12px; font-weight: 600; margin: 7px 0; }
+.life-memory time { font-size: 9px; opacity: .55; }
+.life-memory p { font-size: 10px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow-y: auto; }
+.shared-life-panel button:disabled { opacity: .45; }
+.shared-life-panel input[type=datetime-local] { min-width: 0; max-width: 100%; box-sizing: border-box; }

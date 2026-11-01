@@ -25,7 +25,7 @@ public class NeteaseDirectPlugin extends Plugin {
     private static final Set<String> PATHS = new HashSet<>(Arrays.asList(
         "/weapi/login/qrcode/unikey", "/weapi/login/qrcode/client/login",
         "/weapi/w/nuser/account/get", "/weapi/user/playlist", "/weapi/v6/playlist/detail",
-        "/weapi/v3/song/detail", "/weapi/song/enhance/player/url", "/weapi/song/lyric"
+        "/weapi/cloudsearch/pc", "/weapi/v3/song/detail", "/weapi/song/enhance/player/url", "/weapi/song/lyric"
     ));
     private final OkHttpClient client = new OkHttpClient.Builder()
         .cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)

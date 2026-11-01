@@ -15,7 +15,8 @@ function staggerDelay(index: number): number {
 }
 
 function isViewingChat(chatId: string): boolean {
-  return useMellow.getState().viewingChatId === chatId
+  const state=useMellow.getState()
+  return state.activeApp === 'messages' && !state.locked && state.viewingChatId === chatId
 }
 
 async function touchDelivered(

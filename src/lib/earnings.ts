@@ -38,9 +38,10 @@ export function lotteryPrize(numbers: string, winning: string): number {
   return matches === 5 ? 100000 : matches === 4 ? 5000 : matches === 3 ? 500 : matches === 2 ? 50 : matches === 1 ? 10 : 0
 }
 export function scratchPrize(random: number): number { return random < .0001 ? 10000 : random < .001 ? 1000 : random < .01 ? 100 : random < .1 ? 30 : random < .3 ? 10 : random < .65 ? 3 : 0 }
-export function beginWork(s: WindState, coins: number, job: WindJob, now: number) {
+export function beginWork(s: WindState, coins: number, job: WindJob, now: number, minutes: number = job.minutes) {
   if (s.work) throw Error('已有工作进行中')
-  return { state: { ...s, work: { job: { ...job, pay: jobPay(job, s.skills[job.skill] || 0) }, started: now } }, coins }
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw Error('工作时长须为 1～1440 分钟')
+  return { state: { ...s, work: { job: { ...job, minutes, xp: Math.max(1, Math.round(job.xp * minutes / job.minutes)), pay: Math.max(1, Math.round(jobPay(job, s.skills[job.skill] || 0) * minutes / job.minutes)) }, started: now } }, coins }
 }
 export function claimWork(s: WindState, coins: number, now: number) {
   const work = s.work

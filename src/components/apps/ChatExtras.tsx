@@ -1,3 +1,4 @@
+import { uid } from '../../lib/id.ts'
 import { motion } from 'framer-motion'
 import { Gift, Mic, MicOff, PhoneOff, SendHorizontal, Truck, Volume2, Wallet, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -5,7 +6,7 @@ import { GIFT_COUNTS, REAL_GIFTS, VIRTUAL_GIFTS, type GiftItem } from '../../dat
 import { createCallSession, finishCallSession, playCallVoice, runCallTurn, type CallSession, type CallTurn } from '../../domain/callSession.ts'
 import { parseCard } from '../../engine/prompt.ts'
 import { initialOf } from '../../lib/format.ts'
-import { addCoins, readCoins } from '../../lib/wallet.ts'
+import { readCoins } from '../../lib/wallet.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { AppSettings, Character, Chat, ChatMessage, Identity, Preset } from '../../types/index.ts'
 
@@ -129,7 +130,9 @@ export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boole
   )
 }
 
-export function GiftSheet(props: { namespace: string; people: Character[]; onClose: () => void; onSend: (content: string) => void }) {
+export function GiftSheet(props: { namespace: string; people: Character[]; onClose: () => void; onSend: (content: string, cost: number, requestId: string) => Promise<void> }) {
+  const purchaseId=useRef(uid('gift_purchase')),sending=useRef(false)
+  const [pending,setPending]=useState(false)
   const [tab, setTab] = useState<'virtual' | 'real'>('virtual')
   const [to, setTo] = useState(props.people[0]?.id ?? 'all')
   const [pick, setPick] = useState<GiftItem>(VIRTUAL_GIFTS[1] ?? VIRTUAL_GIFTS[0]!)
@@ -158,18 +161,17 @@ export function GiftSheet(props: { namespace: string; people: Character[]; onClo
     if (next === 'real' && to === 'all') setTo(props.people[0]?.id ?? 'all')
   }
   const send = async () => {
-    if (coins === null) return
-    if (coins < total) {
-      setWarn(`糖币不够，还差 ${total - coins}。去乘风玩一局就有啦`)
-      return
-    }
-    setCoins(await addCoins(props.namespace, -total))
-    props.onSend(real ? `[实物] ${pick.icon}｜${pick.name}｜送给 ${who}｜${note.trim()}` : `[礼物] ${pick.icon}｜${pick.name} ×${count}｜送给 ${who}｜${note.trim()}`)
-    props.onClose()
+    if(coins===null||sending.current)return
+    sending.current=true;setPending(true);setWarn('')
+    try{
+      await props.onSend(real ? `[实物] ${pick.icon}｜${pick.name}｜送给 ${who}｜${note.trim()}` : `[礼物] ${pick.icon}｜${pick.name} ×${count}｜送给 ${who}｜${note.trim()}`,total,purchaseId.current)
+      props.onClose()
+    }catch(e){setWarn(e instanceof Error?e.message:'礼物没有送出，请重试')}
+    finally{sending.current=false;setPending(false)}
   }
   const list = real ? REAL_GIFTS : VIRTUAL_GIFTS
   return (
-    <Sheet title="群礼物" tint="#C9B6E8" onClose={props.onClose}>
+    <Sheet title={props.people.length>1?'群礼物':'送一份礼物'} tint="#C9B6E8" onClose={props.onClose}>
       <div className="flex items-center justify-between rounded-[20px] bg-[linear-gradient(120deg,#EFE6FF,#FFE3EE)] px-3 py-2.5">
         <span className="text-xs" style={dim}>我的糖币</span>
         <span className="text-lg font-semibold tabular-nums text-[#7a5fb0]">🍬 {coins ?? '…'}</span>
@@ -227,7 +229,7 @@ export function GiftSheet(props: { namespace: string; people: Character[]; onClo
       )}
       <input value={note} maxLength={30} onChange={(event) => setNote(event.target.value)} placeholder={real ? '写张贺卡，随礼物一起送到' : '说点什么（可不填）'} className="soft-input mt-3" />
       {warn ? <p className="mt-2 text-center text-xs text-[#b0505c]">{warn}</p> : null}
-      <button type="button" disabled={coins === null} className="mt-3 w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.35)]" style={{ background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void send()}>
+      <button type="button" disabled={coins === null||pending} className="mt-3 w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.35)]" style={{ background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void send()}>
         {real ? `购买并送给 ${who} · 🍬${total}` : `赠送 ${pick.name} ×${count} · 🍬${total}`}
       </button>
     </Sheet>

@@ -25,7 +25,7 @@ export async function tickProactive(input: {
     if (chat.kind !== 'dm' || chat.blocked || chat.allowProactive === false) continue
     const minutes = Math.max(1, Math.round(chat.proactiveMinutes || globalMinutes))
     const threshold = minutes * 60_000
-    if (state.viewingChatId === chat.id) continue
+    if (state.activeApp==='messages' && !state.locked && state.viewingChatId === chat.id) continue
 
     const key = jobKey('proactive', input.identity.namespace, chat.id)
     if (isAiJobRunning(key)) continue

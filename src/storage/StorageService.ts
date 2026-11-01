@@ -574,13 +574,55 @@ class StorageService {
     })
   }
 
+  async changeAppBags(namespace: string, ids: string[], change: (bags: Record<string, unknown>) => Record<string, unknown>): Promise<Record<string, unknown>> {
+    const db = this.ns(namespace)
+    return db.transaction('rw', db.appData, async () => {
+      const rows = await db.appData.bulkGet(ids)
+      const bags = Object.fromEntries(ids.map((id, i) => [id, rows[i]?.value ?? null]))
+      const next = change(bags)
+      await db.appData.bulkPut(ids.map(id => ({ id, value: next[id] })))
+      return next
+    })
+  }
+
+  async commitPaidChatMessage(namespace: string, chatId: string, message: ChatMessage, cost: number, bagId: string, change: (saved: unknown) => unknown): Promise<void> {
+    if (!Number.isFinite(cost) || cost < 0) throw Error('礼物金额无效')
+    const db = this.ns(namespace)
+    await db.transaction('rw', db.appData, db.messages, db.chats, async () => {
+      if (await db.messages.get(message.id)) return
+      const chat = await db.chats.get(chatId)
+      if (!chat || chat.blocked) throw Error('这个会话暂时不能送礼')
+      const savedCoins = (await db.appData.get('coins'))?.value
+      const coins = typeof savedCoins === 'number' && Number.isFinite(savedCoins) ? savedCoins : 20
+      if (coins < cost) throw Error(`糖币不够，还差 ${cost - coins} 枚`)
+      const next = change((await db.appData.get(bagId))?.value ?? null)
+      await db.appData.bulkPut([{ id: 'coins', value: coins - cost }, { id: bagId, value: next }])
+      await db.messages.put(message)
+      await db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: message.createdAt })
+    })
+  }
+
+  async purchaseDelivery(namespace:string,order:import('../lib/delivery.ts').Delivery,purchasedIds?:string[]):Promise<void>{
+    const db=this.ns(namespace),cartId=order.shop==='duotao'?'cart_duotao':'cart_flash'
+    await db.transaction('rw',db.appData,async()=>{
+      const saved=(await db.appData.get('coins'))?.value
+      const coins=typeof saved==='number'&&Number.isFinite(saved)?saved:20
+      if(!Number.isFinite(order.total)||order.total<0||coins<order.total)throw Error('余额不足')
+      const cart=((await db.appData.get(cartId))?.value??[]) as Array<{id:string;qty:number}>
+      if(purchasedIds&&purchasedIds.some(id=>!cart.some(l=>l.id===id)))throw Error('购物车已经变化，请刷新后再结算')
+      const orders=((await db.appData.get('deliveries'))?.value??[]) as import('../lib/delivery.ts').Delivery[]
+      if(orders.some(o=>o.id===order.id))return
+      await db.appData.bulkPut([{id:'coins',value:coins-order.total},{id:'deliveries',value:[order,...orders]},{id:cartId,value:purchasedIds?cart.filter(l=>!purchasedIds.includes(l.id)):[]}])
+    })
+  }
+
   async deleteBag(namespace: string, id: string): Promise<void> {
     await this.ns(namespace).appData.delete(id)
   }
 
   async exportBundle(): Promise<Record<string, unknown>> {
     const identities = await this.listIdentities()
-    const names = [...new Set(identities.flatMap((item) => [item.namespace, `${item.namespace}__side`]))]
+    const names = [...new Set(['mellow_account_rewards',...identities.flatMap((item) => [item.namespace, `${item.namespace}__side`])])]
     const worlds = []
     for (const namespace of names) {
       const db = this.ns(namespace)

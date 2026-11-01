@@ -1,3 +1,4 @@
+import { HOME_GOODS, type HomeState } from '../../lib/homeLife.ts'
 import { MapEncounter } from './MapEncounter.tsx'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
@@ -150,9 +151,17 @@ export function MapApp(props: { onBack: () => void }) {
   useEffect(() => {
     if (!phone) return
     let stop = false
-    void storage.getBag<World>(phone.namespace, 'map_world').then((saved) => {
+    void Promise.all([storage.getBag<World>(phone.namespace, 'map_world'),storage.getBag<HomeState>(phone.namespace,'home_life_v1')]).then(([saved,home]) => {
       if (stop) return
       const next = normalize(saved)
+      for(const id of home?.houses??[]){
+        const item=HOME_GOODS.find(g=>g.id===id),key='owned_home_'+id
+        if(!item)continue
+        const note='你购买的住所。'+Object.entries(home?.rooms[id]??{}).map(([room,f])=>room+'：'+HOME_GOODS.find(g=>g.id===f)?.name).join('；')
+        const existing=next.places.find(p=>p.id===key)
+        if(existing){existing.name=item.name;existing.note=note}
+        else next.places.push({id:key,name:item.name,kind:'家',note,x:20+next.places.length*9%65,y:30+next.places.length*13%55,residents:[],visits:0})
+      }
       setWorld(next)
       if (!saved?.places?.length) void storage.setBag(phone.namespace, 'map_world', next)
     })

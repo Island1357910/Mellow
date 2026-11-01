@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AIError } from '../../engine/AIAdapter.ts'
-import { postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
+import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
 import { isTrustedVoiceCache, minimaxSpeak, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
 import { modePresetId } from '../../lib/defaults.ts'
@@ -23,9 +23,11 @@ import { parseReplySegments } from '../../lib/stickerReply.ts'
 import { spokenSmsText } from '../../lib/smsReply.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 
-type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
+type ToolId = 'life' | 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
 
 const DM_TOOLS: Array<{ id: ToolId; label: string; tint: string; icon: ReactNode }> = [
+  { id: 'life', label: '共同生活', tint: '#DBE6D4', icon: <PartyPopper size={20}/> },
+  { id: 'gift', label: '礼物', tint: '#F3E3FB', icon: <Gift size={20}/> },
   { id: 'music', label: '一起听 / 读', tint: '#D5F0E4', icon: <Music size={20} /> },
   { id: 'album', label: '相册', tint: '#D7E7F8', icon: <Image size={20} /> },
   { id: 'sticker', label: '表情包', tint: '#F8E6C0', icon: <Smile size={20} /> },
@@ -37,7 +39,7 @@ const GROUP_TOOLS: Array<{ id: ToolId; label: string; tint: string; icon: ReactN
   ...DM_TOOLS,
   { id: 'party', label: '群派对', tint: '#E6DDF8', icon: <PartyPopper size={20} /> },
   { id: 'anon', label: '匿名', tint: '#E7E3EC', icon: <VenetianMask size={20} /> },
-  { id: 'gift', label: '群礼物', tint: '#F3E3FB', icon: <Gift size={20} /> },
+
 ]
 
 export function ChatThread(props: { identity: Identity; chat: Chat; characters: Character[]; onBack: () => void; onChat: (chat: Chat) => void; onPeople?: () => void }) {
@@ -440,7 +442,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
       {sheet === 'redpacket' || sheet === 'transfer' ? (
         <MoneySheet mode={sheet} group={chat.kind === 'group'} people={people} onClose={() => setSheet(null)} onSend={(content) => void send(content, sheet)} />
       ) : null}
-      {sheet === 'gift' ? <GiftSheet namespace={props.identity.namespace} people={people} onClose={() => setSheet(null)} onSend={(content) => void send(content, 'gift')} /> : null}
+      {sheet === 'gift' ? <GiftSheet namespace={props.identity.namespace} people={people} onClose={() => setSheet(null)} onSend={async(content,cost,requestId)=>{await postPaidGiftMessage({namespace:props.identity.namespace,identity:props.identity,chat,text:content,cost,requestId});void reload().catch(()=>undefined)}} /> : null}
       {calling ? (
         <CallScreen
           title={title}
@@ -501,6 +503,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   )
 
   async function runTool(id: ToolId) {
+    if(id==='life'){if(primary)await storage.setBag(props.identity.namespace,'life_selected_char',primary.id);useMellow.getState().openApp('life');return}
     if (id === 'album') {
       const input = document.createElement('input')
       input.type = 'file'
