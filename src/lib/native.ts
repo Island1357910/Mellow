@@ -11,6 +11,6 @@ export async function setupNativeApp(): Promise<void> {
     if (state.controlOpen) state.setControl(false)
     else if (state.identitySheet) state.setIdentitySheet(false)
     else if (state.activeApp) state.closeApp()
-    else void App.minimizeApp()
+    else if (window.dispatchEvent(new Event('mellow-home-back', { cancelable: true }))) void App.minimizeApp()
   })
 }

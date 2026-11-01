@@ -40,6 +40,7 @@ export function HomeScreen() {
   const [dragX, setDragX] = useState(0)
   const [settling, setSettling] = useState(true)
   const [browser, setBrowser] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [pendingSearch, setPendingSearch] = useState<string | null>(null)
   const [pad, setPad] = useState<string | null>(null)
   const [birthdayStamp, setBirthdayStamp] = useState(0)
@@ -53,7 +54,7 @@ export function HomeScreen() {
     if (!node) return
     let cool = false
     const onWheel = (event: WheelEvent) => {
-      if (identitySheet || activeApp || browser || pad !== null) return
+      if (identitySheet || activeApp || browser || searchOpen || pad !== null) return
       const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey
       if (!horizontal) return
       const delta = event.shiftKey && Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
@@ -68,10 +69,10 @@ export function HomeScreen() {
     }
     node.addEventListener('wheel', onWheel, { passive: false })
     return () => node.removeEventListener('wheel', onWheel)
-  }, [activeApp, browser, identitySheet, pad, pageCount])
+  }, [activeApp, browser, identitySheet, searchOpen, pad, pageCount])
 
   useEffect(() => {
-    if (activeApp || identitySheet || browser || pad !== null) return
+    if (activeApp || identitySheet || browser || searchOpen || pad !== null) return
     const onKey = (event: KeyboardEvent) => {
       const target = event.target
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
@@ -101,7 +102,7 @@ export function HomeScreen() {
   }
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || identitySheet || browser || pad !== null || playerSheet) return
+    if (event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) return
     const target = event.target
     if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) return
     dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, t: performance.now() }
@@ -212,9 +213,9 @@ export function HomeScreen() {
         </section>
       ) : null}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-12 z-20 flex flex-col items-center gap-2.5">
-        <div className="pointer-events-auto w-[min(440px,calc(100%-2rem))]">
-          <SearchBar onSearch={runSearch} />
+      <div className="home-toolbar pointer-events-none absolute inset-x-0 bottom-12 z-20 flex flex-col items-center gap-2.5">
+        <div className="home-search-wrap pointer-events-auto">
+          <button type="button" data-no-swipe className="home-search-trigger" aria-label="搜索或输入网址" onClick={() => setSearchOpen(true)}><span>搜索或输入网址</span><Search size={18}/></button>
         </div>
         <div className="pointer-events-auto flex items-center justify-center gap-1">
           {Array.from({ length: pageCount }, (_, dot) => (
@@ -229,6 +230,7 @@ export function HomeScreen() {
           ))}
         </div>
       </div>
+      {searchOpen && <HomeSearchPanel onClose={() => setSearchOpen(false)} onSearch={query => { setSearchOpen(false); runSearch(query) }}/>}
       {browser ? (
         <SimBrowser
           query={browser}
@@ -365,29 +367,23 @@ function BirthdayLine(props: { namespace: string; stamp: number; onOpen: (birthd
   )
 }
 
-function SearchBar(props: { onSearch: (query: string) => void }) {
+export function HomeSearchPanel(props: { onSearch: (query: string) => void; onClose: () => void }) {
   const [query, setQuery] = useState('')
-  return (
-    <form
-      data-no-swipe
-      className="flex items-center gap-2 rounded-full bg-white/80 px-4 py-3 shadow-[0_8px_20px_rgba(90,70,80,0.05)]"
-      onSubmit={(event) => {
-        event.preventDefault()
-        const text = query.trim()
-        if (text) props.onSearch(text)
-      }}
-    >
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="搜索或输入网址"
-        className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-      />
-      <button type="submit" aria-label="搜索" className="grid h-8 w-8 place-items-center rounded-full bg-white">
-        <Search size={16} />
-      </button>
-    </form>
-  )
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const back = (event: Event) => { event.preventDefault(); input.current?.blur(); props.onClose() }
+    window.addEventListener('mellow-home-back', back)
+    return () => window.removeEventListener('mellow-home-back', back)
+  }, [props.onClose])
+  const close = () => { input.current?.blur(); props.onClose() }
+  return <section className="home-search-panel" role="dialog" aria-modal="true" aria-label="桌面搜索" data-no-swipe onPointerDown={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') close() }}>
+    <header><strong>搜索</strong><button type="button" className="chip" onClick={close}>取消</button></header>
+    <form className="home-search-form" onSubmit={event => {
+      event.preventDefault(); const text = query.trim()
+      if (text) { input.current?.blur(); props.onSearch(text) }
+    }}><input ref={input} autoFocus aria-label="搜索内容或网址" type="search" enterKeyHint="search" value={query} maxLength={2000} onChange={event => setQuery(event.target.value)} placeholder="搜索或输入网址"/><button type="submit" aria-label="提交搜索" disabled={!query.trim()}><Search size={20}/></button></form>
+    <p className="text-xs mt-3" style={{ color: 'var(--m-text-secondary)' }}>输入想了解的内容或网址，再点击搜索。</p>
+  </section>
 }
 
 function PageFill(props: { namespace: string; decors: DecorCard[]; onDecor: (id: string, image: string) => void }) {

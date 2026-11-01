@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import { parse } from 'acorn'
+import postcss from 'postcss'
 
 const boot = fs.readFileSync('public/boot.js', 'utf8')
 parse(boot, { ecmaVersion: 5 })
@@ -60,3 +61,27 @@ assert.ok(fs.existsSync('dist/startup-error.html'))
 const cap = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'))
 assert.equal(cap.server.errorPath, 'startup-error.html')
 console.log(`Compatibility checks passed: ES5 loader/watchdog, ${legacy.length} Chrome 60 syntax-checked legacy chunks, native bridge syntax, flattened CSS layers and old viewport fallback`)
+
+// Old engines discard whole @scope blocks. Inactive decorations must still be hidden.
+const legacyTree = postcss.parse(css)
+legacyTree.walkAtRules('scope', rule => rule.remove())
+for (const selector of ['.apple-atmosphere', '.apple-widget-motifs', '.halloween-widget-motifs']) {
+  let hidden = false
+  legacyTree.walkRules(rule => {
+    if (rule.selector.includes(selector) && !/:is\(|:where\(|:has\(/.test(rule.selector)) {
+      rule.walkDecls('display', decl => { if (decl.value === 'none') hidden = true })
+    }
+  })
+  assert(hidden, selector + ' needs a baseline hide rule outside unsupported scope blocks')
+}
+for (const selector of ['.launcher-col', '.dock-bar', '.home-search-wrap']) {
+  let usableWidth = false
+  legacyTree.walkRules(rule => {
+    if (rule.selector.startsWith(selector)) rule.walkDecls('width', decl => {
+      if (!/min\(|max\(|clamp\(/.test(decl.value)) usableWidth = true
+    })
+  })
+  assert(usableWidth, selector + ' needs a width that works without CSS min/max/clamp')
+}
+assert.match(fs.readFileSync('android/app/src/main/AndroidManifest.xml','utf8'), /windowSoftInputMode="adjustResize"/)
+console.log('Home compatibility checks passed: inactive motifs hidden without scope, legacy widths and IME resize policy')
