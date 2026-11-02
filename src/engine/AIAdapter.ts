@@ -70,6 +70,17 @@ function cleanText(text: string): string {
   return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
 }
 
+/** 模型请求控制提示，不是玩家发言，也不落库。保留完整历史和末尾系统约束。 */
+function withUserEnding(messages: AIMessage[]): AIMessage[] {
+  const rows = messages.map(item => ({ ...item }))
+  const last = rows[rows.length - 1]
+  if (last?.role === 'user' && last.content.trim()) return rows
+  const content = '（应用生成的请求控制提示，不是玩家的新发言。）请根据以上设定、真实对话和本次任务生成下一条角色回复。不要替玩家说话或做决定，不要把这段控制提示写进正文或当作共同经历。'
+  if (last?.role === 'user') last.content = content
+  else rows.push({ role: 'user', content })
+  return rows
+}
+
 function squashRoles(messages: AIMessage[]): AIMessage[] {
   const rows: AIMessage[] = []
   for (const item of messages) {
@@ -254,12 +265,13 @@ export class AIAdapter {
   }
 
   private payloads(request: AIRequest): Array<Record<string, unknown>> {
+    const messages = withUserEnding(request.messages)
     const temperature = typeof request.temperature === 'number' && request.temperature > 0 && request.temperature <= 1
       ? request.temperature
       : 0.8
     const normal: Record<string, unknown> = {
       model: this.config.model,
-      messages: request.messages,
+      messages,
       temperature,
       max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
     }
@@ -270,18 +282,18 @@ export class AIAdapter {
       normal,
       {
         model: this.config.model,
-        messages: normalizeMessages(request.messages, 1400, false),
+        messages: normalizeMessages(messages, 1400, false),
         temperature: 0.8,
         max_tokens: 512,
       },
       {
         model: this.config.model,
-        messages: normalizeMessages(request.messages, 700, true),
+        messages: normalizeMessages(messages, 700, true),
         max_tokens: 256,
       },
       {
         model: this.config.model,
-        messages: normalizeMessages(request.messages, 500, true),
+        messages: normalizeMessages(messages, 500, true),
       },
     ]
   }

@@ -310,6 +310,8 @@ export async function replyInChat(input: {
       history,
       fourthWall: input.fourthWall,
       priority: storyBridge,
+      proactive: input.proactive,
+      triggerNote: input.triggerNote,
       note: [
         replyNote(input.chat),
         sharedContent,

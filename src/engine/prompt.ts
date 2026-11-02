@@ -52,6 +52,9 @@ export function buildSmsMessages(input: {
   note?: string
   /** 线下关系。放在短信记录之后，压过短信旧上下文。 */
   priority?: string
+  /** 主动触发只作为模型请求任务，不伪造或保存玩家消息。 */
+  proactive?: boolean
+  triggerNote?: string
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall } = input
   const history = input.history.filter((item) => item.kind !== 'system').slice(-30)
@@ -104,6 +107,16 @@ export function buildSmsMessages(input: {
     const last = messages[messages.length - 1]
     if (last?.role === 'user') last.content = `${last.content}\n\n${SMS_RELATION_LOCK}`
     messages.push({ role: 'system', content: input.priority.trim() })
+  }
+  if (input.proactive) {
+    messages.push({
+      role: 'user',
+      content: [
+        '（应用触发的主动消息任务，不是玩家发来的短信；玩家没有发送新消息。）',
+        input.triggerNote?.trim() || '结合当前关系与真实聊天，自然地主动发一条短信，不要催促玩家或提及等待时长。',
+        '这是你主动开启或延续话题，不是重答旧问题。只写角色此刻要发出的内容，不要引用任务提示，不要编造玩家的新发言、动作或决定。',
+      ].join('\n'),
+    })
   }
 
   return {
