@@ -1,4 +1,5 @@
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
+import { normalizeApiBindings } from './apiModules.ts'
 import type { AppSettings, BackupSettings, DecorCard, HomeLayout, PresetMode, ProactiveLevel } from '../types/index.ts'
 
 function legacyProactiveMinutes(level: ProactiveLevel | undefined): number {
@@ -61,6 +62,7 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
     sound: false,
     vibration: false,
     activeApiId: '',
+    apiModuleBindings: {},
     installedApps: [],
     appIcons: {},
     iconSets: [],
@@ -106,6 +108,7 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
     ...raw,
     id: 'global',
     activeIdentityId: raw?.activeIdentityId || base.activeIdentityId,
+    apiModuleBindings: normalizeApiBindings(raw?.apiModuleBindings),
     modePresets: { ...MODE_PRESET_DEFAULTS, ...raw?.modePresets },
     installedApps: raw?.installedApps ?? [],
     appIcons: raw?.appIcons ?? {},

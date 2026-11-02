@@ -72,6 +72,7 @@ export async function runStoryGeneration(input: {
     jiushiBlock: jiushiConfig ? jiushiPromptBlock(jiushiConfig) : undefined,
   })
   const content = await generateStoryReply({
+    mode: input.mode,
     messages,
     preset,
     charsMin: config.replyCharsMin,
@@ -80,7 +81,7 @@ export async function runStoryGeneration(input: {
   let next = await putSave(input.namespace, { ...save, lines: [...save.lines, line('assistant', content)] })
   if (needsSummary(next, config)) {
     try {
-      next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds), summaryError: '' })
+      next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds, input.mode), summaryError: '' })
     } catch (error) {
       await putSave(input.namespace, { ...next, summaryError: error instanceof Error ? error.message : '总结失败，下轮自动重试' })
       const { useMellow } = await import('../store/useMellow.ts')

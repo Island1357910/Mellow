@@ -1,4 +1,4 @@
-import { AIAdapter } from '../engine/AIAdapter.ts'
+import { moduleAdapter } from './ask.ts'
 import { storage } from '../storage/StorageService.ts'
 
 export interface SearchHit {
@@ -19,7 +19,7 @@ function bagKey(query: string): string {
 }
 
 async function ask(system: string, user: string, maxTokens: number): Promise<string> {
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+  const adapter = await moduleAdapter('search')
   const response = await adapter.complete({
     messages: [
       { role: 'system', content: system },

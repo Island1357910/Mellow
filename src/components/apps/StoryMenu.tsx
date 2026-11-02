@@ -286,7 +286,7 @@ function MemoryTab(props: TabProps) {
   const write = async (kind: 'small' | 'big') => {
     setBusy(kind)
     try {
-      await props.onSave(await writeSummary(save, kind, config.keepRounds))
+      await props.onSave(await writeSummary(save, kind, config.keepRounds, props.mode))
       props.onNote(kind === 'small' ? '写好了一条小总结' : '合成了大总结')
     } catch (reason) {
       props.onNote(reason instanceof Error ? reason.message : '没总结出来')

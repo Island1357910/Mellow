@@ -1,5 +1,7 @@
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import type { WorldEntry } from './worldbook.ts'
+
+const { askLine } = moduleAi('create')
 
 export interface MadeCard {
   name: string

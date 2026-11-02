@@ -1,4 +1,4 @@
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 import { describeMessage } from '../engine/prompt.ts'
@@ -8,6 +8,8 @@ import {
   DAY, addKeepsake, adjustRelationship, characterLife, changeSharedLife, homeDescription,
   readSharedLife, sharedLifeNote, ensureSharedCharacter, type Appointment, type LifeContact, type LifeEvent, type Relationship,
 } from './sharedLife.ts'
+
+const { askLine } = moduleAi('life')
 
 function text(value: unknown, limit = 800): string {
   return typeof value === 'string' ? value.trim().slice(0, limit) : ''

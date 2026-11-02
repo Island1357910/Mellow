@@ -1251,6 +1251,65 @@ button {
   background: color-mix(in srgb, var(--m-primary) 16%, transparent);
 }
 
+/* Essential PIN layout stays outside @scope and avoids min()/flex gap so older
+   Android WebViews retain six visible dots and the complete bottom key row. */
+.secret-lock {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 20px 48px;
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.secret-lock .pin-content {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 320px;
+  margin: auto;
+  text-align: center;
+}
+.pin-ui .pin-dots { display: flex; justify-content: center; }
+.pin-ui .pin-dot {
+  display: block;
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  margin: 0 7px;
+  border: 2px solid var(--control-dot-empty, #88778f) !important;
+  border-radius: 50%;
+  background: transparent !important;
+  box-sizing: border-box;
+}
+.pin-ui .pin-dot[data-filled="true"] {
+  background: var(--control-dot-filled, #d686a0) !important;
+  border-color: var(--control-dot-filled, #d686a0) !important;
+}
+.pin-ui .pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-gap: 12px 18px;
+  width: 100%;
+  max-width: 252px;
+  margin: 0 auto;
+}
+.pin-ui .lock-key {
+  width: 100%;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--control-key-border, #a99eae);
+  border-radius: 50%;
+  background: var(--control-key-surface, #fffaf6) !important;
+  color: var(--control-key-ink, #2f2f2f) !important;
+  box-shadow: 0 3px 8px #120c1a12;
+  touch-action: manipulation;
+}
+.pin-ui .lock-key:active {
+  background: var(--control-pressed, #efbfcc) !important;
+  color: var(--control-pressed-ink, #241b25) !important;
+}
+
 .clock-date {
   font-family: "ZCOOL XiaoWei", "Songti SC", "STSong", "Noto Serif SC", serif;
   letter-spacing: 0.16em;

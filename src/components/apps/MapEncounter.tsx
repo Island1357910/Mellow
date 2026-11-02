@@ -1,9 +1,11 @@
 import { sharedLifeNote } from '../../lib/sharedLife.ts'
 import { ArrowLeft, History, MapPin, Send, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { askLine, readJson } from '../../lib/ask.ts'
+import { moduleAi, readJson } from '../../lib/ask.ts'
 import { storage, defaultCharState } from '../../storage/StorageService.ts'
 import type { Character } from '../../types/index.ts'
+
+const { askLine } = moduleAi('map')
 
 type Line = { speaker: string; text: string; at: number }
 export function MapEncounter({ namespace, place, people, player, onExit }: { namespace: string; place: {id:string;name:string;kind:string;note:string}; people: Character[]; player:string; onExit:()=>void }) {

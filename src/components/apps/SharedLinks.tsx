@@ -1,10 +1,12 @@
 import { bindTogetherSource, useTogether } from '../../lib/together.ts'
 import { BookOpen, Film, Globe, Music, ArrowLeft, ExternalLink, Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { askLine } from '../../lib/ask.ts'
+import { moduleAi } from '../../lib/ask.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import type { Character } from '../../types/index.ts'
+
+const { askLine } = moduleAi('connections')
 interface Link {id:string;name:string;url:string;kind:string;progress?:string;seconds?:number}
 interface Line {role:'user'|'assistant';text:string;at:number}
 const KINDS=[['小说',BookOpen],['电影',Film],['音乐',Music],['网页',Globe]] as const

@@ -1,7 +1,7 @@
 import { HomeLifePanel } from './HomeLifePanel.tsx'
 import { ShoppingBag } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { askLine, readJson } from '../../lib/ask.ts'
+import { moduleAi, readJson } from '../../lib/ask.ts'
 import {
   merchantOf,
   DUOTAO,
@@ -117,7 +117,7 @@ function ShopApp(props: {
     setError('')
     const local = draftGoods(props.shop, text)
     try {
-      const raw = await askLine(
+      const raw = await moduleAi(props.shop).askLine(
         `你是${props.title}的店员。只返回 JSON 数组，正好 3 件货。每项 {"name":"名字","price":数字,"level":"普通或精致或稀有","blurb":"一句","emoji":"一个表情","cat":"分类","trait":"一句属性"}。价格在 4 到 80。三件是同一需求的不同等级。`,
         text,
         400,

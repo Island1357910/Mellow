@@ -85,3 +85,24 @@ for (const selector of ['.launcher-col', '.dock-bar', '.home-search-wrap']) {
 }
 assert.match(fs.readFileSync('android/app/src/main/AndroidManifest.xml','utf8'), /windowSoftInputMode="adjustResize"/)
 console.log('Home compatibility checks passed: inactive motifs hidden without scope, legacy widths and IME resize policy')
+
+// The PIN must remain visible even when the engine discards scoped theme rules.
+function pinDeclaration(selector, property, expected) {
+  let found = false
+  legacyTree.walkRules(rule => {
+    // Cascade-layer flattening adds synthetic :not(#...) specificity guards.
+    const normalized = rule.selector.replace(/:not\(#[^)]*\)/g, '')
+    if (!normalized.split(',').map(part => part.trim()).includes(selector)) return
+    rule.walkDecls(property, decl => { if (expected.test(decl.value)) found = true })
+  })
+  assert(found, `${selector} needs compatible ${property} outside @scope`)
+}
+pinDeclaration('.secret-lock', 'overflow-y', /^auto$/)
+pinDeclaration('.secret-lock .pin-content', 'margin', /^auto$/)
+pinDeclaration('.pin-ui .pin-dot', 'width', /^11px$/)
+pinDeclaration('.pin-ui .pin-dot', 'margin', /^0 7px$/)
+pinDeclaration('.pin-ui .pin-pad', 'width', /^100%$/)
+pinDeclaration('.pin-ui .pin-pad', 'max-width', /^252px$/)
+pinDeclaration('.pin-ui .lock-key', 'background', /#fffaf6/)
+pinDeclaration('.pin-ui .lock-key', 'border', /1px solid/)
+console.log('PIN compatibility checks passed: unscoped dots, bounded keypad width, visible keys and scrollable layout')

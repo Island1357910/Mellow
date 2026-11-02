@@ -1,8 +1,10 @@
 import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { getNearbyMeta, isNearbyCharacter } from './nearbyContact.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
+
+const { askLine } = moduleAi('nearby')
 
 const ENRICH_THRESHOLDS = [6, 14, 28]
 

@@ -1,5 +1,22 @@
 import { AIAdapter } from '../engine/AIAdapter.ts'
 import { storage } from '../storage/StorageService.ts'
+import type { ApiModuleId } from './apiModules.ts'
+
+export async function moduleAdapter(moduleId?: ApiModuleId): Promise<AIAdapter> {
+  const profile = moduleId ? await storage.readModuleApi(moduleId) : await storage.readApi()
+  return AIAdapter.fromStored(profile, profile ? await storage.readApiKey(profile.id) : '')
+}
+
+/** 在调用入口明确归属，不依赖当前屏幕，后台及并发请求也使用自己的配置。 */
+export function moduleAi(moduleId: ApiModuleId) {
+  return {
+    askLine: (system: string, user: string, maxTokens = 180, timeoutMs = 120_000, temperature = 0.9) =>
+      askLine(system, user, maxTokens, timeoutMs, temperature, moduleId),
+    askJson: (system: string, user: string, maxTokens = 8192, timeoutMs = 180_000) =>
+      askLine(system, user, maxTokens, timeoutMs, 0.2, moduleId),
+    ensureAiReady: async () => { await moduleAdapter(moduleId) },
+  }
+}
 
 export async function askLine(
   system: string,
@@ -7,8 +24,9 @@ export async function askLine(
   maxTokens = 180,
   timeoutMs = 120_000,
   temperature = 0.9,
+  moduleId?: ApiModuleId,
 ): Promise<string> {
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+  const adapter = await moduleAdapter(moduleId)
   const result = await adapter.complete({
     messages: [
       { role: 'system', content: system },

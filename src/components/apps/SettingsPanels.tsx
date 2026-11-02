@@ -1,5 +1,6 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { uid } from '../../lib/id.ts'
+import { API_MODULES, MAX_API_PROFILES } from '../../lib/apiModules.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { PHONE_APPS } from '../../data/apps.ts'
 import { AIAdapter } from '../../engine/AIAdapter.ts'
@@ -131,7 +132,8 @@ export function ApiPanel() {
 
   return (
     <SoftCard>
-      <SectionTitle tone="sky">接口</SectionTitle>
+      <SectionTitle tone="sky">API 设置（{profiles.length}/{MAX_API_PROFILES}）</SectionTitle>
+      <p className="mb-3 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>最多三组 API。每个应用模块只能选择一组，同一组可供多个模块使用。未单独分配的模块使用默认接口。</p>
       {apiMeta.ready && apiMeta.hasKey ? (
         <div className="mb-3"><PillNote tone="mint" compact>已连接 · {apiMeta.name || '当前接口'} · {apiMeta.model}（重新登录后仍有效，无需重复配置）</PillNote></div>
       ) : (
@@ -139,12 +141,12 @@ export function ApiPanel() {
       )}
       <div className="mb-3 grid grid-cols-2 gap-2">
         {profiles.map((card) => (
-          <button key={card.id} type="button" className={`chip min-w-0 w-full py-2 text-left text-xs ${settings.activeApiId === card.id ? 'chip-pink' : ''}`} onClick={() => loadCard(card.id)}>
-            <span className="block truncate font-medium">{card.name}</span>
+          <button key={card.id} type="button" aria-pressed={id === card.id} className={`chip min-w-0 w-full py-2 text-left text-xs ${id === card.id ? 'chip-pink' : ''}`} onClick={() => loadCard(card.id)}>
+            <span className="block truncate font-medium">{card.name}{settings.activeApiId === card.id ? ' · 默认' : ''}</span>
             <span className="block truncate" style={{ color: 'var(--m-text-secondary)' }}>{card.ready ? card.model : '还没选模型'}</span>
           </button>
         ))}
-        <button type="button" className="chip border border-dashed border-black/10 bg-white/60 py-2 text-xs" onClick={() => { setId(''); setName('新接口'); setEndpoint('https://api.openai.com/v1'); setModel(''); setKey(''); setModels([]) }}>新建</button>
+        <button type="button" disabled={profiles.length >= MAX_API_PROFILES} className="chip border border-dashed border-black/10 bg-white/60 py-2 text-xs disabled:opacity-50" onClick={() => { setId(''); setName('新接口'); setEndpoint('https://api.openai.com/v1'); setModel(''); setKey(''); setModels([]) }}>{profiles.length >= MAX_API_PROFILES ? '已达三组上限' : '新建 API'}</button>
       </div>
       <div className="space-y-3">
         <Field label="名字" value={name} onChange={setName} />
@@ -182,23 +184,39 @@ export function ApiPanel() {
             }
             void (async () => {
               const saved = await storage.saveApiProfile({ id: id || undefined, name, endpoint, model, key: key.trim() ? key : undefined, ready: true })
-              await patchSettings({ activeApiId: saved.id })
+              if (!settings.activeApiId) await patchSettings({ activeApiId: saved.id })
               await reloadApis()
               setId(saved.id)
               setKey('')
-              setStatus('已保存，并切到这张')
+              setStatus('已保存，可在下方分配应用模块')
             })().catch((error: unknown) => setStatus(error instanceof Error ? error.message : '没保存成'))
-          }}>保存并使用</button>
+          }}>保存 API 设置</button>
           {profiles.filter((card) => card.ready && card.id !== settings.activeApiId).map((card) => (
             <button key={card.id} type="button" className="chip chip-sky text-xs" onClick={() => selectProfile(card.id)}>
-              切到 {card.name}
+              设为默认：{card.name}
             </button>
           ))}
           {id ? (
-            <button type="button" className="chip chip-danger text-xs" onClick={() => void storage.deleteApiProfile(id).then(() => reloadApis()).then(() => { setId(''); setStatus('已删除') })}>删除这张</button>
+            <button type="button" className="chip chip-danger text-xs" onClick={() => void storage.deleteApiProfile(id).then(() => reloadApis()).then(() => { setId(''); setStatus('已删除，相关模块已恢复使用默认接口') }).catch(error => setStatus(error instanceof Error ? error.message : '删除失败'))}>删除这张</button>
           ) : null}
         </div>
         {status ? <PillNote tone="mint" inline>{status}</PillNote> : null}
+        <SectionTitle tone="sky">应用模块分配</SectionTitle>
+        <div className="space-y-3">
+          {API_MODULES.map(module => (
+            <label key={module.id} className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
+              {module.name}
+              <select className="soft-select mt-1 w-full text-sm" value={settings.apiModuleBindings[module.id] ?? ''} onChange={event => {
+                const apiId = event.target.value
+                void storage.bindApiModule(module.id, apiId).then(() => reloadApis()).catch(error => setStatus(error instanceof Error ? error.message : '分配失败'))
+              }}>
+                <option value="">使用默认接口{apiMeta.name ? `（${apiMeta.name}）` : ''}</option>
+                {settings.apiModuleBindings[module.id] && !profiles.some(card => card.id === settings.apiModuleBindings[module.id] && card.ready) ? <option value={settings.apiModuleBindings[module.id]}>原绑定不可用，请重新选择</option> : null}
+                {profiles.filter(card => card.ready).map(card => <option key={card.id} value={card.id}>{card.name} · {card.model}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
       </div>
     </SoftCard>
   )

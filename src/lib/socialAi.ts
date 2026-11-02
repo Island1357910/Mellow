@@ -1,4 +1,4 @@
-import { AIAdapter } from '../engine/AIAdapter.ts'
+import { moduleAdapter } from './ask.ts'
 import { isNearbyCharacter, listNearbySeen } from './nearbyContact.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -22,8 +22,8 @@ export interface SocialNearPerson {
   tags: string[]
 }
 
-async function ask(prompt: string, maxTokens = 900): Promise<string> {
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+async function ask(prompt: string, maxTokens = 900, moduleId: 'moments' | 'nearby' = 'moments'): Promise<string> {
+  const adapter = await moduleAdapter(moduleId)
   const result = await adapter.complete({
     messages: [
       { role: 'system', content: '只返回 JSON，不要写解释，不要用代码块。' },
@@ -68,7 +68,7 @@ export async function generateNearbyPeople(namespace: string, visit: number): Pr
     ...seen,
     ...chars.filter(isNearbyCharacter).map((item) => item.name),
   ])
-  const raw = await ask('生成 7 个彼此不同的附近的人。名字两个或三个字，不要重复。资料短，像卡片，不要写成故事。只返回 {"people":[{"name":"","gender":"","age":"","city":"","signature":"","bio":"","tags":["",""]}]}', 1100)
+  const raw = await ask('生成 7 个彼此不同的附近的人。名字两个或三个字，不要重复。资料短，像卡片，不要写成故事。只返回 {"people":[{"name":"","gender":"","age":"","city":"","signature":"","bio":"","tags":["",""]}]}', 1100, 'nearby')
   const data = readJson(raw) as { people?: Array<Record<string, unknown>> }
   const next = (data.people ?? []).slice(0, 8).flatMap((item) => {
     const name = asText(item.name)

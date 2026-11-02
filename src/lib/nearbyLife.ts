@@ -2,12 +2,14 @@ import { replyInChat } from '../domain/messaging.ts'
 import { isAiJobRunning, jobKey, runAiJob } from '../engine/aiJobs.ts'
 import { isSmsProactivePaused } from './smsGuard.ts'
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { modePresetId } from './defaults.ts'
 import { getNearbyMeta, isNearbyCharacter, refreshNearbyLife } from './nearbyContact.ts'
 import { storage, defaultCharState } from '../storage/StorageService.ts'
 import { useMellow } from '../store/useMellow.ts'
 import type { AppSettings, Character, Identity, Preset } from '../types/index.ts'
+
+const { askLine } = moduleAi('nearby')
 
 async function aiRefreshLife(namespace: string, character: Character): Promise<void> {
   const meta = getNearbyMeta(character)

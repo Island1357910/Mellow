@@ -6,7 +6,7 @@ import { addKeepsake, changeSharedLife, readSharedLife, sharedLifeNote } from '.
 import { uid } from '../../lib/id.ts'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
-import { askLine, readJson } from '../../lib/ask.ts'
+import { moduleAi, readJson } from '../../lib/ask.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { aiMove as goAi, emptyGrid, winner, type Grid, type Stone } from '../../lib/gomoku.ts'
@@ -19,6 +19,8 @@ import type { Character } from '../../types/index.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 import { PickCard } from '../ui/PickCard.tsx'
 import { RoundTable } from '../ui/RoundTable.tsx'
+
+const { askLine } = moduleAi('table')
 
 const GAMES = [
   { id: 'soup', name: '海龟汤', blurb: '只问是或不是', min: 2, max: 2, emoji: '🐢', tint: '#D7E7F8', accent: '#7FB8E0' },

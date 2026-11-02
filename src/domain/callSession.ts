@@ -1,4 +1,5 @@
-import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
+import { moduleAdapter } from '../lib/ask.ts'
+import { AIError } from '../engine/AIAdapter.ts'
 import { buildCallMessages, pickPreset } from '../engine/prompt.ts'
 import { minimaxSpeak, normalizeMinimaxKey, resolveCharacterVoiceId } from '../engine/minimax.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
@@ -65,9 +66,7 @@ export async function runCallTurn(input: {
       })),
       fourthWall: input.fourthWall,
     })
-    const stored = await storage.readApi()
-    const key = await storage.readApiKey()
-    const adapter = await AIAdapter.fromStored(stored, key)
+    const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({
       messages: built.messages,
       temperature: built.temperature,
@@ -122,9 +121,7 @@ async function summarizeCall(input: {
     turn.role === 'user' ? `${input.identity.name}：${turn.text}` : `${turn.charName ?? input.character.name}：${turn.text}`,
   )
   try {
-    const stored = await storage.readApi()
-    const key = await storage.readApiKey()
-    const adapter = await AIAdapter.fromStored(stored, key)
+    const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({
       messages: [
         {

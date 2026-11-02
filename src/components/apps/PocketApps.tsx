@@ -1,7 +1,7 @@
 import { RecordDate, useRecordArchive } from './RecordArchive.tsx'
 import { useEffect, useState, type ReactNode } from 'react'
 import { downloadJson } from '../../lib/download.ts'
-import { askLine } from '../../lib/ask.ts'
+import { moduleAi } from '../../lib/ask.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -358,7 +358,7 @@ export function DreamApp(props: { onBack: () => void }) {
     setBusy(item.id)
     setError('')
     try {
-      const echo = await askLine('把这段梦接成电台里的一小段旁白，60 字以内，不要解释，不要列点。', item.text, 120)
+      const echo = await moduleAi('dream').askLine('把这段梦接成电台里的一小段旁白，60 字以内，不要解释，不要列点。', item.text, 120)
       save(rows.map((row) => (row.id === item.id ? { ...row, echo } : row)))
     } catch (e) {
       setError(e instanceof Error ? e.message : '生成失败，可以重试')
@@ -411,7 +411,7 @@ export function SparkApp(props: { onBack: () => void }) {
     if (busy) return
     setBusy(item.id)
     try {
-      const more = await askLine('把这句没写完的话展开成两句，保持原来的口气，不要总结。', item.text, 120)
+      const more = await moduleAi('spark').askLine('把这句没写完的话展开成两句，保持原来的口气，不要总结。', item.text, 120)
       save(rows.map((row) => (row.id === item.id ? { ...row, more } : row)))
     } catch (e) {
       setError(e instanceof Error ? e.message : '生成失败，可以重试')
@@ -476,7 +476,7 @@ export function WriteApp(props: { onBack: () => void }) {
     setBusy(true)
     setError('')
     try {
-      const line = await askLine(`任务：${style}。续写时推进一个具体事件；对白模式增加有潜台词的对话；细节模式增加可见动作与环境。保持原文语气和人称，不总结、不列点。只返回可接在文末的新段落。`, text, 500)
+      const line = await moduleAi('write').askLine(`任务：${style}。续写时推进一个具体事件；对白模式增加有潜台词的对话；细节模式增加可见动作与环境。保持原文语气和人称，不总结、不列点。只返回可接在文末的新段落。`, text, 500)
       setPrevious(text)
       keep(`${text.trim()}\n${line}`)
     } catch (reason) {

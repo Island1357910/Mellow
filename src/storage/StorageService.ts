@@ -4,6 +4,7 @@ import { OFFICIAL_PRESETS } from '../data/officialPresets.ts'
 import { sortChats } from '../lib/chats.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { normalizeSettings } from '../lib/defaults.ts'
+import { API_MODULES, MAX_API_PROFILES, type ApiModuleId } from '../lib/apiModules.ts'
 import { uid } from '../lib/id.ts'
 import { BUNDLED_THEMES, canDeleteTheme } from '../theme/themes.ts'
 import type {
@@ -361,14 +362,53 @@ class StorageService {
       updatedAt: Date.now(),
       provider: 'openai',
     })
-    await this.meta.apiConfig.put(next)
+    await this.meta.transaction('rw', this.meta.apiConfig, () =>
+      this.meta.apiConfig.get(id).then(existing => {
+        if (existing) return
+        return this.meta.apiConfig.count().then(count => {
+          if (count >= MAX_API_PROFILES) throw new Error('最多保存三组 API 设置，请编辑或删除已有接口')
+        })
+      }).then(() => this.meta.apiConfig.put(next)))
     return viewOf(next)
   }
 
   async deleteApiProfile(id: string): Promise<void> {
-    await this.meta.apiConfig.delete(id)
+    await this.meta.transaction('rw', [this.meta.apiConfig, this.meta.settings], () =>
+      this.meta.apiConfig.delete(id).then(() => this.meta.settings.get('global')).then(raw => {
+        const settings = normalizeSettings(raw)
+        return this.meta.apiConfig.toArray().then(remaining => {
+          const apiModuleBindings = Object.fromEntries(Object.entries(settings.apiModuleBindings).filter(([, apiId]) => apiId !== id))
+          return this.meta.settings.put({ ...settings, apiModuleBindings,
+            activeApiId: settings.activeApiId === id ? remaining.find(row => row.ready)?.id ?? '' : settings.activeApiId })
+        })
+      }))
+  }
+
+  async bindApiModule(moduleId: ApiModuleId, apiId: string): Promise<void> {
+    if (!API_MODULES.some(module => module.id === moduleId)) throw new Error('未知的 API 模块')
+    await this.meta.transaction('rw', [this.meta.apiConfig, this.meta.settings], () =>
+      (apiId ? this.meta.apiConfig.get(apiId) : Dexie.Promise.resolve(undefined)).then(profile => {
+        if (apiId && !profile?.ready) throw new Error('请先保存可用的 API 设置')
+        return this.meta.settings.get('global')
+      }).then(raw => {
+        const settings = normalizeSettings(raw)
+        const apiModuleBindings = { ...settings.apiModuleBindings }
+        if (apiId) apiModuleBindings[moduleId] = apiId
+        else delete apiModuleBindings[moduleId]
+        return this.meta.settings.put({ ...settings, apiModuleBindings })
+      }))
+  }
+
+  async readModuleApi(moduleId: ApiModuleId): Promise<ApiProfile | undefined> {
     const settings = await this.getSettings()
-    if (settings.activeApiId === id) await this.saveSettings({ ...settings, activeApiId: '' })
+    const apiId = settings.apiModuleBindings[moduleId]
+    // 显式绑定不可用时提示错误，避免偷偷向另一个服务发送请求。
+    if (apiId) {
+      const row = await this.meta.apiConfig.get(apiId)
+      if (!row || !row.ready) throw new Error('此模块绑定的 API 不可用，请到设置中重新选择')
+      return asProfile(row)
+    }
+    return this.readApi()
   }
 
   async readApiKey(id?: string): Promise<string> {

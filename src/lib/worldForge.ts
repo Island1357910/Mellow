@@ -1,11 +1,14 @@
 import { characterFromDraft } from '../domain/importing.ts'
 import { importCharacterRegex } from '../engine/story.ts'
-import { askJson, readJson } from './ask.ts'
+import { moduleAi } from './ask.ts'
+import { FORGE_JSON_RULES, requestForgeOutput } from './worldForgeFormat.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
 import { writeWorld, readWorld, type WorldEntry } from './worldbook.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity, LorebookEntry } from '../types/index.ts'
+
+const { askJson } = moduleAi('worldforge')
 
 export interface ForgedCharacter {
   draft: CardDraft
@@ -263,7 +266,7 @@ async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
 
     let aiMap = new Map<string, CardDraft>()
     try {
-      const text = await askJson(
+      const raw = await requestForgeOutput((correction) => askJson(
         `你是角色卡整理器。根据 character_book 原文，为每位 NPC 输出完整、可单独聊天的角色字段。
 要求：
 - description 必须保留原文全部人设细节（身份、背景、说话风格、礼物偏好、剧情钩子等），不能省略或概括成空壳
@@ -271,25 +274,27 @@ async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
 - scenario 写该角色所在的世界观情境
 - firstMes 写符合人设的一句开场白
 - systemPrompt 写输出约束（不要替玩家发言等）
-- 不要 creatorNotes，不要解释
+- 不要 creatorNotes，不要解释；逐一输出本批全部角色，name 必须与输入完全一致
+${FORGE_JSON_RULES}
 只返回 JSON：
 {"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""]}]}`,
-        `世界名：${parsed.worldTitle}\n\n${JSON.stringify(payload)}`,
+        `世界名：${parsed.worldTitle}\n\n${JSON.stringify(payload)}${correction}`,
         AI_FORGE_MAX_TOKENS,
         AI_FORGE_TIMEOUT_MS,
-      )
-      aiMap = readAiCharacterBatch(readJson(text), parsed.worldTitle)
+      ), batch.map(item => item.draft.name))
+      aiMap = readAiCharacterBatch(raw, parsed.worldTitle)
     } catch {
       usedFallback = true
     }
 
     for (const item of batch) {
-      const merged = mergeNpcDraft(item.draft, aiMap.get(item.draft.name), parsed.worldTitle)
+      const ai = aiMap.get(item.draft.name)
+      const merged = mergeNpcDraft(item.draft, ai, parsed.worldTitle)
       const ok = hasCharacterSettings(merged)
-      if (!ok) usedFallback = true
+      if (!ai || !ok) usedFallback = true
       enriched.push({
         draft: merged,
-        note: ok ? 'AI 已整理设定' : '保留原文设定',
+        note: ai && ok ? 'AI 已整理设定' : '保留原文设定',
       })
     }
   }
@@ -338,18 +343,20 @@ async function aiForge(raw: unknown): Promise<ForgeResult> {
     source.length > AI_FORGE_SOURCE_LIMIT
       ? `${source.slice(0, AI_FORGE_SOURCE_LIMIT)}\n…（后文已截）`
       : source
-  const text = await askJson(
+  const output = await requestForgeOutput((correction) => askJson(
     `你是大世界卡拆分器。输入可能是手写的世界观、大纲、一张 SillyTavern 卡，或多角色世界观 JSON。
 请拆成：
 1) 世界总设定条目（有多少写多少，含时代、地理、势力、规则等，保留原文细节）
 2) 可单独游玩的 NPC 角色卡（有多少写多少），每人必须有完整 name、description、personality、scenario、firstMes、systemPrompt
-不要导入世界主卡本身为角色。不要 creatorNotes。不要解释、不要省略条目。只返回 JSON：
+不要导入世界主卡本身为角色。不要 creatorNotes。不要解释、不要省略条目。
+${FORGE_JSON_RULES}
+只返回以下结构，角色使用 camelCase 字段名，不要套 spec/data：
 {"worldTitle":"","worldSummary":"","worldEntries":[{"title":"","keys":"","content":""}],"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""],"note":""}]}`,
-    clip,
+    clip + correction,
     AI_FORGE_MAX_TOKENS,
     AI_FORGE_TIMEOUT_MS,
-  )
-  const parsed = readForgeResult(readJson(text))
+  ))
+  const parsed = readForgeResult(output)
   if (!parsed || parsed.characters.length === 0) throw new Error('没拆出角色')
   return {
     ...parsed,
@@ -405,11 +412,8 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
   } catch {
     // 不是可直接解析的卡结构，继续走 AI 拆分
   }
-  try {
-    return dropWorldHostCharacter(await aiForge(raw))
-  } catch {
-    return dropWorldHostCharacter(localForge(raw))
-  }
+  // 可本地解析的卡已在上面处理；正文生成失败时保留真实错误。
+  return dropWorldHostCharacter(await aiForge(raw))
 }
 
 export interface ForgeApplyOptions {

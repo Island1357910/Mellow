@@ -21,7 +21,7 @@ const IPHONE_KEYS: Array<{ key: string; label?: string } | null> = [
 
 function PinDots(props: { length: number; filled: number }) {
   return (
-    <div className="pin-dots flex justify-center gap-[14px]" role="group" aria-label={`已输入 ${props.filled} 位，共 ${props.length} 位`}>
+    <div className="pin-dots" role="group" aria-label={`已输入 ${props.filled} 位，共 ${props.length} 位`}>
       {Array.from({ length: props.length }, (_, index) => (
         <span
           key={index}
@@ -41,7 +41,7 @@ function PinDots(props: { length: number; filled: number }) {
 
 function IphonePinPad(props: { onKey: (key: string) => void; onCancel?: () => void }) {
   return (
-    <div className="pin-pad mx-auto grid w-[min(100%,252px)] grid-cols-3 gap-x-6 gap-y-3">
+    <div className="pin-pad">
       {IPHONE_KEYS.map((item, index) => {
         if (!item) return <span key={index} />
         const { key, label } = item
@@ -103,9 +103,8 @@ export function SecretLock(props: {
   }
 
   return (
-    <div className="pin-ui secret-lock relative z-20 h-full min-h-0">
-      <div className="absolute inset-x-0 top-[53%] w-full -translate-y-1/2 px-5">
-        <div className="mx-auto w-full max-w-[320px] text-center">
+    <div className="pin-ui secret-lock relative z-20">
+      <div className="pin-content">
         <h2 className="pin-title mb-4 text-lg font-semibold">{props.title ?? '请输入六位密码'}</h2>
         {props.hint ? <p className="pin-hint mb-4 text-xs">{props.hint}</p> : null}
         <PinDots length={PIN_LENGTH} filled={digits.length} />
@@ -118,7 +117,6 @@ export function SecretLock(props: {
         )}
         <div className="mt-8">
           <IphonePinPad onKey={press} onCancel={props.onCancel} />
-        </div>
         </div>
       </div>
     </div>

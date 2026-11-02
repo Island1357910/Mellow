@@ -1,6 +1,8 @@
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
+
+const { askLine } = moduleAi('huizhen')
 
 const APP_IDS = [
   { id: 'sms', name: '短信' },

@@ -1,8 +1,10 @@
 import { readSharedLife, changeSharedLife } from './sharedLife.ts'
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character } from '../types/index.ts'
+
+const { askLine } = moduleAi('huizhen')
 
 export interface PeekLine {
   id: string

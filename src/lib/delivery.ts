@@ -1,7 +1,7 @@
 import { rememberGift } from './sharedLife.ts'
 import { useMellow } from '../store/useMellow.ts'
 import { ensureDirectChat } from '../domain/messaging.ts'
-import { askLine } from './ask.ts'
+import { moduleAi } from './ask.ts'
 import { uid } from './id.ts'
 import { walletTask } from './wallet.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -231,7 +231,7 @@ export async function tickDeliveries(namespace: string, chars: Character[]): Pro
       : `门口有个包裹，拆开是${names}。是你买的吗？`
     let text = fallback
     try {
-      const line = await askLine(
+      const line = await moduleAi(order.shop).askLine(
         `你是${person.name}。用一两句口语发短信。${order.told ? '对方提前说过要给你买这些，你刚收到，高兴。' : '你事先不知道这个包裹，觉得可能是对方买的，问一句。'}不要加引号。`,
         `包裹里是：${names}${order.note ? `。留言：${order.note}` : ''}`,
         80,

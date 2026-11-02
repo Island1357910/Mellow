@@ -2,7 +2,7 @@ import { HOME_GOODS, type HomeState } from '../../lib/homeLife.ts'
 import { MapEncounter } from './MapEncounter.tsx'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
-import { askJson, askLine, readJson } from '../../lib/ask.ts'
+import { moduleAi, readJson } from '../../lib/ask.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
 import { addCoins } from '../../lib/wallet.ts'
@@ -10,6 +10,8 @@ import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { Character } from '../../types/index.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
+
+const { askJson, askLine } = moduleAi('map')
 
 interface Place {
   id: string

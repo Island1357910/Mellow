@@ -1,8 +1,10 @@
 import { realTimeContext } from './realTime.ts'
-import { askLine as baseAskLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { passerby } from './feed.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
+
+const { askLine: baseAskLine } = moduleAi('forum')
 
 export interface ForumReply {
   id: string

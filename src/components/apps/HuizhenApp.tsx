@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, SlidersHorizontal, RefreshCw, MessageCircle, Search, Image, NotebookPen, Sparkles, Users, LockKeyhole } from 'lucide-react'
 import { PHONE_APPS } from '../../data/apps.ts'
-import { askLine, readJson } from '../../lib/ask.ts'
+import { moduleAi, readJson } from '../../lib/ask.ts'
 import { assessCharOpen } from '../../lib/peekAssess.ts'
 import { refreshPeek, type PeekThread } from '../../lib/peek.ts'
 import { parseReplySegments } from '../../lib/stickerReply.ts'
@@ -11,6 +11,8 @@ import type { Character, ChatMessage } from '../../types/index.ts'
 import { Screen } from '../ui/primitives.tsx'
 import { AppGlyph } from '../os/AppGlyph.tsx'
 import { CharacterPhone } from './CharacterPhone.tsx'
+
+const { askLine } = moduleAi('huizhen')
 const APPS=[{id:'sms',name:'短信',Icon:MessageCircle,color:'#52b875'},{id:'search',name:'浏览器',Icon:Search,color:'#5998dc'},{id:'moments',name:'朋友圈',Icon:Users,color:'#70b79c'},{id:'star',name:'星博',Icon:Sparkles,color:'#ecad55'},{id:'album',name:'相册',Icon:Image,color:'#d98cb1'},{id:'diary',name:'日记',Icon:NotebookPen,color:'#a18ccf'}]
 type PhoneItem={title:string;text:string}
 function MessageContent({message}:{message:{content:string;kind?:string}}){

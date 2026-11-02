@@ -1,10 +1,11 @@
+import { moduleAdapter } from '../lib/ask.ts'
 import { walletTask } from '../lib/wallet.ts'
 import { sharedLifeNote, rememberGift, normalizeSharedLife, addKeepsake, SHARED_LIFE_KEY, type SharedLife } from '../lib/sharedLife.ts'
 import { observeSharedLifeTurn } from '../lib/sharedLifeAi.ts'
 import { runAiJob, jobKey } from '../engine/aiJobs.ts'
 import { mapMemoryNote } from '../lib/mapMemory.ts'
 import { togetherNoteFor } from '../lib/together.ts'
-import { AIAdapter, AIError } from '../engine/AIAdapter.ts'
+import { AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
 import { glanceExplainNote, userAskedHowYouKnow } from '../lib/glanceExplain.ts'
@@ -322,9 +323,7 @@ export async function replyInChat(input: {
         world,
       ].filter(Boolean).join('\n'),
     })
-    const stored = await storage.readApi()
-    const key = await storage.readApiKey()
-    const adapter = await AIAdapter.fromStored(stored, key)
+    const adapter = await moduleAdapter('messages')
     const range = replyRange(input.chat)
     const { max } = range
     const response = await adapter.complete({
@@ -420,9 +419,7 @@ export async function deliverSms(input: {
       priority: storyBridge,
       note: [await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
-    const stored = await storage.readApi()
-    const key = await storage.readApiKey()
-    const adapter = await AIAdapter.fromStored(stored, key)
+    const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({
       messages: built.messages,
       temperature: built.temperature,

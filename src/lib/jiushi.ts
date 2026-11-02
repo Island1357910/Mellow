@@ -1,6 +1,6 @@
 import { importCharacterRegex } from '../engine/story.ts'
 import { characterFromDraft } from '../domain/importing.ts'
-import { askLine, readJson } from './ask.ts'
+import { moduleAi, readJson } from './ask.ts'
 import { resolveImportJson } from './cardTextImport.ts'
 import { jiushiStoryBridgeForLetter } from './jiushiBridge.ts'
 import { parseCharacterCards, type CardDraft } from './sillytavern.ts'
@@ -8,6 +8,8 @@ import { importCharacterWorld } from './worldbook.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity } from '../types/index.ts'
 import { uid } from './id.ts'
+
+const { askLine } = moduleAi('jiushi')
 
 export const JIUSHI_TAGS = ['旧世', '古风'] as const
 

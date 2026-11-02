@@ -1,6 +1,5 @@
 import { realTimeContext } from './realTime.ts'
-import { AIAdapter } from '../engine/AIAdapter.ts'
-import { askLine, readJsonArray } from './ask.ts'
+import { moduleAdapter, moduleAi, readJsonArray } from './ask.ts'
 import { uid } from './id.ts'
 import {
   freshFallbackPosts,
@@ -15,6 +14,8 @@ import {
   type StarPerson,
 } from './feed.ts'
 import { storage } from '../storage/StorageService.ts'
+
+const { askLine } = moduleAi('star')
 
 const FEED_SYSTEM = '你是星博（类似微博）的内容生成器。只输出 JSON，不要 Markdown，不要代码块，不要任何解释或前后缀。'
 const GENERATE_ATTEMPTS = 3
@@ -136,7 +137,7 @@ function parsePosts(raw: unknown, chars: StarPerson[], player: string): FeedPost
 }
 
 async function starComplete(system: string, user: string, maxTokens: number): Promise<string> {
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+  const adapter = await moduleAdapter('star')
   const result = await adapter.complete({
     messages: [
       { role: 'system', content: realTimeContext()+'\n'+system },

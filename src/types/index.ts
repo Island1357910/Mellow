@@ -425,6 +425,8 @@ export interface AppSettings {
   sound: boolean
   vibration: boolean
   activeApiId: string
+  /** 每个模块最多对应一个接口；缺省时使用默认接口。 */
+  apiModuleBindings: import('../lib/apiModules.ts').ApiModuleBindings
   installedApps: string[]
   /** appId -> emoji 或图片 data URL */
   appIcons: Record<string, string>

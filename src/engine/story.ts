@@ -2,7 +2,7 @@ import { loreEntries } from '../lib/sillytavern.ts'
 import { uid } from '../lib/id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { AIMessage, Character, Identity, Lorebook, LorebookEntry, Preset } from '../types/index.ts'
-import { AIAdapter } from './AIAdapter.ts'
+import { moduleAdapter } from '../lib/ask.ts'
 
 export type StoryMode = 'offline' | 'side' | 'jiushi'
 
@@ -693,9 +693,9 @@ export function displayRules(mode: StoryMode, config: StoryConfig, chars: Charac
   return [...scoped, ...extra]
 }
 
-export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepRounds: number): Promise<StorySave> {
+export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepRounds: number, mode: StoryMode = 'offline'): Promise<StorySave> {
   void keepRounds
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+  const adapter = await moduleAdapter(mode)
   const start = memoryBlock(save).covered
   if (kind === 'small') {
     const end = save.lines.length
@@ -761,8 +761,8 @@ function fitStoryMessages(messages: AIMessage[]): AIMessage[] {
   return [{ role: 'system', content: system || '请写线下这一幕。' }, ...kept]
 }
 
-export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number): Promise<string> {
-  const adapter = await AIAdapter.fromStored(await storage.readApi(), await storage.readApiKey())
+export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline'): Promise<string> {
+  const adapter = await moduleAdapter(mode)
   const response = await adapter.complete({
     messages: fitStoryMessages(messages),
     temperature: storyTemperature(preset),
@@ -772,6 +772,7 @@ export async function generate(messages: AIMessage[], preset: Preset | null, max
 }
 
 export async function generateStoryReply(input: {
+  mode?: StoryMode
   messages: AIMessage[]
   preset: Preset | null
   charsMin: number
@@ -779,7 +780,7 @@ export async function generateStoryReply(input: {
 }): Promise<string> {
   const range = storyCharRange(input.charsMin, input.charsMax)
   const budget = 512
-  let content = await generate(input.messages, input.preset, budget)
+  let content = await generate(input.messages, input.preset, budget, input.mode)
   let len = plainStoryLength(content)
   if (len >= range.lo && len <= range.hi) return content
 
@@ -799,6 +800,7 @@ export async function generateStoryReply(input: {
       ],
       input.preset,
       budget,
+      input.mode,
     )
     content = `${content.trimEnd()}\n${tail.trim()}`
     len = plainStoryLength(content)

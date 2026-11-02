@@ -23,7 +23,7 @@ export async function tickTogether(identity: Identity, force = false): Promise<v
     config = useTogether.getState().config
     const snapshot = togetherSnapshot(ns, config.charId)
     if (!snapshot.note || !config.charId || (!config.auto && !force)) return
-    if (!state.apiMeta.ready) { useTogether.setState({ status: '请先在设置里配置可用的聊天 API' }); return }
+    if (!(await storage.readModuleApi('messages'))?.ready) { useTogether.setState({ status: '请先在设置里配置可用的短信 API' }); return }
     if (state.pendingReplyChatId) return
     const key = ns + ':' + config.charId
     const previous = last.get(key)
