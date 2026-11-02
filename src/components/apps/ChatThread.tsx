@@ -22,6 +22,7 @@ import { VoiceSelect } from './SettingsPanels.tsx'
 import { ALL_SMS_STICKERS } from '../../data/stickers.ts'
 import { parseReplySegments } from '../../lib/stickerReply.ts'
 import { spokenSmsText } from '../../lib/smsReply.ts'
+import { stripThinkingFromSms } from '../../lib/smsSanitize.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 
 type ToolId = 'life' | 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
@@ -649,38 +650,42 @@ function Bubble(props: {
   onDelete: () => void
   onRemove: () => void
 }) {
-  const person = props.people.find((item) => item.id === props.message.charId)
-  const kind = props.message.kind
+  const message = props.message.role === 'assistant'
+    ? { ...props.message, content: stripThinkingFromSms(props.message.content) }
+    : props.message
+
+  const person = props.people.find((item) => item.id === message.charId)
+  const kind = message.kind
   if (kind === 'system') {
-    return <div className="flex justify-center"><PillNote tone="lilac" compact>{props.message.content}</PillNote></div>
+    return <div className="flex justify-center"><PillNote tone="lilac" compact>{message.content}</PillNote></div>
   }
-  const mine = props.message.role === 'user'
+  const mine = message.role === 'user'
   const cls = mine ? 'b-mine' : 'b-theirs'
-  const quoteBlock = props.message.quoteText ? (
-    <p className="mb-1 rounded-xl bg-black/5 px-2 py-1 text-[11px] leading-5 opacity-75">{props.message.quoteText}</p>
+  const quoteBlock = message.quoteText ? (
+    <p className="mb-1 rounded-xl bg-black/5 px-2 py-1 text-[11px] leading-5 opacity-75">{message.quoteText}</p>
   ) : null
-  const image = kind === 'image' && props.message.content.startsWith('data:')
+  const image = kind === 'image' && message.content.startsWith('data:')
   let body: ReactNode
   if (image) {
-    body = <img src={props.message.content} alt="" className="max-w-[200px] rounded-2xl" />
+    body = <img src={message.content} alt="" className="max-w-[200px] rounded-2xl" />
   } else if (kind === 'sticker') {
-    body = props.message.content.startsWith('http') || props.message.content.startsWith('/stickers/') ? (
-      <img src={props.message.content} alt="" className="max-w-[140px] rounded-2xl" loading="lazy" />
+    body = message.content.startsWith('http') || message.content.startsWith('/stickers/') ? (
+      <img src={message.content} alt="" className="max-w-[140px] rounded-2xl" loading="lazy" />
     ) : (
-      <span className="block px-1 text-5xl leading-none">{props.message.content}</span>
+      <span className="block px-1 text-5xl leading-none">{message.content}</span>
     )
   } else if (kind === 'redpacket' || kind === 'transfer' || kind === 'gift') {
-    body = <CardBubble message={props.message} />
+    body = <CardBubble message={message} />
   } else if (kind === 'call' || kind === 'party' || kind === 'music') {
     body = (
       <span className={`${cls} flex items-center gap-2 px-3 py-2 text-sm`}>
         {kind === 'call' ? <Phone size={14} /> : kind === 'party' ? <PartyPopper size={14} /> : <Music size={14} />}
-        {props.message.content}
+        {message.content}
       </span>
     )
   } else if (kind === 'voice') {
-    const voiceText = spokenSmsText(props.message.content)
-    const stickers = parseReplySegments(props.message.content).filter(item => item.kind === 'sticker')
+    const voiceText = spokenSmsText(message.content)
+    const stickers = parseReplySegments(message.content).filter(item => item.kind === 'sticker')
     body = (
       <div className="flex flex-col items-start gap-2">
         {quoteBlock}
@@ -694,7 +699,7 @@ function Bubble(props: {
           onPlay={props.onSpeak}
           onReveal={props.onRevealVoice}
         />
-        </div> : stickers.length === 0 ? <div className={`${cls} px-3 py-2`}>{props.message.content}</div> : null}
+        </div> : stickers.length === 0 ? <div className={`${cls} px-3 py-2`}>{message.content}</div> : null}
         {stickers.map((item, index) => <img key={`${item.content}-${index}`} src={item.content} alt="表情包" className="max-w-[140px] rounded-2xl" loading="lazy" />)}
       </div>
     )
@@ -702,7 +707,7 @@ function Bubble(props: {
     body = (
       <div className={`${cls} readable max-w-[70vw] px-3 py-2 md:max-w-sm`}>
         {quoteBlock}
-        <p className="whitespace-pre-wrap text-sm leading-6">{props.message.content}</p>
+        <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
       </div>
     )
   }
@@ -718,7 +723,7 @@ function Bubble(props: {
       {!mine && !selectable ? <MiniFace name={person?.nickname || person?.name || '群'} avatar={person?.avatar ?? ''} /> : null}
       {!mine && selectable ? check : null}
       <div className={mine ? 'flex flex-col items-end' : ''}>
-        {!mine && person && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}{props.message.starred ? ' · 已收藏' : ''}</p> : null}
+        {!mine && person && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}{message.starred ? ' · 已收藏' : ''}</p> : null}
         <button
           type="button"
           className="text-left"
@@ -734,12 +739,12 @@ function Bubble(props: {
         {props.menuOpen ? (
           <div className="mt-1 flex flex-wrap gap-1">
             <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onQuote}>引用</button>
-            <button type="button" className="chip chip-mint px-2 py-0.5 text-[10px]" onClick={props.onStar}>{props.message.starred ? '取消收藏' : '收藏'}</button>
+            <button type="button" className="chip chip-mint px-2 py-0.5 text-[10px]" onClick={props.onStar}>{message.starred ? '取消收藏' : '收藏'}</button>
             <button type="button" className="chip chip-danger px-2 py-0.5 text-[10px]" onClick={props.onDelete}>删除</button>
             <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onRemove}>彻底移除</button>
           </div>
         ) : null}
-        <p className="mt-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{formatChatTime(props.message.createdAt)}</p>
+        <p className="mt-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{formatChatTime(message.createdAt)}</p>
       </div>
       {mine && selectable ? check : null}
     </div>

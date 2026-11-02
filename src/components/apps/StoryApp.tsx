@@ -31,6 +31,7 @@ import {
   type StorySave,
 } from '../../engine/story.ts'
 import { initialOf } from '../../lib/format.ts'
+import { stripReasoning } from '../../lib/reasoning.ts'
 import { isJiushiCharacter, loadJiushiConfig } from '../../lib/jiushi.ts'
 import { touchImmersive } from '../../lib/smsGuard.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -506,7 +507,9 @@ function Prose(props: { text: string; quote: string }) {
 
 function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<typeof displayRules>; config: StoryConfig; mine: boolean; theme: (typeof THEME)[StoryMode]; userName: string }) {
   const reading = props.config.reading
-  const shown = unwrapHtmlFence(applyRegex(props.line.content, props.rules, 'display', props.line.role))
+  const content = props.line.role === 'assistant' ? stripReasoning(props.line.content) : props.line.content
+  const rendered = unwrapHtmlFence(applyRegex(content, props.rules, 'display', props.line.role))
+  const shown = props.line.role === 'assistant' ? stripReasoning(rendered) : rendered
   const text = { fontFamily: FONT_STACK[reading.font], fontSize: reading.fontSize, lineHeight: reading.lineHeight }
   const html = props.config.renderHtml && hasHtml(shown)
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)

@@ -1,4 +1,5 @@
 import type { AIMessage, AIRequest, AIResponse, ApiConfig } from '../types/index.ts'
+import { stripReasoning } from '../lib/reasoning.ts'
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
 const DEFAULT_MAX_TOKENS = 8192
@@ -109,10 +110,17 @@ function normalizeMessages(messages: AIMessage[], maxChars: number, foldSystem: 
   return rows.length > 0 ? rows : [{ role: 'user', content: '请继续。' }]
 }
 
+function isReasoningPart(part: unknown): boolean {
+  return Boolean(part && typeof part === 'object' && 'type' in part && typeof part.type === 'string'
+    && /^(?:reasoning|thinking|analysis|redacted_thinking|reasoning_text|summary_text)$/i.test(part.type))
+}
+
 function partText(part: unknown): string {
   if (typeof part === 'string') return part
   if (typeof part !== 'object' || !part) return ''
   const row = part as Record<string, unknown>
+  if (isReasoningPart(part)) return ''
+  if (row.type === 'message') return messageContent(row.content)
   if (typeof row.text === 'string') return row.text
   if (typeof row.content === 'string') return row.content
   if (row.type === 'text' && typeof row.text === 'string') return row.text
@@ -124,9 +132,7 @@ function messageContent(value: unknown): string {
   if (typeof value === 'string') return value.trim()
   if (Array.isArray(value)) return value.map(partText).join('').trim()
   if (typeof value === 'object') {
-    const row = value as Record<string, unknown>
-    if (typeof row.text === 'string') return row.text.trim()
-    if (typeof row.content === 'string') return row.content.trim()
+    return partText(value).trim()
   }
   return ''
 }
@@ -148,13 +154,13 @@ function extractContent(data: unknown): string {
     if (message) {
       const main = messageContent(message.content)
       if (main) return main
-      const fallback = pickString(message.reasoning_content, message.output, message.text)
+      const fallback = pickString(message.output, message.text)
       if (fallback) return fallback
     }
     const direct = pickString(choice.text, choice.content, messageContent(choice.message))
     if (direct) return direct
   }
-  return pickString(root.content, root.output, root.output_text, root.response)
+  return pickString(messageContent(root.content), messageContent(root.output), root.output_text, root.response)
 }
 
 /**
@@ -309,8 +315,16 @@ export class AIAdapter {
       }
 
       const data = (await response.json()) as unknown
-      const content = extractContent(data)
+      const rawContent = extractContent(data)
+      const content = stripReasoning(rawContent)
       if (content) return { content, model: this.config.model, provider: 'openai' }
+      const root = data as { choices?: Array<{ message?: { reasoning_content?: unknown; reasoning?: unknown; content?: unknown } }>; content?: unknown; output?: unknown }
+      const message = root?.choices?.[0]?.message
+      const reasoningParts = [message?.content, root?.content, root?.output].some(value =>
+        Array.isArray(value) ? value.some(isReasoningPart) : isReasoningPart(value))
+      if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts) {
+        throw new AIError('接口只返回了思考内容，没有可显示的正文。请重试或增加输出长度。', 'api')
+      }
       last = '接口回来了，但没有文字。'
       if (index === payloads.length - 1) throw new AIError(last, 'api', true)
     }

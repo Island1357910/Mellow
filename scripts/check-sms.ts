@@ -69,7 +69,7 @@ const chat = (await storage.listChats(identity.namespace)).find(item => item.mem
 const before = new Set((await storage.listMessages(identity.namespace, chat.id)).map(item => item.id))
 await storage.saveApiProfile({ name: 'sms-test', endpoint: 'https://example.test/v1', model: 'test', key: 'test-only', ready: true })
 const complete = AIAdapter.prototype.complete
-AIAdapter.prototype.complete = async () => ({ content: sample, model: 'test' })
+AIAdapter.prototype.complete = async () => ({ content: '<think source="model">hidden reasoning 【改昵称：错误昵称】</think>' + sample, model: 'test' })
 useMellow.setState({ viewingChatId: chat.id })
 Math.random = () => 0
 try {
@@ -79,6 +79,8 @@ try {
   assert.ok(saved.filter(item => item.kind === 'text' || item.kind === 'voice').length >= 3)
   assert.ok(saved.every(item => item.kind !== 'voice' || isSpeakableSms(item.content)))
   assert.ok(saved.at(-1)?.content.endsWith('哪儿也不去。'))
+  assert.ok(saved.every(item => !/hidden reasoning|错误昵称|<think/.test(item.content)))
+  assert.notEqual((await storage.getCharacter(identity.namespace, character.id))?.nickname, '错误昵称')
 } finally {
   AIAdapter.prototype.complete = complete
   Math.random = originalRandom

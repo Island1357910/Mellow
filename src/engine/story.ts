@@ -3,6 +3,7 @@ import { uid } from '../lib/id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { AIMessage, Character, Identity, Lorebook, LorebookEntry, Preset } from '../types/index.ts'
 import { moduleAdapter } from '../lib/ask.ts'
+import { stripReasoning } from '../lib/reasoning.ts'
 
 export type StoryMode = 'offline' | 'side' | 'jiushi'
 
@@ -558,8 +559,8 @@ function memoryBlock(save: StorySave): { text: string; covered: number } {
   const smalls = save.summaries.filter((item) => item.kind === 'small' && item.upTo > (big?.upTo ?? 0))
   const covered = Math.max(big?.upTo ?? 0, ...smalls.map((item) => item.upTo), 0)
   const bits: string[] = []
-  if (big) bits.push(`【前情大总结】\n${big.text}`)
-  if (smalls.length) bits.push(`【之后的小总结】\n${smalls.map((item) => `- ${item.text}`).join('\n')}`)
+  if (big) bits.push(`【前情大总结】\n${stripReasoning(big.text)}`)
+  if (smalls.length) bits.push(`【之后的小总结】\n${smalls.map((item) => `- ${stripReasoning(item.text)}`).join('\n')}`)
   return { text: bits.join('\n\n'), covered }
 }
 
@@ -674,7 +675,8 @@ export function buildStoryPrompt(input: {
   const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focusChars(chars, save).flatMap(cardRegex)) : [])]
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
-    messages.push({ role: item.role, content: promptLine(applyRegex(item.content, rules, 'prompt', item.role)) })
+    const content = item.role === 'assistant' ? stripReasoning(item.content) : item.content
+    if (content.trim()) messages.push({ role: item.role, content: promptLine(applyRegex(content, rules, 'prompt', item.role)) })
   }
   if (input.nudge) messages.push({ role: 'user', content: input.nudge })
   if (mode === 'offline' && input.smsBridge?.trim()) {
@@ -704,26 +706,29 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
     const response = await adapter.complete({
       messages: [
         { role: 'system', content: '把下面这段剧情压缩成一段 150 字以内的小总结。只写发生了什么、人物关系有什么变化、留下了什么悬念。不加标题，不评价。' },
-        { role: 'user', content: chunk.map((item) => `${item.role === 'user' ? '玩家' : '剧情'}：${item.content.replace(/<[^>]+>/g, '')}`).join('\n') },
+        { role: 'user', content: chunk.map((item) => `${item.role === 'user' ? '玩家' : '剧情'}：${(item.role === 'assistant' ? stripReasoning(item.content) : item.content).replace(/<[^>]+>/g, '')}`).join('\n') },
       ],
       temperature: 0.3,
       maxTokens: 400,
     })
-    if (!response.content.trim()) throw new Error('总结返回为空，将在下轮重试')
+    const summary = stripReasoning(response.content)
+    if (!summary) throw new Error('总结返回为空，将在下轮重试')
     const upTo = end > start ? end : save.lines.length
-    return { ...save, summaries: [...save.summaries, { id: uid('sum'), kind, text: response.content.trim(), upTo, createdAt: Date.now() }] }
+    return { ...save, summaries: [...save.summaries, { id: uid('sum'), kind, text: summary, upTo, createdAt: Date.now() }] }
   }
   if (save.summaries.length === 0) throw new Error('先有几条小总结，才能合成大总结')
   const response = await adapter.complete({
     messages: [
       { role: 'system', content: '把下面按时间排列的总结合并成一份 400 字以内的前情大总结。保留关键事件、人物关系和未解决的线索，按时间顺序写成一段。' },
-      { role: 'user', content: save.summaries.map((item) => `${item.kind === 'big' ? '【大总结】' : '-'} ${item.text}`).join('\n') },
+      { role: 'user', content: save.summaries.map((item) => `${item.kind === 'big' ? '【大总结】' : '-'} ${stripReasoning(item.text)}`).join('\n') },
     ],
     temperature: 0.3,
     maxTokens: 900,
   })
   const upTo = Math.max(...save.summaries.map((item) => item.upTo))
-  return { ...save, summaries: [{ id: uid('sum'), kind: 'big', text: response.content.trim(), upTo, createdAt: Date.now() }] }
+  const summary = stripReasoning(response.content)
+  if (!summary) throw new Error('总结返回为空，将在下轮重试')
+  return { ...save, summaries: [{ id: uid('sum'), kind: 'big', text: summary, upTo, createdAt: Date.now() }] }
 }
 
 export function needsSummary(save: StorySave, config: StoryConfig): boolean {
@@ -751,7 +756,7 @@ function fitStoryMessages(messages: AIMessage[]): AIMessage[] {
   for (let index = rest.length - 1; index >= 0; index -= 1) {
     const item = rest[index]
     if (!item?.content.trim()) continue
-    const content = promptLine(item.content)
+    const content = promptLine(item.role === 'assistant' ? stripReasoning(item.content) : item.content)
     if (used + content.length > maxChars && kept.length > 0) break
     kept.push({ role: item.role, content })
     used += content.length
@@ -768,7 +773,9 @@ export async function generate(messages: AIMessage[], preset: Preset | null, max
     temperature: storyTemperature(preset),
     maxTokens: maxTokens ?? 1024,
   })
-  return response.content
+  const content = stripReasoning(response.content)
+  if (!content) throw new Error('模型只返回了思考内容，没有剧情正文，请重试或增加输出长度')
+  return content
 }
 
 export async function generateStoryReply(input: {
