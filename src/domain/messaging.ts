@@ -16,7 +16,7 @@ import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
-import { buildSmsReplySegments, SMS_SPLIT } from '../lib/smsReply.ts'
+import { buildSmsReplySegments, SMS_SPLIT, stripVoicePrefix } from '../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
@@ -192,7 +192,7 @@ function replyNote(chat: Chat): string {
       ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独一行写 ${SMS_SPLIT}，不要编号。每条只说一个意思，避免把所有话挤进一条长消息。`
       : '这次只发一条消息。',
   )
-  if (chat.backstory?.trim()) bits.push(`你和对方的过往与关系（对方补充的，当作你们共同的记忆）：\n${chat.backstory.trim()}`)
+  if (chat.backstory?.trim()) bits.push(`${chat.kind === 'group' ? '群内公开背景（不视为每位成员都亲历）' : '你和对方的过往与关系（对方补充的，当作你们共同的记忆）'}：\n${chat.backstory.trim()}`)
   if (chat.kind === 'group') bits.push('这是群聊。只写你自己的话，不要替其他成员发言。')
   bits.push(PROFILE_RULE)
   return bits.join('\n')
@@ -301,13 +301,14 @@ export async function replyInChat(input: {
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
-    const storyBridge = await storyBridgeForSms(input.namespace, input.character)
+    const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
       preset,
       history,
+      groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
       proactive: input.proactive,
@@ -351,7 +352,7 @@ export async function replyInChat(input: {
     })
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
-    void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
+    if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
     if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})
     return last
   } catch (error) {
@@ -411,12 +412,13 @@ export async function deliverSms(input: {
     const explain =
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
-    const storyBridge = await storyBridgeForSms(input.namespace, input.character)
+    const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
       preset,
       history,
+      groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
       note: [await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
@@ -433,12 +435,12 @@ export async function deliverSms(input: {
     const reply = textMessage({
       chatId: input.chat.id,
       role: 'assistant',
-      content: stripThinkingFromSms(response.content) || '……',
+      content: stripVoicePrefix(stripThinkingFromSms(response.content)) || '……',
       charId: input.character.id,
     })
     await storage.putMessage(input.namespace, reply)
     await touchChat(input.namespace, chat, reply.content, 1, reply.kind)
-    void maybeEnrichNearby(input.namespace, input.character, [...history, userMessage, reply])
+    if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...history, userMessage, reply])
     return reply
   } catch (error) {
     const message = error instanceof AIError ? error.message : error instanceof Error ? error.message : '没能发出去'

@@ -13,11 +13,12 @@ for (const profile of await storage.listApiProfiles()) await storage.deleteApiPr
 const save = (id: string) => storage.saveApiProfile({ id, name: id, endpoint: `https://${id}.invalid/v1`, model: `${id}-model`, key: `${id}-test-key`, ready: true })
 await save('api-one')
 await save('api-two')
-// Concurrent creates cannot exceed the three-profile cap.
-const results = await Promise.allSettled([save('api-three'), save('api-four')])
+// Concurrent creates cannot exceed the seven-profile cap.
+await Promise.all(['api-three', 'api-four', 'api-five', 'api-six'].map(save))
+const results = await Promise.allSettled([save('api-seven'), save('api-eight')])
 assert.equal(results.filter(result => result.status === 'fulfilled').length, 1)
-assert.equal((await storage.listApiProfiles()).length, 3)
-await assert.rejects(save('api-five'), /最多保存三组/)
+assert.equal((await storage.listApiProfiles()).length, 7)
+await assert.rejects(save('api-nine'), /最多保存七组/)
 await save('api-two') // Existing profiles remain editable at the cap.
 let settings = await storage.getSettings()
 await storage.saveSettings({ ...settings, activeApiId: 'api-one' })
@@ -72,5 +73,5 @@ await storage.saveSettings({ ...settings, apiModuleBindings: { star: 'missing' }
 await assert.rejects(storage.readModuleApi('star'), /绑定的 API 不可用/)
 await storage.deleteApiProfile('api-one')
 assert.notEqual((await storage.getSettings()).activeApiId, 'api-one')
-console.log('API routing checks passed: three-profile cap, concurrent creation/binding, exclusive reassignment, persistence, credentials, story/summary routing and deletion cleanup')
+console.log('API routing checks passed: seven-profile cap, concurrent creation/binding, exclusive reassignment, persistence, credentials, story/summary routing and deletion cleanup')
 process.exit(0)

@@ -366,7 +366,7 @@ class StorageService {
       this.meta.apiConfig.get(id).then(existing => {
         if (existing) return
         return this.meta.apiConfig.count().then(count => {
-          if (count >= MAX_API_PROFILES) throw new Error('最多保存三组 API 设置，请编辑或删除已有接口')
+          if (count >= MAX_API_PROFILES) throw new Error('最多保存七组 API 设置，请编辑或删除已有接口')
         })
       }).then(() => this.meta.apiConfig.put(next)))
     return viewOf(next)

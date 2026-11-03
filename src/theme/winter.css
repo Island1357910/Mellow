@@ -1,0 +1,25 @@
+@scope (:root) to (.jiushi-phone) {
+  .winter-motifs { display: none; pointer-events: none; position: absolute; inset: 0; overflow: hidden; }
+  .winter-motifs > span { position: absolute; aspect-ratio: 1; }
+  .device[data-theme-pack="cocoa"] .winter-cocoa,
+  .device[data-theme-pack="ice"] .winter-ice { display: block; }
+  .winter-wallpaper { opacity: .55; }
+  .winter-widget { opacity: .16; }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) .everyday-blossoms { display: none; }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) :is(.home-widget, .music-widget, .dock-bar, .menu-card, .decor-card, .pill-note) {
+    background: color-mix(in srgb, var(--m-surface) 90%, transparent) !important;
+    color: var(--m-text);
+    border: 1px solid color-mix(in srgb, var(--m-primary) 32%, transparent);
+    box-shadow: var(--m-shadow), inset 0 1px 0 #ffffffb0;
+  }
+  .device[data-theme-pack="ice"] :is(.home-widget, .dock-bar, .menu-card) { backdrop-filter: blur(12px); }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) :is(.chip-solid, .chip-pink) { background: var(--m-accent) !important; color: var(--m-surface) !important; }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) .app-glyph {
+    background: linear-gradient(145deg, var(--m-surface), var(--m-secondary)) !important;
+    color: var(--m-accent) !important;
+    box-shadow: var(--m-shadow), inset 0 1px 0 #ffffffc0;
+    border: 1px solid color-mix(in srgb, var(--m-primary) 35%, transparent);
+  }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) .app-launch:nth-child(3n) .app-glyph { background: linear-gradient(145deg, var(--m-background), var(--m-primary)) !important; }
+  :is(.device[data-theme-pack="cocoa"], .device[data-theme-pack="ice"]) .memo-widget { background: color-mix(in srgb, var(--m-secondary) 42%, var(--m-surface)) !important; }
+}

@@ -1,3 +1,4 @@
+import { WinterMotifs } from './WinterMotifs.tsx'
 import { AppleWidgetMotifs } from './AppleMotifs.tsx'
 import { HalloweenGlyph } from './HalloweenMotifs.tsx'
 import { Check, ImagePlus, Plus, Smile, X } from 'lucide-react'
@@ -216,6 +217,7 @@ function Blossoms() {
   return (
     <>
     <AppleWidgetMotifs />
+    <WinterMotifs widget />
     <div className="everyday-blossoms pointer-events-none absolute inset-0 overflow-hidden opacity-[0.22]">
       <Flower size={58} color="#F3A8BA" rotate={12} className="absolute -bottom-3 -right-2" />
       <Flower size={30} color="#C9B6E8" rotate={-18} className="absolute bottom-10 right-12" />

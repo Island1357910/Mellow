@@ -2,6 +2,10 @@ import { capReplySegments, expandReplyParts, parseReplySegments, type ReplySegme
 
 export const SMS_SPLIT = '<<<分>>>'
 
+export function stripVoicePrefix(text: string): string {
+  return text.replace(/^(?:\s*(?:[（(]语音(?:消息)?[）)]|\[语音(?:消息)?\]|【语音(?:消息)?】)\s*[:：]?\s*)+/u, '').trim()
+}
+
 /** 按句意分组；没有分隔指令的长回复也会拆条，不截断或省略内容。 */
 function splitText(text: string, min: number, max: number): string[] {
   if (max <= 1) return [text]
@@ -38,7 +42,7 @@ function splitText(text: string, min: number, max: number): string[] {
 export function buildSmsReplySegments(content: string, range: { min: number; max: number }): ReplySegment[] {
   const min = Math.max(1, Math.min(10, Math.round(range.min) || 1))
   const max = Math.max(min, Math.min(10, Math.round(range.max) || 1))
-  const parts = content.split(/<<<\s*分\s*>>>|\n\s*-{3,}\s*\n|\n\s*\n+/u).map(part => part.trim()).filter(Boolean)
+  const parts = content.split(/<<<\s*分\s*>>>|\n\s*-{3,}\s*\n|\n\s*\n+/u).map(stripVoicePrefix).filter(Boolean)
   const segments = expandReplyParts(parts)
   const textCount = segments.filter(item => item.kind === 'text').length
   let available = Math.max(0, max - textCount)

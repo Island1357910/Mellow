@@ -1,3 +1,4 @@
+import { advancePetalDrops, PETAL_DROPS, PETAL_DURATION, PETAL_TARGET, type PetalDrop } from '../../domain/petalGame.ts'
 import { EarningsPanel } from './EarningsPanel.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Flame, RotateCcw, Star } from 'lucide-react'
@@ -30,10 +31,10 @@ const GAMES: GameInfo[] = [
     name: '接花',
     icon: '🌸',
     tag: '反应 · 容易',
-    intro: '花落下来时点中它。连续接住会计连击。',
-    rules: ['一共落下 8 朵花', '接住 6 朵及以上过关', '过关 +40 枚，没过也有 5 枚'],
+    intro: '拖动底部花篮接住鲜花，避开垃圾，挑战 30 秒。',
+    rules: ['限时 30 秒，拖动底部花篮，达到 120 分过关', '普通花 +5、精品花 +15、贵重花 +30、垃圾 −20 分', '过关 +40 枚，没过也有 5 枚'],
     rate: 1,
-    cap: 120,
+    cap: 300,
     tint: '#F8E3C4',
     deep: '#D98A3D',
   },
@@ -88,7 +89,6 @@ const GAMES: GameInfo[] = [
 ]
 
 const DIM = { color: 'var(--m-text-secondary)' }
-const LANES = [22, 70, 40, 58, 30, 76, 48, 18]
 const PAD_COLORS = [
   { name: '粉', bg: '#F3A8BA' },
   { name: '薄荷', bg: '#9ED9C4' },
@@ -395,94 +395,68 @@ function FlashLine(props: { text: string }) {
 
 function PetalPlay(props: { onFinish: Finish }) {
   const info = GAMES[0] as GameInfo
-  const [step, setStep] = useState(0)
-  const [flying, setFlying] = useState(true)
-  const [catches, setCatches] = useState(0)
-  const [combo, setCombo] = useState(0)
-  const [flash, setFlash] = useState('花要落下来了')
-  const lock = useRef(false)
-  const flyingRef = useRef(true)
-  const stepRef = useRef(0)
-  const comboRef = useRef(0)
-  const stats = useRef({ catches: 0, bestCombo: 0 })
+  const arena = useRef<HTMLDivElement>(null)
+  const basket = useRef(50)
   const finishRef = useRef(props.onFinish)
-  const timer = useRef(0)
+  const [ui, setUi] = useState({ drops: [] as PetalDrop[], basket: 50, left: 300, score: 0, caught: 0, trash: 0, flash: '拖动花篮，接花避开垃圾' })
+  useEffect(() => { finishRef.current = props.onFinish })
   useEffect(() => {
-    finishRef.current = props.onFinish
-  })
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-  const settle = () => {
-    const caught = stats.current.catches
-    const bestCombo = stats.current.bestCombo
-    finishRef.current(caught >= 6, caught * 12 + bestCombo * 4, [
-      ['接住', `${caught}/8`],
-      ['错过', `${8 - caught}`],
-      ['连击', `${bestCombo}`],
-    ])
-  }
-  const advance = () => {
-    if (stepRef.current >= 7) {
-      settle()
-      return
+    let frame = 0, id = 0, nextDrop = 0
+    const started = performance.now()
+    let prev = started
+    let drops: PetalDrop[] = []
+    let score = 0, caught = 0, trash = 0
+    let flash = '拖动花篮，接花避开垃圾'
+    const loop = (now: number) => {
+      const elapsed = now - started
+      if (elapsed >= PETAL_DURATION) {
+        finishRef.current(score >= PETAL_TARGET, score, [['鲜花', String(caught)], ['垃圾', String(trash)], ['得分', String(score)]])
+        return
+      }
+      const dt = Math.min(50, now - prev) / 1000
+      prev = now
+      if (elapsed >= nextDrop) {
+        const chance = Math.random()
+        const kind = chance < .45 ? 0 : chance < .70 ? 1 : chance < .80 ? 2 : 3
+        drops.push({ id: id++, x: 8 + Math.random() * 84, y: -18, speed: 85 + Math.random() * 35 + elapsed / 1500, kind })
+        nextDrop = elapsed + 550
+      }
+      const width = arena.current?.clientWidth || 300
+      const result = advancePetalDrops(drops, dt, basket.current, width)
+      drops = result.drops
+      score += result.score
+      caught += result.caught
+      trash += result.trash
+      if (result.flash) flash = result.flash
+      setUi({ drops: drops.map(drop => ({ ...drop })), basket: basket.current, left: Math.ceil((PETAL_DURATION - elapsed) / 100), score, caught, trash, flash })
+      frame = requestAnimationFrame(loop)
     }
-    stepRef.current += 1
-    lock.current = false
-    flyingRef.current = true
-    setFlying(true)
-    setStep(stepRef.current)
-    setFlash('接住它')
-  }
-  const later = () => {
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(advance, 380)
-  }
-  const miss = () => {
-    if (lock.current) return
-    lock.current = true
-    flyingRef.current = false
-    comboRef.current = 0
-    setCombo(0)
-    setFlying(false)
-    setFlash('溜走了')
-    later()
-  }
-  const hit = () => {
-    if (lock.current) return
-    lock.current = true
-    flyingRef.current = false
-    const nextCombo = comboRef.current + 1
-    comboRef.current = nextCombo
-    stats.current.catches += 1
-    stats.current.bestCombo = Math.max(stats.current.bestCombo, nextCombo)
-    setCatches(stats.current.catches)
-    setCombo(nextCombo)
-    setFlying(false)
-    setFlash(nextCombo > 1 ? `连击 ×${nextCombo}` : '接住了')
-    later()
+    frame = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  const moveBasket = (clientX: number) => {
+    const rect = arena.current?.getBoundingClientRect()
+    if (!rect) return
+    const inset = Math.min(50, 34 / rect.width * 100)
+    basket.current = Math.max(inset, Math.min(100 - inset, (clientX - rect.left) / rect.width * 100))
   }
   return (
     <div>
-      <Hud color={info.deep} label={`${step + 1}/8`} value={`接住 ${catches}`} extra={combo > 1 ? <span className="flex items-center gap-0.5 text-[#E07A4C]"><Flame size={12} />×{combo}</span> : null} />
-      <div className="relative h-[280px] overflow-hidden rounded-[28px]" style={{ background: 'linear-gradient(180deg,#FFF6EA,#F8E3C4)' }}>
-        <motion.button
-          key={step}
-          type="button"
-          aria-label="接花"
-          initial={{ y: 0, opacity: 1, scale: 1 }}
-          animate={flying ? { y: 214, opacity: 1, scale: 1 } : { y: 120, opacity: 0, scale: 1.5 }}
-          transition={{ duration: flying ? 1.25 : 0.26, ease: flying ? 'easeIn' : 'easeOut' }}
-          onAnimationComplete={() => {
-            if (flyingRef.current) miss()
-          }}
-          className="absolute top-3 text-5xl"
-          style={{ left: `${LANES[step] ?? 40}%`, translate: '-50% 0' }}
-          onClick={hit}
-        >
-          🌸
-        </motion.button>
-        <div className="absolute inset-x-0 bottom-3 text-center text-3xl">🧺</div>
+      <Hud color={info.deep} label={'得分 ' + ui.score} value={(ui.left / 10).toFixed(1) + 's'} extra={<span style={DIM}>目标 120 分</span>} />
+      <div ref={arena} role="slider" tabIndex={0} aria-label="拖动花篮，左右方向键也可移动" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ui.basket)}
+        className="relative h-[330px] overflow-hidden rounded-[28px] outline-offset-2"
+        style={{ background: 'linear-gradient(180deg,#FFF8EE,#F8E3C4)', touchAction: 'none', cursor: 'ew-resize' }}
+        onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); moveBasket(event.clientX) }}
+        onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) moveBasket(event.clientX) }}
+        onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
+        onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); const inset = 34 / (arena.current?.clientWidth || 300) * 100; basket.current = Math.max(inset, Math.min(100 - inset, basket.current + (event.key === 'ArrowLeft' ? -5 : 5))) } }}>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-[#E3C79D]/50" />
+        {ui.drops.map(drop => <span key={drop.id} aria-label={PETAL_DROPS[drop.kind]!.name} className="pointer-events-none absolute text-3xl" style={{ left: drop.x + '%', top: drop.y, transform: 'translate(-50%,-50%)' }}>{PETAL_DROPS[drop.kind]!.icon}</span>)}
+        <span className="pointer-events-none absolute bottom-1 text-[56px] leading-none" style={{ left: ui.basket + '%', transform: 'translateX(-50%)' }}>🧺</span>
       </div>
-      <FlashLine text={flash} />
+      <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px]" style={DIM}>{PETAL_DROPS.map(item => <span key={item.name}>{item.icon} {item.name} {item.points > 0 ? '+' : ''}{item.points}</span>)}</div>
+      <TimeBar left={ui.left} total={300} color={info.deep} />
+      <FlashLine text={ui.flash} />
     </div>
   )
 }

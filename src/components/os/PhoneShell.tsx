@@ -157,7 +157,7 @@ export function PhoneShell() {
       <div
         className="device"
         data-palette={theme.customPalette || theme.id === 'theme_halloween' ? 'custom' : undefined}
-        data-theme-pack={theme.id === 'theme_red_apple_love' ? 'apple' : undefined}
+        data-theme-pack={theme.id === 'theme_red_apple_love' ? 'apple' : theme.id === 'theme_winter_cocoa' ? 'cocoa' : theme.id === 'theme_ice_early_winter' ? 'ice' : undefined}
         data-season={theme.id === 'theme_halloween' ? 'halloween' : undefined}
         data-font={fontReady ? 'custom' : undefined}
         data-effect={theme.effect}

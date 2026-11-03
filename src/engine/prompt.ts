@@ -48,6 +48,7 @@ export function buildSmsMessages(input: {
   identity: Identity
   preset: Preset | null
   history: ChatMessage[]
+  groupMembers?: Array<{ id: string; name: string }>
   fourthWall: boolean
   note?: string
   /** 线下关系。放在短信记录之后，压过短信旧上下文。 */
@@ -94,13 +95,17 @@ export function buildSmsMessages(input: {
   systems.push('禁止输出思维链、推理过程、内心分析或 <thinking> 等标签；只写 {{char}} 真正要发出去的那几句。')
   systems.push(stickerCatalogForPrompt())
   systems.push(fill(CHANNEL, character, identity))
+  systems.push('语音或文字的发送形式由应用决定。只输出正文，不要输出（语音消息）、[语音]等媒介前缀。')
+  if (input.groupMembers) systems.push(`当前群聊只扮演 ${character.name}（ID：${character.id}）。群成员：${input.groupMembers.map(member => `${member.name}（${member.id}）`).join('、')}。发送者标记仅用于区分身份，不要复述。只有自己的发言是你说过的话，其他人的经历、关系和秘密不属于你的记忆。只依据自己的经历和群内明确公开的信息回应；别人讲述的经历只是你听说的事情，不能当作亲历。未经公开且不属于你的事情应当不知道，不猜测、不替别人回忆，不把自己与玩家的关系套用到全群。群聊背景仅是公开背景，不表示每位成员都亲历。`)
   if (input.priority?.trim()) systems.push(input.priority.trim())
 
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of history) {
     messages.push({
-      role: item.role === 'assistant' ? 'assistant' : 'user',
-      content: describeMessage(item),
+      role: item.role === 'assistant' && (!input.groupMembers || item.charId === character.id) ? 'assistant' : 'user',
+      content: input.groupMembers
+        ? `[发送者：${item.role === 'user' ? identity.name : input.groupMembers.find(member => member.id === item.charId)?.name ?? '未知成员'}；ID：${item.role === 'user' ? identity.id : item.charId ?? '未知'}] ${describeMessage(item)}`
+        : describeMessage(item),
     })
   }
   if (input.priority?.trim()) {
@@ -197,7 +202,7 @@ export function describeMessage(item: ChatMessage): string {
   const [head = '', ...rest] = parseCard(item.content)
   switch (item.kind) {
     case 'voice':
-      return `（语音消息）${item.content}`
+      return item.content
     case 'image':
       return '（发来一张图片）'
     case 'sticker':

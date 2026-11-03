@@ -1,3 +1,4 @@
+@import "./theme/winter.css";
 @import "tailwindcss";
 @import "./theme/halloween.css";
 @import "./theme/controls.css";

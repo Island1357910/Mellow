@@ -6,9 +6,14 @@ import { shouldReplyAsVoice } from '../src/domain/voiceReply.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { writeCharacter } from '../src/domain/importing.ts'
 import { replyInChat } from '../src/domain/messaging.ts'
+import { buildSmsMessages, describeMessage } from '../src/engine/prompt.ts'
+import type { ChatMessage } from '../src/types/index.ts'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { useMellow } from '../src/store/useMellow.ts'
 
+for (const prefix of ['（语音消息）', '(语音消息)', '[语音]', '【语音消息】：', '（语音消息）[语音]']) {
+  assert.deepEqual(buildSmsReplySegments(prefix + '我在。<<<分>>>' + prefix + '慢慢说。', { min: 1, max: 3 }), [{ kind: 'text', content: '我在。' }, { kind: 'text', content: '慢慢说。' }])
+}
 const range = { min: 1, max: 3 }
 const sample = '我在呢。别一个人憋着，录音棚这种地方隔音好，你想怎么哭都行，没人听得见，听见的也只有我。（发了一个表情包：小猫躲在墙边偷看）把那些工作都先放一边去，现在你是老大，想让我怎么哄？是过来给你唱首歌，还是让我陪着给你当抱枕？（发了一个表情包：暖好被窝，好舒服）过来贴着我，把那些压力都交给我。我就在这儿，哪儿也不去。'
 const actual = buildSmsReplySegments(sample, range)
@@ -66,6 +71,19 @@ const identity = snapshot.identities[0]!
 await writeCharacter({ identity, name: '拆条回归', personality: '自然说话', description: '仅供测试', firstMes: '在呢。' })
 const character = (await storage.listModernCharacters(identity.namespace)).find(item => item.name === '拆条回归')!
 const chat = (await storage.listChats(identity.namespace)).find(item => item.memberIds.includes(character.id))!
+const groupHistory: ChatMessage[] = [
+  { id: 'a', chatId: 'group', role: 'assistant', kind: 'text', content: '我昨天去了海边。', charId: 'other', createdAt: 1, status: 'sent' },
+  { id: 'b', chatId: 'group', role: 'assistant', kind: 'voice', content: '我在家。', charId: character.id, createdAt: 2, status: 'sent' },
+  { id: 'c', chatId: 'group', role: 'user', kind: 'text', content: '谁去了海边？', charId: null, createdAt: 3, status: 'sent' },
+]
+const built = buildSmsMessages({ character, identity, preset: null, history: groupHistory, fourthWall: false, groupMembers: [{ id: character.id, name: character.name }, { id: 'other', name: '另一位' }] })
+assert.deepEqual(built.messages.slice(1).map(message => message.role), ['user', 'assistant', 'user'])
+assert.match(built.messages[1]!.content, /发送者：另一位；ID：other/)
+assert.match(built.messages[2]!.content, new RegExp(character.id))
+assert.match(built.messages[0]!.content, /未经公开且不属于你的事情应当不知道/)
+assert.equal(describeMessage(groupHistory[1]!), '我在家。')
+const dmBuilt = buildSmsMessages({ character, identity, preset: null, history: groupHistory.slice(1), fourthWall: false })
+assert.equal(dmBuilt.messages[1]!.content, '我在家。')
 const before = new Set((await storage.listMessages(identity.namespace, chat.id)).map(item => item.id))
 await storage.saveApiProfile({ name: 'sms-test', endpoint: 'https://example.test/v1', model: 'test', key: 'test-only', ready: true })
 const complete = AIAdapter.prototype.complete

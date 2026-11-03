@@ -1,3 +1,4 @@
+import { WINTER_GIFTS } from '../theme/winter.ts'
 import { storage } from '../storage/StorageService.ts'
 import { APPLE_THEME } from '../theme/apple.ts'
 import { walletTask } from './wallet.ts'
@@ -17,11 +18,14 @@ export function codeReward(code:string,now:number) {
     if(now>=HALLOWEEN_CODE_END)throw Error('万圣节兑换码已于 2026 年 11 月 3 日 00:00（北京时间）到期')
     return {id:'halloween_together_2026',coins:2000,themeId:undefined}
   }
+  const winter = WINTER_GIFTS.find(gift => gift.code === code.trim())
+  if (winter) return { id: winter.id, coins: 2000, themeId: winter.theme.id }
   throw Error('兑换码不存在，请检查大小写和文字')
 }
 export async function restoreRedeemTheme(namespace:string){
   const saved=await storage.getBag<RedeemState>(namespace,'redeem_codes_v1')
   if(saved?.claims?.opening_apple_2026?.themeId===APPLE_THEME.id)await storage.saveTheme(APPLE_THEME)
+  for (const gift of WINTER_GIFTS) if (saved?.claims?.[gift.id]?.themeId === gift.theme.id) await storage.saveTheme(gift.theme)
 }
 const ACCOUNT_NAMESPACE='mellow_account_rewards'
 export async function accountRewards(): Promise<RedeemState> {

@@ -133,7 +133,7 @@ export function ApiPanel() {
   return (
     <SoftCard>
       <SectionTitle tone="sky">API 设置（{profiles.length}/{MAX_API_PROFILES}）</SectionTitle>
-      <p className="mb-3 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>最多三组 API。每个应用模块只能选择一组，同一组可供多个模块使用。未单独分配的模块使用默认接口。</p>
+      <p className="mb-3 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>最多七组 API。每个应用模块只能选择一组，同一组可供多个模块使用。未单独分配的模块使用默认接口。</p>
       {apiMeta.ready && apiMeta.hasKey ? (
         <div className="mb-3"><PillNote tone="mint" compact>已连接 · {apiMeta.name || '当前接口'} · {apiMeta.model}（重新登录后仍有效，无需重复配置）</PillNote></div>
       ) : (
@@ -146,7 +146,7 @@ export function ApiPanel() {
             <span className="block truncate" style={{ color: 'var(--m-text-secondary)' }}>{card.ready ? card.model : '还没选模型'}</span>
           </button>
         ))}
-        <button type="button" disabled={profiles.length >= MAX_API_PROFILES} className="chip border border-dashed border-black/10 bg-white/60 py-2 text-xs disabled:opacity-50" onClick={() => { setId(''); setName('新接口'); setEndpoint('https://api.openai.com/v1'); setModel(''); setKey(''); setModels([]) }}>{profiles.length >= MAX_API_PROFILES ? '已达三组上限' : '新建 API'}</button>
+        <button type="button" disabled={profiles.length >= MAX_API_PROFILES} className="chip border border-dashed border-black/10 bg-white/60 py-2 text-xs disabled:opacity-50" onClick={() => { setId(''); setName('新接口'); setEndpoint('https://api.openai.com/v1'); setModel(''); setKey(''); setModels([]) }}>{profiles.length >= MAX_API_PROFILES ? '已达七组上限' : '新建 API'}</button>
       </div>
       <div className="space-y-3">
         <Field label="名字" value={name} onChange={setName} />
