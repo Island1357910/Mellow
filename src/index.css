@@ -7,7 +7,7 @@
 
 /* Baseline rules must remain outside @scope for older Android WebViews. */
 .apple-atmosphere, .apple-wallpaper-pattern, .apple-widget-motifs,
-.halloween-wallpaper-pattern, .halloween-widget-motifs { display: none; }
+.halloween-wallpaper-pattern, .halloween-widget-motifs, .winter-motifs { display: none; }
 
 :root {
   color-scheme: light;
