@@ -526,7 +526,7 @@ function clipTail(text: string, max: number): string {
   return `…\n${clean.slice(-max)}`
 }
 
-function promptLine(text: string): string {
+function promptLine(text: string, limit = 0): string {
   const plain = text
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -534,15 +534,17 @@ function promptLine(text: string): string {
     .replace(/\u0000/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return clip(plain || '……', 600)
+  if (!limit || plain.length <= limit) return plain || '……'
+  const head = Math.floor(limit / 3)
+  return `${plain.slice(0, head)}\n（中段省略，以下为本段结尾）\n${plain.slice(-(limit - head))}`
 }
 
 function card(character: Character): string {
-  const parts = [`【${character.name}】${character.nickname ? `（昵称 ${character.nickname}）` : ''}`]
-  if (character.description.trim()) parts.push(clip(character.description, 800))
-  if (character.personality.trim()) parts.push(`性格：${clip(character.personality, 400)}`)
-  if (character.scenario.trim()) parts.push(`情境：${clip(character.scenario, 400)}`)
-  if (character.mesExample.trim()) parts.push(`说话的样子（参考，不照抄）：\n${clip(character.mesExample, 400)}`)
+  const parts = [`【${character.name} · 角色ID：${character.id}】${character.nickname ? `（昵称 ${character.nickname}，与 ${character.name} 是同一人）` : ''}`]
+  if (character.description.trim()) parts.push(character.description.trim())
+  if (character.personality.trim()) parts.push(`性格：${character.personality.trim()}`)
+  if (character.scenario.trim()) parts.push(`背景情境（不是每轮必须重演的开场）：${character.scenario.trim()}`)
+  if (character.mesExample.trim()) parts.push(`说话的样子（仅供参考，不是本次已经发生的对话，不照抄）：\n${character.mesExample.trim()}`)
   return parts.join('\n')
 }
 
@@ -550,17 +552,48 @@ function fill(text: string, charName: string, userName: string): string {
   return text.replaceAll('{{char}}', charName).replaceAll('{{user}}', userName)
 }
 
-/** 线下：最近几条里被提到的角色，就把他们的完整设定连上。 */
-export function focusChars(chars: Character[], save: StorySave, extra = ''): Character[] {
-  const named = (text: string) => chars.filter(item => [item.name, item.nickname, item.remark].some(name => name?.trim() && text.includes(name.trim())))
-  const requested = named(extra)
-  if (requested.length) return requested
-  for (const item of [...save.lines].reverse()) {
-    if (item.participantIds?.length) return chars.filter(person => item.participantIds!.includes(person.id))
-    const people = named(item.content)
-    if (people.length) return people
+/** Resolve aliases without treating a shorter name or a shared nickname as another person. */
+function namedStoryChars(chars: Character[], text: string): Character[] {
+  const owners = new Map<string, Character[]>()
+  for (const person of chars) for (const alias of new Set([person.name, person.nickname, person.remark].map(name => name?.trim()).filter((name): name is string => Boolean(name)))) {
+    owners.set(alias, [...(owners.get(alias) ?? []), person])
   }
-  return []
+  const hits: Array<{ start: number; end: number; person: Character }> = []
+  for (const [alias, people] of owners) {
+    if (people.length !== 1) continue
+    let start = text.indexOf(alias)
+    while (start !== -1) {
+      const before = text.slice(Math.max(0, start - 16), start)
+      // Mentioning someone in a conversation or on the phone does not bring them into the room.
+      if (!/(?:提到|说起|想起|听说|聊起|关于|给|收到|知道|认识).{0,4}$/.test(before) || /(?:叫|邀请|找|见).{0,4}$/.test(before)) hits.push({ start, end: start + alias.length, person: people[0]! })
+      start = text.indexOf(alias, start + alias.length)
+    }
+  }
+  const longest = hits.filter(hit => !hits.some(other => other !== hit && other.start <= hit.start && other.end >= hit.end && other.end - other.start > hit.end - hit.start))
+  return [...new Map(longest.sort((a, b) => a.start - b.start).map(hit => [hit.person.id, hit.person])).values()]
+}
+
+/** Continue the recorded cast; references and dialogue examples are not scene changes. */
+export function focusChars(chars: Character[], save: StorySave, extra = ''): Character[] {
+  let cast: Character[] = []
+  for (const item of [...save.lines, ...(extra ? [{ role: 'user' as const, content: extra }] : [])]) {
+    if ('participantIds' in item && item.participantIds !== undefined) {
+      cast = item.participantIds.map(id => chars.find(person => person.id === id)).filter((person): person is Character => Boolean(person))
+      continue
+    }
+    const plain = promptLine(item.content)
+    const text = item.role === 'assistant' ? plain.replace(/[“「"][^”」"\n]*[”」"]/g, '') : plain
+    const people = namedStoryChars(chars, text)
+    if (item.role === 'user' && people.length) {
+      const changedScene = /(?:去找|去见|来到|走进|只剩|单独|转场|场景切换|和.{0,30}(?:去|回))/.test(text)
+      cast = changedScene || !cast.length ? people : [...new Map([...cast, ...people].map(person => [person.id, person])).values()]
+    } else if (!cast.length) cast = people
+    if (item.role === 'user') cast = cast.filter(person => {
+      const escaped = person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return !new RegExp(`${escaped}(?:已经|已|先|就)?(?:离开了|离开现场|走了|回去了|不在场|没来)`).test(text)
+    })
+  }
+  return cast
 }
 
 function memoryBlock(save: StorySave): { text: string; covered: number } {
@@ -579,7 +612,8 @@ export function contextStart(save: StorySave, keepRounds: number): number {
 }
 
 const OFFLINE_RULE = `这是线下：面对面的真实场景，不是手机聊天。
-你是这个世界的叙述者，同时扮演玩家遇到或想找的每一个角色。玩家说要找谁、去哪里、做什么，就让场景顺着发生；被提到的角色按各自的设定出场、说话、行动。
+你是这个世界的叙述者，同时扮演玩家实际遇到的角色。角色姓名、昵称、ID、人设分别对应同一个人，不能串换外貌、性格、身份、经历或对白归属。仅仅提到、想起、聊天讨论某人，或给某人发短信，不代表这个人已在现场。只有明确见面、入场或玩家主动转换场景时才改变在场人物。
+严格从上一段末尾的时间、地点、人物和动作结果继续。已经完成的送达、进门、上车、吃饭、交接物品、拥抱、解释等不是待办，不要再次安排同一事件；除非玩家明确要求回忆、重来或再次执行。角色背景情境、开场和示例对白只是设定，不能覆盖当前剧情进度。尚未完成的动作和约定保持未完成，不要擅自补成事实。
 用第三人称叙述加角色对白，对白用“”。可以写动作、神态、环境。不要替 {{user}} 说话或替 {{user}} 做决定，停在把选择交还给 {{user}} 的地方。`
 
 const SIDE_RULE = `这是番外：一条独立的世界线，和主线手机里的事无关，不要提主线。
@@ -640,7 +674,7 @@ export function buildStoryPrompt(input: {
       ),
     )
   }
-  if (input.world?.trim()) systems.push(clip(input.world, 800))
+  if (input.world?.trim()) systems.push(mode === 'offline' ? input.world.trim() : clip(input.world, 800))
   if (input.smsBridge?.trim() && mode !== 'offline') systems.push(clipTail(input.smsBridge, 1200))
   if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
   systems.push(
@@ -661,23 +695,28 @@ export function buildStoryPrompt(input: {
   systems.push(userPersona.trim() ? `玩家扮演 ${userName}。关于 ${userName}：${clip(userPersona, 400)}` : `玩家扮演 ${userName}。`)
   let books: Lorebook[] = []
   if (mode === 'offline') {
-    const roster = chars.slice(0, 20).map((item) => `${item.name}${item.nickname ? `（${item.nickname}）` : ''}：${(item.personality || item.description).split(/[。\n]/)[0]?.slice(0, 40) ?? ''}`)
-    if (roster.length) systems.push(`这个世界里的人（玩家可能会找他们）：\n${roster.join('\n')}`)
-    const focus = focusChars(chars, save).slice(0, 2)
+    const roster = chars.map((item) => `${item.name}${item.nickname ? `（昵称 ${item.nickname}）` : ''} · ID：${item.id}`)
+    if (roster.length) systems.push(`可供玩家寻找的人物名录（不代表已经在场，不要自动加入现场）：\n${roster.join('\n')}`)
+    const focus = focusChars(chars, save, input.nudge)
     if (focus.length) systems.push(`此刻相关的人的完整设定：\n\n${focus.map(card).join('\n\n')}`)
+    if (focus.length) systems.push(`【本幕人物对应】\n${focus.map(person => `${person.id} = ${person.name}${person.nickname ? ` = ${person.nickname}` : ''}`).join('\n')}\n上述设定各归本人，不把一个人的习惯、关系或秘密挪给另一个人。未明确入场的人不自动出现。`)
+    for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fill(person.systemPrompt, person.name, userName)}`)
     books = focus.map((item) => item.characterBook).filter((item): item is Lorebook => Boolean(item))
   } else {
     const picked = chars.filter((item) => (save.bookCharIds ?? []).includes(item.id)).map((item) => item.characterBook)
     books = [...picked.filter((item): item is Lorebook => Boolean(item)), ...(save.books ?? [])]
   }
-  const lore = loreText(books, recent, 800)
+  const lore = loreText(books, recent, mode === 'offline' ? Number.MAX_SAFE_INTEGER : 800)
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
-  if (memory.text) systems.push(clip(memory.text, 800))
+  if (memory.text) systems.push(mode === 'offline' ? memory.text : clip(memory.text, 800))
   if (sideLike(mode) && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
+  if (mode === 'offline') for (const person of focusChars(chars, save, input.nudge)) {
+    if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
+  }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
 
   const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
@@ -685,9 +724,14 @@ export function buildStoryPrompt(input: {
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
     const content = item.role === 'assistant' ? stripReasoning(item.content) : item.content
-    if (content.trim()) messages.push({ role: item.role, content: promptLine(applyRegex(content, rules, 'prompt', item.role)) })
+    const recentFull = mode === 'offline' && save.lines.indexOf(item) >= save.lines.length - 8
+    if (content.trim()) messages.push({ role: item.role, content: promptLine(applyRegex(content, rules, 'prompt', item.role), recentFull ? 0 : 1600) })
   }
   if (input.nudge) messages.push({ role: 'user', content: input.nudge })
+  if (mode === 'offline') {
+    const last = messages[messages.length - 1]
+    if (last?.role === 'user') last.content += '\n\n（叙事接续要求，不写入正文：从上一段最后的动作结果之后推进；已完成的事情不要再次开场重演。按本幕人物对应保持每个人自己的设定和视角，不替玩家行动。）'
+  }
   if (mode === 'offline' && input.smsBridge?.trim()) {
     const last = messages[messages.length - 1]
     if (last?.role === 'user') {
@@ -714,11 +758,11 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
     if (chunk.length === 0) throw new Error('还没有需要总结的内容')
     const response = await adapter.complete({
       messages: [
-        { role: 'system', content: '把下面这段剧情压缩成一段 150 字以内的小总结。只写发生了什么、人物关系有什么变化、留下了什么悬念。不加标题，不评价。' },
+        { role: 'system', content: '把下面剧情整理为 800 字以内的连续性记录。逐一写清人物姓名与身份，谁对谁做了什么；明确区分已完成事件、未完成约定、当前地点与最后动作结果。保留人设相关事实、物品交接和关系变化，不能串换人物、把计划写成完成、把提到的人写成在场。不复述开场，不评价。' },
         { role: 'user', content: chunk.map((item) => `${item.role === 'user' ? '玩家' : '剧情'}：${(item.role === 'assistant' ? stripReasoning(item.content) : item.content).replace(/<[^>]+>/g, '')}`).join('\n') },
       ],
       temperature: 0.3,
-      maxTokens: 400,
+      maxTokens: 1600,
     })
     const summary = stripReasoning(response.content)
     if (!summary) throw new Error('总结返回为空，将在下轮重试')
@@ -728,11 +772,11 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
   if (save.summaries.length === 0) throw new Error('先有几条小总结，才能合成大总结')
   const response = await adapter.complete({
     messages: [
-      { role: 'system', content: '把下面按时间排列的总结合并成一份 400 字以内的前情大总结。保留关键事件、人物关系和未解决的线索，按时间顺序写成一段。' },
+      { role: 'system', content: '把下面按时间排列的总结合并成 1600 字以内的前情记录。按人物姓名保留身份、关系和经历归属，区分已完成事件与未完成约定，保留最后地点和动作结果。旧状态被后续改变时以最新结果为准，不能串人、把已完成事项退回待办，或凭空增加事实。' },
       { role: 'user', content: save.summaries.map((item) => `${item.kind === 'big' ? '【大总结】' : '-'} ${stripReasoning(item.text)}`).join('\n') },
     ],
     temperature: 0.3,
-    maxTokens: 900,
+    maxTokens: 3200,
   })
   const upTo = Math.max(...save.summaries.map((item) => item.upTo))
   const summary = stripReasoning(response.content)
@@ -752,27 +796,22 @@ function storyTemperature(preset: Preset | null): number {
   return Math.min(0.9, Math.max(0.2, value))
 }
 
-/** 线下上下文比短信长得多。超长人设、top_p=1 或惩罚项会让不少接口直接回「请求参数无效」。 */
+/** Preserve assembled context instead of erasing cast and scene endings a second time. */
 function fitStoryMessages(messages: AIMessage[]): AIMessage[] {
-  const maxChars = 1600
-  const system = `${clipTail(
-    messages.filter((item) => item.role === 'system').map((item) => item.content.trim()).filter(Boolean).join('\n\n'),
-    800,
-  )}\n用第三人称写眼前这一幕，对白用引号。不要替玩家说话或做决定。`
-  const rest = messages.filter((item) => item.role !== 'system')
-  const kept: AIMessage[] = []
-  let used = system.length
-  for (let index = rest.length - 1; index >= 0; index -= 1) {
-    const item = rest[index]
-    if (!item?.content.trim()) continue
-    const content = promptLine(item.role === 'assistant' ? stripReasoning(item.content) : item.content)
-    if (used + content.length > maxChars && kept.length > 0) break
-    kept.push({ role: item.role, content })
-    used += content.length
+  const kept = messages.filter(item => item.content.trim()).map(item => ({ ...item, content: item.role === 'assistant' ? stripReasoning(item.content) : item.content }))
+  if (kept.length === 0 || kept[kept.length - 1]?.role !== 'user') kept.push({ role: 'user', content: '请接着上一段末尾的动作结果向后推进，不要重新演出已完成的事情。' })
+  return kept
+}
+
+export function mergeStoryContinuation(previous: string, next: string): string {
+  const clean = next.trim()
+  if (!clean || previous.includes(clean)) return previous
+  for (let size = Math.min(previous.length, clean.length); size >= 12; size--) {
+    if (previous.endsWith(clean.slice(0, size))) return `${previous}${clean.slice(size)}`.trimEnd()
   }
-  kept.reverse()
-  if (kept.length === 0 || kept[kept.length - 1]?.role !== 'user') kept.push({ role: 'user', content: '请接着眼前这一幕往下写。' })
-  return [{ role: 'system', content: system || '请写线下这一幕。' }, ...kept]
+  const oldParagraphs = new Set(previous.split(/\n+/).map(text => text.trim()).filter(text => text.length >= 20))
+  const fresh = clean.split(/\n+/).filter(text => !oldParagraphs.has(text.trim())).join('\n').trim()
+  return fresh ? `${previous.trimEnd()}\n${fresh}` : previous
 }
 
 export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline'): Promise<string> {
@@ -795,7 +834,7 @@ export async function generateStoryReply(input: {
   charsMax: number
 }): Promise<string> {
   const range = storyCharRange(input.charsMin, input.charsMax)
-  const budget = 512
+  const budget = Math.min(16384, Math.max(2048, Math.ceil(range.max * 2) + 512))
   let content = await generate(input.messages, input.preset, budget, input.mode)
   let len = plainStoryLength(content)
   if (len >= range.lo && len <= range.hi) return content
@@ -818,7 +857,9 @@ export async function generateStoryReply(input: {
       budget,
       input.mode,
     )
-    content = `${content.trimEnd()}\n${tail.trim()}`
+    const merged = mergeStoryContinuation(content, tail)
+    if (merged === content) break
+    content = merged
     len = plainStoryLength(content)
   }
 
