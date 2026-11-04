@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
@@ -30,7 +30,8 @@
     "check:proactive-api": "node --import ./scripts/check-env.mjs scripts/check-proactive-api.ts",
     "check:db-startup": "node --import ./scripts/check-env.mjs scripts/check-db-startup.ts",
     "check:table-history": "node --import ./scripts/check-env.mjs --import ./scripts/check-transaction-scope.mjs scripts/check-table-history.ts",
-    "check:petal": "node scripts/check-petal.ts"
+    "check:petal": "node scripts/check-petal.ts",
+    "check:generation": "node --import ./scripts/check-env.mjs scripts/check-generation.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

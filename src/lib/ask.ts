@@ -4,7 +4,20 @@ import type { ApiModuleId } from './apiModules.ts'
 
 export async function moduleAdapter(moduleId?: ApiModuleId): Promise<AIAdapter> {
   const profile = moduleId ? await storage.readModuleApi(moduleId) : await storage.readApi()
-  return AIAdapter.fromStored(profile, profile ? await storage.readApiKey(profile.id) : '')
+  const settings = await storage.getSettings()
+  const adapter = await AIAdapter.fromStored(profile, profile ? await storage.readApiKey(profile.id) : '', settings.generation)
+  const complete = adapter.complete.bind(adapter)
+  adapter.complete = async request => {
+    const response = await complete(request)
+    if (response.truncated) {
+      try {
+        const { useMellow } = await import('../store/useMellow.ts')
+        await useMellow.getState().pushNotice({ kind: 'toast', title: '回复尚未完整', body: '已保留收到的正文，自动补全未完成。可以继续生成，或到 API 设置增加输出额度。', appId: moduleId ?? 'settings', identityId: settings.activeIdentityId, priority: 3 })
+      } catch { /* A notification failure must not discard the preserved answer. */ }
+    }
+    return response
+  }
+  return adapter
 }
 
 /** 在调用入口明确归属，不依赖当前屏幕，后台及并发请求也使用自己的配置。 */

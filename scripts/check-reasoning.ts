@@ -52,7 +52,7 @@ try {
     { choices: [{ message: { content: [{ type: 'thinking', text: 'hidden' }] } }] },
   ]) {
     mock(body)
-    await assert.rejects(adapter.complete(request), /只返回了思考内容/)
+    await assert.rejects(adapter.complete({ ...request, antiTruncation: false }), /只返回了思考内容/)
     assert.equal(calls, 1, 'reasoning-only responses must not trigger paid retry loops')
   }
 } finally { globalThis.fetch = fetchOriginal }

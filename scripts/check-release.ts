@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
-import { HALLOWEEN_CODE_START,HALLOWEEN_CODE_END,APPLE_CODE_START,APPLE_CODE_END,codeReward,redeemCode,type RedeemState } from '../src/lib/redeem.ts'
+import { HALLOWEEN_CODE_START,HALLOWEEN_CODE_END,APPLE_CODE_START,APPLE_CODE_END,codeReward,redeemCode,WINTER_CODE_END,type RedeemState } from '../src/lib/redeem.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { readCoins } from '../src/lib/wallet.ts'
 import { WINTER_GIFTS } from '../src/theme/winter.ts'
@@ -39,6 +39,9 @@ assert.equal((themeStyle(BUNDLED_THEMES.find(t=>t.id==='theme_macaron')!) as Rec
 for(const board of FORUM_BOARDS){const post=normalizeForumThreads([{id:board,title:'测试',board,author:'测试',text:'长文'.repeat(4000),replies:[]}])[0]!;assert.equal(post.board,board);assert.equal(post.text.length,8000)}
 const newIdentityBalance = await readCoins('winter-new-identity')
 for (const gift of WINTER_GIFTS) {
+  assert.equal(codeReward(gift.code, WINTER_CODE_END - 1).coins, 2000)
+  assert.throws(() => codeReward(gift.code, WINTER_CODE_END), /到期/)
+  assert.throws(() => codeReward(gift.code, WINTER_CODE_END + 1), /到期/)
   assert.equal(codeReward(gift.code, APPLE_CODE_END).coins, 2000)
   assert.equal(codeReward(gift.code, APPLE_CODE_END).themeId, gift.theme.id)
   const before = await readCoins(ns)

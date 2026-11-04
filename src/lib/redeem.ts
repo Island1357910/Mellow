@@ -6,6 +6,7 @@ export const HALLOWEEN_CODE_START=Date.parse('2026-10-31T00:00:00+08:00')
 export const HALLOWEEN_CODE_END=Date.parse('2026-11-03T00:00:00+08:00')
 export const APPLE_CODE_START=Date.parse('2026-11-01T00:00:00+08:00')
 export const APPLE_CODE_END=Date.parse('2026-11-08T00:00:00+08:00')
+export const WINTER_CODE_END=Date.parse('2026-11-10T00:00:00+08:00')
 export interface RedeemState { claims: Record<string,{at:number;coins:number;themeId?:string}> }
 export function codeReward(code:string,now:number) {
   if(code.trim()==='半糖Mellow'){
@@ -19,7 +20,10 @@ export function codeReward(code:string,now:number) {
     return {id:'halloween_together_2026',coins:2000,themeId:undefined}
   }
   const winter = WINTER_GIFTS.find(gift => gift.code === code.trim())
-  if (winter) return { id: winter.id, coins: 2000, themeId: winter.theme.id }
+  if (winter) {
+    if (now >= WINTER_CODE_END) throw Error('冬日主题兑换码已于 2026 年 11 月 10 日 00:00（北京时间）到期')
+    return { id: winter.id, coins: 2000, themeId: winter.theme.id }
+  }
   throw Error('兑换码不存在，请检查大小写和文字')
 }
 export async function restoreRedeemTheme(namespace:string){

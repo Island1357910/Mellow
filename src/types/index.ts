@@ -427,6 +427,7 @@ export interface AppSettings {
   activeApiId: string
   /** 每个模块最多对应一个接口；缺省时使用默认接口。 */
   apiModuleBindings: import('../lib/apiModules.ts').ApiModuleBindings
+  generation: GenerationSettings
   installedApps: string[]
   /** appId -> emoji 或图片 data URL */
   appIcons: Record<string, string>
@@ -481,12 +482,21 @@ export interface AIRequest {
   presencePenalty?: number
   maxTokens?: number
   timeoutMs?: number
+  antiTruncation?: boolean
+}
+
+export interface GenerationSettings {
+  antiTruncation: boolean
+  maxOutputTokens: number
+  timeoutSeconds: number
 }
 
 export interface AIResponse {
   content: string
   model: string
   provider: AIProvider
+  truncated?: boolean
+  recovered?: boolean
 }
 
 export interface Notice {

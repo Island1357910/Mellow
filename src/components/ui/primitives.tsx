@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { themeOf, useMellow } from '../../store/useMellow.ts'
+import { themePack, themeStyle } from '../../theme/applyTheme.ts'
+import { effectiveTheme } from '../../theme/seasonal.ts'
 
 export function Screen(props: {
   title: string
@@ -155,8 +158,10 @@ export function SoftCard(props: { children: ReactNode; className?: string }) {
 
 /** 挂到 document.body，避免手机壳 transform 影响 fixed 居中 */
 export function ModalPortal(props: { children: ReactNode; onClose: () => void }) {
+  const selected = useMellow(themeOf)
+  const theme = effectiveTheme(selected)
   return createPortal(
-    <div className="modal-overlay modal-portal" onClick={props.onClose}>
+    <div className="modal-overlay modal-portal" data-theme-pack={themePack(theme.id)} style={themeStyle(theme)} onClick={props.onClose}>
       {props.children}
     </div>,
     document.body,

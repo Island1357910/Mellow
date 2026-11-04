@@ -34,7 +34,7 @@ import { storage } from '../../storage/StorageService.ts'
 import { formatClock } from '../../lib/format.ts'
 import { themeOf, useMellow } from '../../store/useMellow.ts'
 import { effectiveTheme } from '../../theme/seasonal.ts'
-import { themeStyle } from '../../theme/applyTheme.ts'
+import { themePack, themeStyle } from '../../theme/applyTheme.ts'
 import { ControlCenter } from './ControlCenter.tsx'
 import { HomeScreen } from './HomeScreen.tsx'
 import { LockScreen, Wallpaper } from './LockScreen.tsx'
@@ -157,7 +157,7 @@ export function PhoneShell() {
       <div
         className="device"
         data-palette={theme.customPalette || theme.id === 'theme_halloween' ? 'custom' : undefined}
-        data-theme-pack={theme.id === 'theme_red_apple_love' ? 'apple' : theme.id === 'theme_winter_cocoa' ? 'cocoa' : theme.id === 'theme_ice_early_winter' ? 'ice' : undefined}
+        data-theme-pack={themePack(theme.id)}
         data-season={theme.id === 'theme_halloween' ? 'halloween' : undefined}
         data-font={fontReady ? 'custom' : undefined}
         data-effect={theme.effect}

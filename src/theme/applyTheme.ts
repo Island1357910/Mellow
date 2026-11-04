@@ -1,6 +1,10 @@
 import type { CSSProperties } from 'react'
 import type { Theme } from '../types/index.ts'
 
+export function themePack(id: string): string | undefined {
+  return ({ theme_red_apple_love: 'apple', theme_winter_cocoa: 'cocoa', theme_ice_early_winter: 'ice' } as Record<string, string>)[id]
+}
+
 export function themeStyle(theme: Theme): CSSProperties {
   const logo = theme.logo ?? (theme.id === 'theme_halloween' ? {primary:'#E3A667',secondary:'#AA8EBA',accent:'#C4BE90'} : {primary:'#FFB5C5',secondary:'#B5E8D5',accent:'#FFE5A0'})
   return {

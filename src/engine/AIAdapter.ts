@@ -1,4 +1,4 @@
-import type { AIMessage, AIRequest, AIResponse, ApiConfig } from '../types/index.ts'
+import type { AIMessage, AIRequest, AIResponse, ApiConfig, GenerationSettings } from '../types/index.ts'
 import { stripReasoning } from '../lib/reasoning.ts'
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
@@ -21,6 +21,18 @@ interface ReadyConfig {
   endpoint: string
   model: string
   key: string
+  generation?: GenerationSettings
+}
+
+interface CompletionResult extends AIResponse { reasoningOnly?: boolean }
+
+function joinContinuation(head: string, tail: string): string {
+  if (tail.startsWith(head)) return tail
+  if (head.endsWith(tail)) return head
+  for (let size = Math.min(head.length, tail.length); size >= 12; size--) {
+    if (head.slice(-size) === tail.slice(0, size)) return head + tail.slice(size)
+  }
+  return head + tail
 }
 
 function trimSlash(value: string): string {
@@ -66,10 +78,6 @@ async function readError(response: Response): Promise<string> {
   return text.slice(0, 240)
 }
 
-function cleanText(text: string): string {
-  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim()
-}
-
 /** 模型请求控制提示，不是玩家发言，也不落库。保留完整历史和末尾系统约束。 */
 function withUserEnding(messages: AIMessage[]): AIMessage[] {
   const rows = messages.map(item => ({ ...item }))
@@ -79,46 +87,6 @@ function withUserEnding(messages: AIMessage[]): AIMessage[] {
   if (last?.role === 'user') last.content = content
   else rows.push({ role: 'user', content })
   return rows
-}
-
-function squashRoles(messages: AIMessage[]): AIMessage[] {
-  const rows: AIMessage[] = []
-  for (const item of messages) {
-    const prev = rows[rows.length - 1]
-    if (prev && prev.role === item.role) prev.content = `${prev.content}\n${item.content}`
-    else rows.push({ role: item.role, content: item.content })
-  }
-  return rows
-}
-
-/** 收成多数接口都接受的形状：角色交替、以 user 结尾，必要时不使用 system。 */
-function normalizeMessages(messages: AIMessage[], maxChars: number, foldSystem: boolean): AIMessage[] {
-  const systemCap = Math.min(700, Math.floor(maxChars * 0.6))
-  const systemRaw = cleanText(messages.filter((item) => item.role === 'system').map((item) => item.content).join('\n'))
-  const system = systemRaw.length <= systemCap ? systemRaw : systemRaw.slice(-systemCap)
-  const rest = messages.filter((item) => item.role !== 'system')
-  const kept: AIMessage[] = []
-  let used = foldSystem ? Math.min(system.length, systemCap) : system.length
-  for (let index = rest.length - 1; index >= 0; index -= 1) {
-    const item = rest[index]
-    if (!item) continue
-    const content = cleanText(item.content).slice(0, 400)
-    if (!content) continue
-    if (used + content.length > maxChars && kept.length > 0) break
-    kept.push({ role: item.role === 'assistant' ? 'assistant' : 'user', content })
-    used += content.length
-  }
-  kept.reverse()
-  let rows: AIMessage[] = foldSystem || !system ? kept : [{ role: 'system', content: system }, ...kept]
-  if (foldSystem && system) {
-    if (rows[0]?.role === 'user') rows[0] = { role: 'user', content: `${system}\n\n${rows[0].content}` }
-    else rows = [{ role: 'user', content: system }, ...rows]
-  }
-  rows = squashRoles(rows)
-  while (rows[0]?.role === 'assistant') rows.shift()
-  if (!rows.some((item) => item.role === 'user')) rows.push({ role: 'user', content: '请继续。' })
-  if (rows[rows.length - 1]?.role !== 'user') rows.push({ role: 'user', content: '请继续。' })
-  return rows.length > 0 ? rows : [{ role: 'user', content: '请继续。' }]
 }
 
 function isReasoningPart(part: unknown): boolean {
@@ -140,8 +108,8 @@ function partText(part: unknown): string {
 
 function messageContent(value: unknown): string {
   if (value == null) return ''
-  if (typeof value === 'string') return value.trim()
-  if (Array.isArray(value)) return value.map(partText).join('').trim()
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(partText).join('')
   if (typeof value === 'object') {
     return partText(value).trim()
   }
@@ -150,7 +118,7 @@ function messageContent(value: unknown): string {
 
 function pickString(...values: unknown[]): string {
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'string' && value.trim()) return value
   }
   return ''
 }
@@ -164,7 +132,7 @@ function extractContent(data: unknown): string {
     const message = choice.message as Record<string, unknown> | undefined
     if (message) {
       const main = messageContent(message.content)
-      if (main) return main
+      if (main.trim()) return main
       const fallback = pickString(message.output, message.text)
       if (fallback) return fallback
     }
@@ -185,11 +153,11 @@ export class AIAdapter {
     this.config = config
   }
 
-  static async fromStored(config: ApiConfig | undefined, key: string): Promise<AIAdapter> {
+  static async fromStored(config: ApiConfig | undefined, key: string, generation?: GenerationSettings): Promise<AIAdapter> {
     if (!config?.endpoint) throw new AIError('还没有可用的接口。到设置里新建一张卡片。', 'config')
     if (!config.ready || !config.model) throw new AIError('先拉取模型，选一个，保存之后才能用。', 'config')
     if (!key.trim()) throw new AIError('这张卡片还没有密钥。', 'config')
-    return new AIAdapter({ endpoint: config.endpoint, model: config.model, key })
+    return new AIAdapter({ endpoint: config.endpoint, model: config.model, key, generation })
   }
 
   static async listModels(endpoint: string, key: string): Promise<string[]> {
@@ -220,6 +188,42 @@ export class AIAdapter {
     if (!this.config.endpoint.trim()) throw new AIError('还没写接口地址。', 'config')
     if (!this.config.key.trim()) throw new AIError('还没保存 API Key。', 'config')
 
+    const enabled = request.antiTruncation ?? this.config.generation?.antiTruncation ?? true
+    const budget = enabled ? Math.max(request.maxTokens ?? 0, this.config.generation?.maxOutputTokens ?? DEFAULT_MAX_TOKENS) : request.maxTokens ?? DEFAULT_MAX_TOKENS
+    const original: AIRequest = { ...request, maxTokens: budget, timeoutMs: Math.max(request.timeoutMs ?? 0, (this.config.generation?.timeoutSeconds ?? 180) * 1000) }
+    let result = await this.completeWithRetry(original)
+    let content = result.content
+    let recovered = false
+    if (enabled) {
+      // At most two additional model generations. Never send hidden reasoning back to the provider.
+      for (let round = 0; round < 2 && (!content || result.reasoningOnly || result.truncated); round++) {
+        recovered = true
+        const task = content
+          ? '（应用的防截断续写任务，不是玩家新发言。）紧接上一条正文最后一个字符续写，只补未完成部分，不要重复开头、解释或重新输出全文。保持原有格式；JSON、HTML和代码应接着补全，直到完整结束。只输出正文，不输出思考过程。'
+          : '（应用的正文恢复任务，不是玩家新发言。）上一轮没有返回可显示的正文。请遵守原任务和原输出格式，直接给出完整正文，简短完成，不输出思考过程或解释，不替玩家发言。'
+        try {
+          result = await this.openai({ ...original,
+            maxTokens: Math.min(32768, budget * (round + 2)),
+            messages: [...request.messages, ...(content ? [{ role: 'assistant' as const, content }] : []), { role: 'user', content: task }],
+          }, Boolean(content))
+        } catch (error) {
+          if (content) return { content, model: this.config.model, provider: 'openai', truncated: true, recovered: true }
+          throw error
+        }
+        const previous = content
+        if (result.content) content = content ? joinContinuation(content, result.content) : result.content
+        if (previous && content === previous) result.truncated = true
+        // Empty continuation is not evidence that the previous partial answer is complete.
+        if (!result.content && content) result.truncated = true
+      }
+    }
+    if (!content) throw new AIError(result.reasoningOnly
+      ? '接口只返回了思考内容，没有可显示的正文。请在 API 设置中增加输出额度，或使用能返回正文的模型。'
+      : '接口返回了空正文，未能恢复。请检查接口或更换模型后重试。', 'api')
+    return { content, model: this.config.model, provider: 'openai', truncated: Boolean(result.truncated || result.reasoningOnly), recovered }
+  }
+
+  private async completeWithRetry(request: AIRequest): Promise<CompletionResult> {
     let last: AIError | null = null
     for (let attempt = 0; attempt < COMPLETE_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(700 * attempt)
@@ -274,6 +278,7 @@ export class AIAdapter {
       messages,
       temperature,
       max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+      stream: false,
     }
     if (typeof request.topP === 'number' && request.topP > 0 && request.topP < 1) normal.top_p = request.topP
     if (request.frequencyPenalty) normal.frequency_penalty = request.frequencyPenalty
@@ -282,23 +287,22 @@ export class AIAdapter {
       normal,
       {
         model: this.config.model,
-        messages: normalizeMessages(messages, 1400, false),
-        temperature: 0.8,
-        max_tokens: 512,
+        messages,
+        max_tokens: normal.max_tokens,
       },
       {
         model: this.config.model,
-        messages: normalizeMessages(messages, 700, true),
-        max_tokens: 256,
+        messages,
+        max_completion_tokens: normal.max_tokens,
       },
       {
         model: this.config.model,
-        messages: normalizeMessages(messages, 500, true),
+        messages,
       },
     ]
   }
 
-  private async openai(request: AIRequest): Promise<AIResponse> {
+  private async openai(request: AIRequest, continuation = false): Promise<CompletionResult> {
     const timeoutMs = request.timeoutMs ?? 120_000
     const payloads = this.payloads(request)
     let last = '请求失败了'
@@ -326,19 +330,26 @@ export class AIAdapter {
         throw new AIError(last, 'api')
       }
 
-      const data = (await response.json()) as unknown
+      let data: unknown
+      try { data = await response.json() } catch { throw new AIError('接口返回的数据不完整或不是 JSON，请重试或检查接口地址。', 'api') }
       const rawContent = extractContent(data)
       const content = stripReasoning(rawContent)
-      if (content) return { content, model: this.config.model, provider: 'openai' }
+      const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null
+      const reason = meta?.choices?.[0]?.finish_reason ?? meta?.incomplete_details?.reason ?? meta?.stop_reason
+      const truncated = reason === 'length' || reason === 'max_tokens' || reason === 'max_output_tokens' || meta?.status === 'incomplete'
+      if (reason === 'content_filter') throw new AIError('接口未生成正文，请查看所选模型的内容限制。', 'api')
+      if (content) return {
+        content: (continuation ? rawContent.match(/^\s*/)?.[0] ?? '' : '') + content + (truncated ? rawContent.match(/\s*$/)?.[0] ?? '' : ''),
+        model: this.config.model, provider: 'openai', truncated,
+      }
       const root = data as { choices?: Array<{ message?: { reasoning_content?: unknown; reasoning?: unknown; content?: unknown } }>; content?: unknown; output?: unknown }
       const message = root?.choices?.[0]?.message
       const reasoningParts = [message?.content, root?.content, root?.output].some(value =>
         Array.isArray(value) ? value.some(isReasoningPart) : isReasoningPart(value))
       if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts) {
-        throw new AIError('接口只返回了思考内容，没有可显示的正文。请重试或增加输出长度。', 'api')
+        return { content: '', model: this.config.model, provider: 'openai', reasoningOnly: true, truncated }
       }
-      last = '接口回来了，但没有文字。'
-      if (index === payloads.length - 1) throw new AIError(last, 'api', true)
+      return { content: '', model: this.config.model, provider: 'openai', truncated }
     }
     throw new AIError(last, 'api')
   }

@@ -550,8 +550,8 @@ function cleanCss(value: string | undefined) {
 function bubbleSheet(scope: string, radius: number, shape: BubbleStyle, custom: Chat['bubbleCss']) {
   const line = shape === 'line' ? 'border: 1px solid rgba(0,0,0,0.08);' : ''
   return [
-    `.${scope} .b-mine{border-radius:${radius}px;background:var(--m-accent);${line}}`,
-    `.${scope} .b-theirs{border-radius:${radius}px;background:#F4FBF7;${line}}`,
+    `.${scope} .b-mine{border-radius:${radius}px;background:var(--winter-bubble-mine,var(--m-accent));color:var(--winter-bubble-ink,inherit);${line}}`,
+    `.${scope} .b-theirs{border-radius:${radius}px;background:var(--winter-bubble-theirs,#F4FBF7);color:var(--winter-bubble-ink,inherit);${line}}`,
     `.${scope} .b-mine{${cleanCss(custom?.mine)}}`,
     `.${scope} .b-theirs{${cleanCss(custom?.theirs)}}`,
   ].join('\n')

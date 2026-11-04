@@ -298,7 +298,7 @@ function Stage(props: { info: GameInfo; best: number; onExit: () => void; onSett
     )
   }
   if (phase === 'result' && end) return <Result info={props.info} best={props.best} end={end} onExit={props.onExit} onAgain={again} />
-  return <Play key={nonce} info={props.info} onFinish={finish} />
+  return <div data-holiday-preserve><Play key={nonce} info={props.info} onFinish={finish} /></div>
 }
 
 function Result(props: {

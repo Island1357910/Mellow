@@ -201,6 +201,11 @@ export function ApiPanel() {
           ) : null}
         </div>
         {status ? <PillNote tone="mint" inline>{status}</PillNote> : null}
+        <SectionTitle tone="sky">回复完整性</SectionTitle>
+        <Toggle label="防截断与空正文恢复" hint="默认开启。正文被截断或只返回思考时，最多额外请求两次自动补全；可能增加耗时与 API 用量。" on={settings.generation.antiTruncation} onChange={antiTruncation => void patchSettings({ generation: { ...settings.generation, antiTruncation } })}/>
+        <label className="block text-xs">输出额度（含模型思考）<NumericInput aria-label="输出额度（含模型思考）" className="soft-input mt-1" value={settings.generation.maxOutputTokens} min={1024} max={32768} step={1024} onValueChange={maxOutputTokens => void patchSettings({ generation: { ...settings.generation, maxOutputTokens } })}/></label>
+        <label className="block text-xs">请求等待时间（秒）<NumericInput aria-label="请求等待时间（秒）" className="soft-input mt-1" value={settings.generation.timeoutSeconds} min={30} max={600} step={30} onValueChange={timeoutSeconds => void patchSettings({ generation: { ...settings.generation, timeoutSeconds } })}/></label>
+        <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>建议 8192 tokens、180 秒。开启防截断时为短回复也预留思考额度，恢复时按需增加至 32768。实际长度与等待时间仍受接口限制。</p>
         <SectionTitle tone="sky">应用模块分配</SectionTitle>
         <div className="space-y-3">
           {API_MODULES.map(module => (

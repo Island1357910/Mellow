@@ -36,7 +36,7 @@ try {
   ] as AIMessage[][]) {
     const before = JSON.stringify(messages)
     requests.length = 0
-    await adapter.complete({ messages, maxTokens: 1234, temperature: 0.65, topP: 0.8, presencePenalty: 0.2 })
+    await adapter.complete({ messages, antiTruncation: false, maxTokens: 1234, temperature: 0.65, topP: 0.8, presencePenalty: 0.2 })
     assert.equal(requests.length, 1, 'strict role endpoint accepts the first full-context request')
     assert.equal(requests[0].messages.at(-1)?.role, 'user')
     assert.equal(requests[0].max_tokens, 1234)
