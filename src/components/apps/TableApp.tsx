@@ -7,6 +7,7 @@ import { uid } from '../../lib/id.ts'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { moduleAi, readJson } from '../../lib/ask.ts'
+import { SCENE_HOLD } from '../../data/officialPresets.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { aiMove as goAi, emptyGrid, winner, type Grid, type Stone } from '../../lib/gomoku.ts'
@@ -570,7 +571,7 @@ export function TableApp(props: { onBack: () => void }) {
   const phone = usePhone()
   const presets = useMellow((state) => state.presets)
   const settings = useMellow((state) => state.settings)
-  const voice = presets.find((item) => item.id === modePresetId(settings, 'table'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''
+  const voice = `${presets.find((item) => item.id === modePresetId(settings, 'table'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''}\n${SCENE_HOLD}`
   useEffect(() => {
     hostVoice = voice
   }, [voice])
@@ -622,7 +623,7 @@ export function TableApp(props: { onBack: () => void }) {
     }))
     if(session.current!==ticket)return
     setPeople(castPeople)
-    hostVoice=voice+'\n同桌人设与关系：'+castPeople.map(({person,bond,recent,backstory,sharedNote})=>`${sharedNote}\n${person.name}：${person.personality}；${person.description}；亲密度${bond}/100。共同过往：${backstory}。近期短信（背景记忆，不是本局刚说的话）：${recent}。互动遵循性格和关系，适度给提示，不随意改变规则。`).join('\n')
+    hostVoice=voice+'\n同桌人设与关系：'+castPeople.map(({person,bond,recent,backstory,sharedNote})=>`${sharedNote}\n${person.name}：${person.personality}；${person.description}；亲密度${bond}/100。共同过往：${backstory}。近期短信（背景记忆，不是本局刚说的话）：${recent}。互动遵循性格和关系，适度给提示，不随意改变规则。`).join('\n')+'\n'+SCENE_HOLD
     const seatedNames = cast(phone.name, chars, chosen, meta.min, meta.max)
     setNames(seatedNames)
     setRecordSession({ id: sessionKey.current, game: meta.name, names: seatedNames, startedAt: Date.now() })

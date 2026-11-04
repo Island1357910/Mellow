@@ -2,6 +2,7 @@ import { searchSocial } from '../../lib/socialSearch.ts'
 import { Heart, MessageCircle, Search, UserPlus, Check, Bookmark, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { SCENE_HOLD } from '../../data/officialPresets.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { loadFeed, needsAiStarSeed, normalizeFeedPosts, saveFeed, STAR_POST_MAX, type FeedComment, type FeedPost } from '../../lib/feed.ts'
 import { refreshStarFeedAi, replyStarCommentAi, seedStarFeedAi } from '../../lib/starAi.ts'
@@ -33,7 +34,7 @@ export function StarApp(props: { onBack: () => void }) {
   const phone = usePhone()
   const presets = useMellow((state) => state.presets)
   const settings = useMellow((state) => state.settings)
-  const starVoice = presets.find((item) => item.id === modePresetId(settings, 'star'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''
+  const starVoice = `${presets.find((item) => item.id === modePresetId(settings, 'star'))?.data.prompts.filter(item => item.enabled).map(item => item.content).join('\n') ?? ''}\n${SCENE_HOLD}`
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [tab, setTab] = useState<'all' | 'follow' | 'saved' | 'mine'>('all')
   const [query, setQuery] = useState('')

@@ -2,6 +2,7 @@ import { searchSocial } from '../../lib/socialSearch.ts'
 import { Heart, MessageCircle, Search, PenLine, UserPlus, Check, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { SCENE_HOLD } from '../../data/officialPresets.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { FORUM_BOARDS, generatePlotForumPost, generateRandomForumPost, normalizeForumThreads, replyForumCommentAi, type ForumThread } from '../../lib/forumAi.ts'
 import { uid } from '../../lib/id.ts'
@@ -11,7 +12,7 @@ import { PillNote, Screen } from '../ui/primitives.tsx'
 export function ForumApp({onBack}:{onBack:()=>void}){
  const phone=useMellow(s=>s.identities.find(i=>i.id===s.activeIdentityId)),settings=useMellow(s=>s.settings),presets=useMellow(s=>s.presets),revision=useMellow(s=>s.dataRevision)
  const namespace=phone?.namespace||''
- const voice=presets.find(p=>p.id===modePresetId(settings,'forum'))?.data.prompts.filter(b=>b.enabled).map(b=>b.content).join('\n')||''
+ const voice=(presets.find(p=>p.id===modePresetId(settings,'forum'))?.data.prompts.filter(b=>b.enabled).map(b=>b.content).join('\n')||'')+'\n'+SCENE_HOLD
  const [rows,setRows]=useState<ForumThread[]>([]),[ready,setReady]=useState(false),[openId,setOpenId]=useState<string|null>(null),[tab,setTab]=useState<'all'|'follow'|'mine'>('all'),[section,setSection]=useState('全部'),[query,setQuery]=useState(''),[follows,setFollows]=useState<string[]>([]),[writing,setWriting]=useState(false),[title,setTitle]=useState(''),[body,setBody]=useState(''),[board,setBoard]=useState('日常'),[plot,setPlot]=useState(''),[comment,setComment]=useState(''),[note,setNote]=useState(''),[busy,setBusy]=useState(false)
  useEffect(()=>{let alive=true;if(namespace)void Promise.all([storage.getBag(namespace,'forum'),storage.getBag<string[]>(namespace,'forum_follows')]).then(([saved,following])=>{if(alive){setRows(normalizeForumThreads(saved));setFollows(following??[]);setReady(true)}});return()=>{alive=false}},[namespace,revision])
  const [searchRows,setSearchRows]=useState<ForumThread[]|null>(null),[searching,setSearching]=useState(false)

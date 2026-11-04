@@ -1,3 +1,4 @@
+import { SCENE_HOLD } from '../data/officialPresets.ts'
 import { loreEntries } from '../lib/sillytavern.ts'
 import { uid } from '../lib/id.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -663,21 +664,20 @@ export function buildStoryPrompt(input: {
   const recent = save.lines.slice(-6).map((item) => item.content).join('\n')
   const systems: string[] = []
   const blocks = (input.preset?.data.prompts ?? []).filter((item) => item.enabled && item.content.trim())
-  if (blocks.length) {
-    systems.push(
-      clip(
-        blocks
-          .map((item) =>
-            fill(item.content, lead?.name ?? charName, userName)
-              .replaceAll('{{description}}', clip(lead?.description || '（没有写）', 800))
-              .replaceAll('{{personality}}', clip(lead?.personality || '（没有写）', 400))
-              .replaceAll('{{scenario}}', clip(lead?.scenario || '（没有写）', 400)),
-          )
-          .join('\n\n'),
-        1500,
-      ),
-    )
-  }
+  const renderBlocks = (items: typeof blocks) =>
+    items
+      .map((item) =>
+        fill(item.content, lead?.name ?? charName, userName)
+          .replaceAll('{{description}}', clip(lead?.description || '（没有写）', 800))
+          .replaceAll('{{personality}}', clip(lead?.personality || '（没有写）', 400))
+          .replaceAll('{{scenario}}', clip(lead?.scenario || '（没有写）', 400)),
+      )
+      .join('\n\n')
+  const keptWhole = new Set(['living_people_v2', 'scene_hold'])
+  const style = blocks.filter((item) => keptWhole.has(item.identifier))
+  const voice = blocks.filter((item) => !keptWhole.has(item.identifier))
+  if (voice.length) systems.push(clip(renderBlocks(voice), 1500))
+  if (style.length) systems.push(renderBlocks(style))
   if (input.world?.trim()) systems.push(mode === 'offline' ? input.world.trim() : clip(input.world, 800))
   if (input.smsBridge?.trim() && mode !== 'offline') systems.push(clipTail(input.smsBridge, 1200))
   if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
@@ -722,6 +722,7 @@ export function buildStoryPrompt(input: {
     if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
+  systems.push(SCENE_HOLD)
 
   const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
   const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focusChars(chars, save).flatMap(cardRegex)) : [])]

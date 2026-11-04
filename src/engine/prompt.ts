@@ -1,3 +1,4 @@
+import { SCENE_HOLD } from '../data/officialPresets.ts'
 import { stickerLabel } from '../data/stickers.ts'
 import { SMS_RELATION_LOCK } from '../lib/channelBridge.ts'
 import { stickerCatalogForPrompt } from '../lib/stickerReply.ts'
@@ -98,6 +99,7 @@ export function buildSmsMessages(input: {
   systems.push('语音或文字的发送形式由应用决定。只输出正文，不要输出（语音消息）、[语音]等媒介前缀。')
   if (input.groupMembers) systems.push(`当前群聊只扮演 ${character.name}（ID：${character.id}）。群成员：${input.groupMembers.map(member => `${member.name}（${member.id}）`).join('、')}。发送者标记仅用于区分身份，不要复述。只有自己的发言是你说过的话，其他人的经历、关系和秘密不属于你的记忆。只依据自己的经历和群内明确公开的信息回应；别人讲述的经历只是你听说的事情，不能当作亲历。未经公开且不属于你的事情应当不知道，不猜测、不替别人回忆，不把自己与玩家的关系套用到全群。群聊背景仅是公开背景，不表示每位成员都亲历。`)
   if (input.priority?.trim()) systems.push(input.priority.trim())
+  systems.push(SCENE_HOLD)
 
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of history) {
@@ -171,6 +173,7 @@ export function buildCallMessages(input: {
   if (fourthWall) systems.push(FOURTH_WALL)
   if (input.note?.trim()) systems.push(input.note.trim())
   systems.push(fill(CALL_RULE, character, identity))
+  systems.push(SCENE_HOLD)
 
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of history) {
