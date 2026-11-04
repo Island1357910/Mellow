@@ -21,6 +21,7 @@ import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { useMellow } from '../store/useMellow.ts'
+import { chatMemoryNote, scheduleChatMemory } from '../lib/chatMemory.ts'
 
 const replyLocks = new Set<string>()
 import { storage } from '../storage/StorageService.ts'
@@ -315,6 +316,7 @@ export async function replyInChat(input: {
       triggerNote: input.triggerNote,
       note: [
         replyNote(input.chat),
+        await chatMemoryNote(input.namespace, input.chat.id),
         sharedContent,
         await mapMemoryNote(input.namespace,input.character.id),
         await sharedLifeNote(input.namespace,input.character.id),
@@ -352,6 +354,7 @@ export async function replyInChat(input: {
     })
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
+    if (replies.length) scheduleChatMemory(input.namespace, input.chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
     if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})
     return last
@@ -364,13 +367,13 @@ export async function replyInChat(input: {
           : error instanceof Error
             ? error.message
             : '没能发出去'
-    const system = textMessage({
+    const system = { ...textMessage({
       chatId: input.chat.id,
       role: 'system',
       kind: 'system',
       content: message,
       charId: null,
-    })
+    }), diagnostic: error instanceof AIError ? error.diagnostic : undefined }
     await storage.putMessage(input.namespace, system)
     return system
   } finally {
@@ -421,7 +424,7 @@ export async function deliverSms(input: {
       groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
-      note: [await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
+      note: [replyNote(input.chat), await chatMemoryNote(input.namespace, input.chat.id), await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({
@@ -440,17 +443,18 @@ export async function deliverSms(input: {
     })
     await storage.putMessage(input.namespace, reply)
     await touchChat(input.namespace, chat, reply.content, 1, reply.kind)
+    scheduleChatMemory(input.namespace, chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...history, userMessage, reply])
     return reply
   } catch (error) {
     const message = error instanceof AIError ? error.message : error instanceof Error ? error.message : '没能发出去'
-    const system = textMessage({
+    const system = { ...textMessage({
       chatId: input.chat.id,
       role: 'system',
       kind: 'system',
       content: message,
       charId: null,
-    })
+    }), diagnostic: error instanceof AIError ? error.diagnostic : undefined }
     await storage.putMessage(input.namespace, system)
     await touchChat(input.namespace, chat, input.text.trim(), 0)
     return system

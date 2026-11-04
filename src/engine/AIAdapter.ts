@@ -1,5 +1,6 @@
 import type { AIMessage, AIRequest, AIResponse, ApiConfig, GenerationSettings } from '../types/index.ts'
 import { stripReasoning } from '../lib/reasoning.ts'
+import { apiErrorText } from '../lib/apiErrorText.ts'
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
 const DEFAULT_MAX_TOKENS = 8192
@@ -8,12 +9,14 @@ const COMPLETE_ATTEMPTS = 3
 export class AIError extends Error {
   code: 'config' | 'network' | 'api' | 'unsupported'
   retryable: boolean
+  diagnostic?: string
 
-  constructor(message: string, code: AIError['code'] = 'api', retryable = false) {
+  constructor(message: string, code: AIError['code'] = 'api', retryable = false, diagnostic?: string) {
     super(message)
     this.name = 'AIError'
     this.code = code
     this.retryable = retryable
+    this.diagnostic = diagnostic
   }
 }
 
@@ -324,6 +327,7 @@ export class AIAdapter {
 
       if (!response.ok) {
         last = await readError(response)
+        if (apiErrorText(last) !== last) throw new AIError(apiErrorText(last), 'api', false, last)
         const retryable = response.status === 429 || response.status >= 500
         if (retryable) throw new AIError(last, 'network', retryable)
         if (response.status === 400 && invalidParam(last) && index < payloads.length - 1) continue
@@ -332,6 +336,10 @@ export class AIAdapter {
 
       let data: unknown
       try { data = await response.json() } catch { throw new AIError('接口返回的数据不完整或不是 JSON，请重试或检查接口地址。', 'api') }
+      if (data && typeof data === 'object' && 'error' in data && data.error) {
+        const detail = errorDetail(data.error) || '接口返回了错误，未生成正文。'
+        throw new AIError(apiErrorText(detail), 'api', false, detail)
+      }
       const rawContent = extractContent(data)
       const content = stripReasoning(rawContent)
       const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null

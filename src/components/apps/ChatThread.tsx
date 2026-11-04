@@ -24,6 +24,8 @@ import { parseReplySegments } from '../../lib/stickerReply.ts'
 import { spokenSmsText } from '../../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../../lib/smsSanitize.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
+import { ChatMemoryPanel } from './ChatMemoryPanel.tsx'
+import { apiErrorText } from '../../lib/apiErrorText.ts'
 
 type ToolId = 'life' | 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
 
@@ -324,7 +326,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         {selectMode ? (
           <div className="flex items-center justify-between gap-2 px-4 pb-14 pt-2">
             <button type="button" className="chip px-3 py-2 text-xs" onClick={() => {
-              const visible = messages.filter((item) => !item.hidden && item.kind !== 'system')
+              const visible = messages.filter((item) => !item.hidden)
               setSelectedIds(new Set(visible.map((item) => item.id)))
             }}>全选</button>
             <button
@@ -467,6 +469,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
       ) : null}
       {menu ? (
         <ChatMenu
+          namespace={props.identity.namespace}
           chat={chat}
           people={people}
           character={chat.kind === 'dm' ? primary : undefined}
@@ -656,8 +659,17 @@ function Bubble(props: {
 
   const person = props.people.find((item) => item.id === message.charId)
   const kind = message.kind
-  if (kind === 'system') {
-    return <div className="flex justify-center"><PillNote tone="lilac" compact>{message.content}</PillNote></div>
+  if (kind === 'system' || message.role === 'system') {
+    const friendly = apiErrorText(message.content)
+    const diagnostic = message.diagnostic || (friendly !== message.content ? message.content : '')
+    return <div role="note" className="flex items-start justify-center gap-1">
+      {props.selectMode && <button type="button" aria-label="选择提示" aria-pressed={props.selected} className="chip shrink-0 p-1" onClick={props.onToggleSelect}>{props.selected ? <CheckSquare size={15}/> : <Square size={15}/>}</button>}
+      <div className="min-w-0 max-w-[90%]">
+        <PillNote tone="lilac" compact><span className="break-words">{friendly}</span></PillNote>
+        {diagnostic && <details className="mt-1 rounded-xl bg-white/80 px-3 py-2 text-[11px]"><summary>查看原始错误</summary><p className="mt-1 break-all">{diagnostic}</p></details>}
+      </div>
+      {!props.selectMode && <button type="button" className="chip shrink-0 p-1" aria-label="删除提示" onClick={props.onRemove}><Trash2 size={13}/></button>}
+    </div>
   }
   const mine = message.role === 'user'
   const cls = mine ? 'b-mine' : 'b-theirs'
@@ -770,6 +782,7 @@ const CSS_PRESETS: Array<{ label: string; css: string }> = [
 ]
 
 function ChatMenu(props: {
+  namespace: string
   chat: Chat
   people: Character[]
   character?: Character
@@ -1002,9 +1015,10 @@ function ChatMenu(props: {
         ) : null}
 
         {tab === 'bond' ? (
+          <>
           <section className="menu-card">
             <p className="text-sm font-medium">过往与关系</p>
-            <p className="mt-1 text-[11px] leading-5" style={dim}>补充你和 {props.people.map((item) => item.name).join('、') || '对方'} 的相识经过、关系、共同回忆或约定。每次回复都会带上，当作你们共同的记忆。</p>
+            <p className="mt-1 text-[11px] leading-5" style={dim}>补充你和 {props.people.map((item) => item.name).join('、') || '对方'} 的相识经过、关系、共同回忆或约定。每次回复都会带上。群聊背景只视为公开信息，不表示每位成员都亲历。</p>
             <textarea
               value={props.chat.backstory ?? ''}
               rows={9}
@@ -1015,6 +1029,8 @@ function ChatMenu(props: {
             />
             <p className="mt-1 text-right text-[10px]" style={dim}>{(props.chat.backstory ?? '').length} / 2000</p>
           </section>
+          <ChatMemoryPanel key={props.chat.id} namespace={props.namespace} chatId={props.chat.id} messages={props.messages} group={props.chat.kind === 'group'}/>
+          </>
         ) : null}
 
         {tab === 'talk' ? (

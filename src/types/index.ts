@@ -179,6 +179,8 @@ export interface ChatMessage {
   starred?: boolean
   /** 软删除 */
   hidden?: boolean
+  /** API 原始诊断，仅供展开查看，不传入角色上下文。 */
+  diagnostic?: string
 }
 
 export interface Group {

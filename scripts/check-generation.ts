@@ -66,6 +66,12 @@ try {
   assert.equal((await adapter.complete({ messages })).content, '兼容正文')
   assert.equal(payloads[1].max_tokens, 8192)
   assert.deepEqual(payloads[1].messages, messages, 'compatibility must not trim history or system boundaries')
+  replies([400, 400, { content: '新额度参数兼容正文' }])
+  assert.equal((await adapter.complete({ messages, maxTokens: 512 })).content, '新额度参数兼容正文')
+  assert.equal(payloads.length, 3)
+  assert.equal(payloads[2].max_completion_tokens, 8192)
+  assert.equal('max_tokens' in payloads[2], false, 'the two alternative budget parameters must not be sent together')
+  assert.deepEqual(payloads[2].messages, messages, 'switching budget fields preserves the complete context')
   assert.equal(JSON.stringify(messages), before)
   assert.deepEqual(normalizeSettings({}).generation, { antiTruncation: true, maxOutputTokens: 8192, timeoutSeconds: 180 })
   assert.deepEqual(normalizeSettings({ generation: { antiTruncation: false, maxOutputTokens: -1, timeoutSeconds: Infinity } }).generation,

@@ -1,6 +1,7 @@
 import { moduleAdapter } from '../lib/ask.ts'
 import { AIError } from '../engine/AIAdapter.ts'
 import { buildCallMessages, pickPreset } from '../engine/prompt.ts'
+import { chatMemoryNote } from '../lib/chatMemory.ts'
 import { minimaxSpeak, normalizeMinimaxKey, resolveCharacterVoiceId } from '../engine/minimax.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { decryptSecret } from '../storage/crypto.ts'
@@ -55,6 +56,7 @@ export async function runCallTurn(input: {
   try {
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
     const built = buildCallMessages({
+      note: await chatMemoryNote(input.namespace, input.chat.id),
       character: input.character,
       identity: input.identity,
       preset,
