@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
-import { AIAdapter } from '../src/engine/AIAdapter.ts'
+import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
 import { buildStoryPrompt, DEFAULT_CONFIG, focusChars, generate, generateStoryReply, mergeStoryContinuation, newSave, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
 import { runStoryGeneration } from '../src/domain/storyRunner.ts'
-import { writeWorld } from '../src/lib/worldbook.ts'
+import { storyWorldText, writeWorld } from '../src/lib/worldbook.ts'
 import type { AIMessage, Character } from '../src/types/index.ts'
 
 const snap = await storage.boot(), identity = snap.identities[0]!, ns = identity.namespace
@@ -29,9 +29,16 @@ const prompt = buildStoryPrompt({ mode: 'offline', save: { ...cast, summaries: [
 for (const char of chars) {
   assert(prompt[0]!.content.includes(`${char.name}独有的身份结尾`))
   assert(prompt[0]!.content.includes(`${char.name}独有的性格结尾`))
-  assert(prompt[0]!.content.includes(`${char.name}本人指令`))
-  assert(prompt[0]!.content.includes(`${char.name}后置设定`))
+  assert(!prompt[0]!.content.includes(`${char.name}本人指令`), 'card control instructions are opt-in')
+  assert(!prompt[0]!.content.includes(`${char.name}后置设定`))
 }
+const expanded = buildStoryPrompt({ mode: 'offline', save: cast, chars, identity, preset: null, config: { ...DEFAULT_CONFIG, includeCardExtras: true } })
+for (const char of chars) assert(expanded[0]!.content.includes(`${char.name}本人指令`) && expanded[0]!.content.includes(`${char.name}后置设定`))
+const oldHistory = newSave('旧记录', { lines: Array.from({ length: 40 }, (_, i) => ({ id: `history-${i}`, role: i % 2 ? 'assistant' as const : 'user' as const, content: i < 36 ? '不应超出窗口的旧原文' : `最新剧情${i}`, createdAt: i, participantIds: ['a'] })) })
+const bounded = buildStoryPrompt({ mode: 'offline', save: oldHistory, chars, identity, preset: null, config: { ...DEFAULT_CONFIG, keepRounds: 2 } })
+assert.equal(bounded.length, 5, 'keepRounds applies before summaries exist too')
+assert(!bounded.some(row => row.content.includes('不应超出窗口的旧原文')))
+assert.equal(oldHistory.lines.length, 40, 'limiting transmitted history never deletes saved history')
 assert(prompt[0]!.content.includes('最新约定尚未完成'))
 assert(prompt.some(m => m.content.includes('阿白收好了雨伞')))
 const original = AIAdapter.fromStored
@@ -61,8 +68,26 @@ try {
   assert(requests[0]!.messages[0]!.content.includes('阿墨专属世界书'))
   assert(requests[0]!.messages[0]!.content.includes('阿白专属世界书'))
   assert(!requests[0]!.messages[0]!.content.includes('阿青专属世界书'))
+  await writeWorld(ns, [{ id: 'unrelated', title: '未触发条目', charId: b.id, keys: '旅行，机场', content: '不应该自动发送的无关条目', enabled: true, updatedAt: 1 }, { id: 'related', title: '茶馆条目', charId: b.id, keys: '茶馆', content: '应该发送的相关条目', enabled: true, updatedAt: 1 }])
+  const world = await storyWorldText(ns, [b], '我们在茶馆坐下')
+  assert(world.includes('应该发送的相关条目'))
+  assert(!world.includes('不应该自动发送的无关条目'))
   answer = '阿青已经付款，阿白的约定尚未完成。'
   await writeSummary(cast, 'small', 12)
   assert(requests.at(-1)!.messages[0]!.content.includes('已完成事件'))
 } finally { AIAdapter.fromStored = original }
+const fetchBefore = globalThis.fetch
+try {
+  const adapter = new AIAdapter({ endpoint: 'https://test.invalid/v1', model: 'test', key: 'test-only' })
+  for (const [status, data] of [
+    [400, { error: { message: 'request blocked by Gemini API: PROHIBITED_CONTENT', type: 'invalid_request_error' } }],
+    [200, { promptFeedback: { blockReason: 'PROHIBITED_CONTENT' } }],
+    [200, { choices: [{ finish_reason: 'content_filter', message: { content: '' } }] }],
+  ] as const) {
+    let calls = 0
+    globalThis.fetch = async () => { calls++; return new Response(JSON.stringify(data), { status }) }
+    await assert.rejects(adapter.complete({ messages: [{ role: 'user', content: '测试请求' }] }), error => error instanceof AIError && !error.retryable && error.message.includes('内容审核拦截'))
+    assert.equal(calls, 1, 'policy blocks must not retry alternative parameters or empty-body recovery')
+  }
+} finally { globalThis.fetch = fetchBefore }
 console.log('Story continuity checks passed: cast persistence, alias isolation, complete cards at API boundary, scene endings, summaries, worldbook ownership and continuation deduplication')

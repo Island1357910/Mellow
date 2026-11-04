@@ -340,6 +340,12 @@ export class AIAdapter {
         const detail = errorDetail(data.error) || '接口返回了错误，未生成正文。'
         throw new AIError(apiErrorText(detail), 'api', false, detail)
       }
+      const feedback = data as { promptFeedback?: { blockReason?: string }; choices?: Array<{ finish_reason?: string }> } | null
+      const blocked = feedback?.promptFeedback?.blockReason
+      if ((blocked && blocked !== 'BLOCK_REASON_UNSPECIFIED') || feedback?.choices?.[0]?.finish_reason === 'content_filter') {
+        const detail = `content_filter${blocked ? `: ${blocked}` : ''}`
+        throw new AIError(apiErrorText(detail), 'api', false, detail)
+      }
       const rawContent = extractContent(data)
       const content = stripReasoning(rawContent)
       const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null

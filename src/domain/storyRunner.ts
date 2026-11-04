@@ -3,7 +3,7 @@ import { smsBridgeForStory } from '../lib/channelBridge.ts'
 import { jiushiLetterBridgeForStory } from '../lib/jiushiBridge.ts'
 import { isJiushiCharacter, jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
 import { jiushiWorldNs } from '../lib/jiushiPhone.ts'
-import { enabledWorldText, readWorld } from '../lib/worldbook.ts'
+import { enabledWorldText, storyWorldText } from '../lib/worldbook.ts'
 import {
   buildStoryPrompt,
   focusChars,
@@ -47,8 +47,7 @@ export async function runStoryGeneration(input: {
   const worldNs = input.mode === 'jiushi' ? jiushiWorldNs(phoneNs) : phoneNs
   const focus = input.mode === 'offline' ? focusChars(chars, save, input.nudge) : []
   const world = input.mode === 'offline'
-    ? (await readWorld(worldNs)).filter(entry => entry.enabled && entry.content.trim() && (!entry.charId || focus.some(person => person.id === entry.charId)))
-      .map(entry => `【${entry.charId ? chars.find(person => person.id === entry.charId)?.name ?? entry.charId : '公共世界'} · ${entry.title || '设定'}】${entry.content.trim()}`).join('\n')
+    ? await storyWorldText(worldNs, focus, `${save.lines.slice(-6).map(item => item.content).join('\n')}\n${input.nudge ?? ''}`)
     : await enabledWorldText(worldNs, save.charId ?? chars[0]?.id)
   const jiushiFocus = input.mode === 'jiushi'
     ? chars.filter(isJiushiCharacter).slice(0, 6)

@@ -96,6 +96,8 @@ export interface StoryConfig {
   statusPrompt: string
   /** 最近多少轮保留原文，更早的只读摘要 */
   keepRounds: number
+  /** 线下额外发送开场、示例对白和角色卡指令；默认不扩大这部分请求范围。 */
+  includeCardExtras: boolean
   autoSummary: boolean
   /** 攒够多少轮旧对话自动写一条小总结 */
   summaryEvery: number
@@ -304,6 +306,7 @@ export const DEFAULT_CONFIG: StoryConfig = {
   renderHtml: true,
   statusPrompt: '',
   keepRounds: 12,
+  includeCardExtras: false,
   autoSummary: true,
   summaryEvery: 8,
   replyCharsMin: 800,
@@ -539,12 +542,12 @@ function promptLine(text: string, limit = 0): string {
   return `${plain.slice(0, head)}\n（中段省略，以下为本段结尾）\n${plain.slice(-(limit - head))}`
 }
 
-function card(character: Character): string {
+function card(character: Character, extras = true): string {
   const parts = [`【${character.name} · 角色ID：${character.id}】${character.nickname ? `（昵称 ${character.nickname}，与 ${character.name} 是同一人）` : ''}`]
   if (character.description.trim()) parts.push(character.description.trim())
   if (character.personality.trim()) parts.push(`性格：${character.personality.trim()}`)
-  if (character.scenario.trim()) parts.push(`背景情境（不是每轮必须重演的开场）：${character.scenario.trim()}`)
-  if (character.mesExample.trim()) parts.push(`说话的样子（仅供参考，不是本次已经发生的对话，不照抄）：\n${character.mesExample.trim()}`)
+  if (extras && character.scenario.trim()) parts.push(`背景情境（不是每轮必须重演的开场）：${character.scenario.trim()}`)
+  if (extras && character.mesExample.trim()) parts.push(`说话的样子（仅供参考，不是本次已经发生的对话，不照抄）：\n${character.mesExample.trim()}`)
   return parts.join('\n')
 }
 
@@ -586,7 +589,8 @@ export function focusChars(chars: Character[], save: StorySave, extra = ''): Cha
     const people = namedStoryChars(chars, text)
     if (item.role === 'user' && people.length) {
       const changedScene = /(?:去找|去见|来到|走进|只剩|单独|转场|场景切换|和.{0,30}(?:去|回))/.test(text)
-      cast = changedScene || !cast.length ? people : [...new Map([...cast, ...people].map(person => [person.id, person])).values()]
+      const entering = /(?:来了|来啦|进来|进门|走来|到场|加入|邀请|叫.{0,20}来|一起坐)/.test(text)
+      cast = changedScene || !cast.length ? people : entering ? [...new Map([...cast, ...people].map(person => [person.id, person])).values()] : cast
     } else if (!cast.length) cast = people
     if (item.role === 'user') cast = cast.filter(person => {
       const escaped = person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -607,8 +611,8 @@ function memoryBlock(save: StorySave): { text: string; covered: number } {
 }
 
 export function contextStart(save: StorySave, keepRounds: number): number {
-  const { covered } = memoryBlock(save)
-  return Math.min(covered, Math.max(0, save.lines.length - keepRounds * 2))
+  const rounds = Number.isFinite(keepRounds) ? Math.max(1, Math.floor(keepRounds)) : DEFAULT_CONFIG.keepRounds
+  return Math.max(0, save.lines.length - rounds * 2)
 }
 
 const OFFLINE_RULE = `这是线下：面对面的真实场景，不是手机聊天。
@@ -698,9 +702,9 @@ export function buildStoryPrompt(input: {
     const roster = chars.map((item) => `${item.name}${item.nickname ? `（昵称 ${item.nickname}）` : ''} · ID：${item.id}`)
     if (roster.length) systems.push(`可供玩家寻找的人物名录（不代表已经在场，不要自动加入现场）：\n${roster.join('\n')}`)
     const focus = focusChars(chars, save, input.nudge)
-    if (focus.length) systems.push(`此刻相关的人的完整设定：\n\n${focus.map(card).join('\n\n')}`)
+    if (focus.length) systems.push(`此刻相关的人的完整人物描述与性格：\n\n${focus.map(person => card(person, config.includeCardExtras)).join('\n\n')}`)
     if (focus.length) systems.push(`【本幕人物对应】\n${focus.map(person => `${person.id} = ${person.name}${person.nickname ? ` = ${person.nickname}` : ''}`).join('\n')}\n上述设定各归本人，不把一个人的习惯、关系或秘密挪给另一个人。未明确入场的人不自动出现。`)
-    for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fill(person.systemPrompt, person.name, userName)}`)
+    if (config.includeCardExtras) for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fill(person.systemPrompt, person.name, userName)}`)
     books = focus.map((item) => item.characterBook).filter((item): item is Lorebook => Boolean(item))
   } else {
     const picked = chars.filter((item) => (save.bookCharIds ?? []).includes(item.id)).map((item) => item.characterBook)
@@ -714,7 +718,7 @@ export function buildStoryPrompt(input: {
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
-  if (mode === 'offline') for (const person of focusChars(chars, save, input.nudge)) {
+  if (mode === 'offline' && config.includeCardExtras) for (const person of focusChars(chars, save, input.nudge)) {
     if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())

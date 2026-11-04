@@ -4,6 +4,7 @@ import { ChevronDown, Download, Image, Plus, Trash2, Upload } from 'lucide-react
 import { useState, type ReactNode } from 'react'
 import {
   applyRegex,
+  contextStart,
   FONT_STACK,
   line,
   lorebookFromUnknown,
@@ -294,11 +295,11 @@ function MemoryTab(props: TabProps) {
       setBusy(null)
     }
   }
-  const covered = Math.max(0, ...save.summaries.map((item) => item.upTo))
-  const rawFrom = Math.min(covered, Math.max(0, save.lines.length - config.keepRounds * 2))
+  const rawFrom = contextStart(save, config.keepRounds)
   return (
     <>
       <Block title="上下文">
+        {props.mode === 'offline' && <SwitchRow label="发送角色卡附加内容" hint="额外发送背景开场、示例对白、卡内系统指令和后置指令。默认关闭；人物描述和性格始终保留。" on={config.includeCardExtras} onClick={() => props.onConfig({ includeCardExtras: !config.includeCardExtras })} />}
         <div className="grid grid-cols-2 gap-2">
           <Num label="最近几轮保留原文" value={config.keepRounds} min={1} max={100} onChange={(keepRounds) => props.onConfig({ keepRounds })} />
         </div>
@@ -307,7 +308,7 @@ function MemoryTab(props: TabProps) {
           <Num label="正文字数上限" value={config.replyCharsMax} min={50} step={10} onChange={(replyCharsMax) => props.onConfig({ replyCharsMax, replyCharsMin: Math.min(replyCharsMax, config.replyCharsMin) })} />
         </div>
         <p className="mt-2 text-[11px] leading-5" style={dim}>字数不设上限，按你填的范围写。很长的回复会分成几段续写。</p>
-        <p className="mt-3 text-[11px] leading-5" style={dim}>超出 {config.keepRounds} 轮的旧剧情，只把摘要发给模型。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段之后的原文，共 {save.lines.length - rawFrom} 段。</p>
+        <p className="mt-3 text-[11px] leading-5" style={dim}>发送最近 {config.keepRounds} 轮原文及已有摘要；更早的原文仍保存在本机，未整理的部分可点「现在写小总结」后使用。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段起的原文，共 {save.lines.length - rawFrom} 段。</p>
       </Block>
       <Block title="自动总结">{save.summaryError && <PillNote tone="butter">上次总结失败：{save.summaryError}。可现在重试，或等待下一轮回复。</PillNote>}
         <SwitchRow label="自动写小总结" hint="按新生成的回复轮数触发，与保留原文轮数分开计算；失败会保留正文并在下轮重试" on={config.autoSummary} onClick={() => props.onConfig({ autoSummary: !config.autoSummary })} />

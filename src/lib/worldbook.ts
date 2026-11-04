@@ -51,6 +51,17 @@ export async function enabledWorldText(namespace: string, charId?: string, smsWo
   return `这个身份启用的世界书，用到才写，不要逐条复述：\n${body.slice(0, 1800)}`
 }
 
+/** Offline retrieval follows both ownership and configured keywords, rather than sending every entry. */
+export async function storyWorldText(namespace: string, people: Character[], recent: string): Promise<string> {
+  const ids = new Set(people.map(person => person.id))
+  const context = `${recent}\n${people.map(person => `${person.name} ${person.nickname ?? ''}`).join('\n')}`.toLowerCase()
+  return (await readWorld(namespace)).filter(entry => {
+    if (!entry.enabled || !entry.content.trim() || (entry.charId && !ids.has(entry.charId))) return false
+    const keys = (entry.keys ?? '').split(/[,，、;；|\n]+/).map(key => key.trim().toLowerCase()).filter(Boolean)
+    return !keys.length || keys.some(key => context.includes(key))
+  }).map(entry => `【${entry.charId ? people.find(person => person.id === entry.charId)?.name ?? entry.charId : '公共世界'} · ${entry.title || '设定'}】${entry.content.trim()}`).join('\n')
+}
+
 export function blankEntry(charId = ''): WorldEntry {
   return { id: uid('lore'), title: '', keys: '', content: '', enabled: true, updatedAt: Date.now(), charId: charId || undefined }
 }
