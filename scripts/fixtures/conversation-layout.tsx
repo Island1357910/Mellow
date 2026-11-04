@@ -13,7 +13,7 @@ if (location.search.includes('legacy')) {
 } else await import('../../src/index.css')
 await useMellow.getState().boot()
 const state = useMellow.getState(), identity = state.identities[0]!, ns = identity.namespace
-const person = { id: 'layout-person', name: '布局测试角色', nickname: '', signature: '聊天与线下排版检查', personality: '温和', description: '', scenario: '', mesExample: '', systemPrompt: '', postHistoryInstructions: '', extensions: {} } as Character
+const person = { id: 'layout-person', name: '布局测试角色', nickname: '', signature: '聊天与线下排版检查', personality: '温和', description: '', scenario: '', mesExample: '', systemPrompt: '', postHistoryInstructions: '', extensions: {}, tags: [], createdAt: 1, updatedAt: 1 } as Character
 await storage.putCharacter(ns, person)
 const chat: Chat = { id: 'layout-chat', kind: 'dm', title: person.name, memberIds: [person.id], lastMessage: '', lastMessageAt: 0, unread: 0, presetId: null, createdAt: 1, updatedAt: 1 }
 await storage.putChat(ns, chat)
