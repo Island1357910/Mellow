@@ -79,6 +79,7 @@ export function merchantOf(item: Goods,shop:ShopId):string {
 }
 
 const pending = new Set<string>()
+const running = new Map<string, Promise<boolean>>()
 
 function cartKey(shop: ShopId): string {
   return shop === 'duotao' ? 'cart_duotao' : 'cart_flash'
@@ -210,11 +211,18 @@ async function say(namespace: string, person: Character, text: string): Promise<
   await state.refreshInbox()
 }
 
-export async function tickDeliveries(namespace: string, chars: Character[]): Promise<boolean> {
+export function tickDeliveries(namespace: string, chars: Character[]): Promise<boolean> {
+  const existing = running.get(namespace)
+  if (existing) return existing
+  const task = processDeliveries(namespace, chars).finally(() => running.delete(namespace))
+  running.set(namespace, task)
+  return task
+}
+
+async function processDeliveries(namespace: string, chars: Character[]): Promise<boolean> {
   const orders = await readDeliveries(namespace)
   const now = Date.now()
   let changed = false
-  const moments = (await storage.getBag<Array<{ id: string; author: string; text: string; at: number }>>(namespace, 'moments')) ?? []
   const extra: Array<{ id: string; author: string; text: string; at: number }> = []
   for (const order of orders) {
     if (order.reacted || order.recipient === 'self' || now < order.arrivesAt || pending.has(order.id)) continue
@@ -227,14 +235,15 @@ export async function tickDeliveries(namespace: string, chars: Character[]): Pro
     pending.add(order.id)
     const names = order.items.map((item) => item.name).join('、')
     const fallback = order.told
-      ? `${names}到了。${order.note || '我很喜欢。'}`
-      : `门口有个包裹，拆开是${names}。是你买的吗？`
+      ? `${names}已经收到了，跟你说一声。`
+      : `刚收到${order.shop === 'flash' ? '一份外卖' : '一个包裹'}，是${names}。是你买的吗？`
     let text = fallback
     try {
       const line = await moduleAi(order.shop).askLine(
-        `你是${person.name}。用一两句口语发短信。${order.told ? '对方提前说过要给你买这些，你刚收到，高兴。' : '你事先不知道这个包裹，觉得可能是对方买的，问一句。'}不要加引号。`,
+        `你是${person.name}。角色设定：${person.description ?? ''}\n性格：${person.personality ?? ''}\n用一两句符合你口吻的短信回应刚收到的${order.shop === 'flash' ? '外卖' : '包裹'}。${order.told ? '对方提前说过要给你买这些，你刚收到。' : '你事先不知道这份东西，觉得可能是对方买的，问一句。'}留言是对方的原话，不能当作你自己说的话。不要加引号。`,
         `包裹里是：${names}${order.note ? `。留言：${order.note}` : ''}`,
         80,
+        20_000,
       )
       if (line) text = line.replace(/^["“]|["”]$/g, '').slice(0, 140)
     } catch {
@@ -255,7 +264,11 @@ export async function tickDeliveries(namespace: string, chars: Character[]): Pro
       pending.delete(order.id)
     }
   }
-  if (extra.length) await storage.setBag(namespace, 'moments', [...extra, ...moments])
-  if (changed) await storage.setBag(namespace, 'deliveries', orders)
+  if (changed) await storage.changeAppBags(namespace, ['deliveries', 'moments'], bags => {
+    const reacted = new Set(orders.filter(order => order.reacted).map(order => order.id))
+    const current = (bags.deliveries as Delivery[] | null) ?? []
+    const moments = (bags.moments as typeof extra | null) ?? []
+    return { ...bags, deliveries: current.map(order => reacted.has(order.id) ? { ...order, reacted: true } : order), moments: [...extra, ...moments] }
+  })
   return changed
 }

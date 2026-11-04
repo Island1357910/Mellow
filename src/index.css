@@ -55,6 +55,27 @@ button {
   width: 100%;
 }
 
+/* Physical dimensions also work in older Android WebViews. Keep chat controls
+   outside flex shrink, and leave room for cutouts in landscape. */
+.conversation-shell { min-width: 0; overflow: hidden; }
+.conversation-shell > header { flex-shrink: 0; }
+.conversation-shell > header > button { flex-shrink: 0; }
+.conversation-shell > .scroll { overflow-x: hidden; overflow-wrap: break-word; }
+.conversation-shell > header,
+.conversation-composer {
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.conversation-composer { flex-shrink: 0; }
+.conversation-shell > .scroll {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
 .wallpaper-photo { display: none; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .device[data-wallpaper="custom"] .wallpaper-photo {
   display: block;

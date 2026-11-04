@@ -52,7 +52,7 @@ export async function runStoryGeneration(input: {
     : []
   const smsBridge =
     input.mode === 'offline'
-      ? await smsBridgeForStory(phoneNs, focus.length ? focus : chars.slice(0, 4))
+      ? await smsBridgeForStory(phoneNs, focus)
       : ''
   const letterBridge =
     input.mode === 'jiushi'
@@ -78,7 +78,10 @@ export async function runStoryGeneration(input: {
     charsMin: config.replyCharsMin,
     charsMax: config.replyCharsMax,
   })
-  let next = await putSave(input.namespace, { ...save, lines: [...save.lines, line('assistant', content)] })
+  const participantIds = focus.map(person => person.id)
+  const lines = save.lines.map((item, index) => input.mode === 'offline' && index === save.lines.length - 1 && item.role === 'user'
+    ? { ...item, participantIds } : item)
+  let next = await putSave(input.namespace, { ...save, lines: [...lines, { ...line('assistant', content), ...(input.mode === 'offline' ? { participantIds } : {}) }] })
   if (needsSummary(next, config)) {
     try {
       next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds, input.mode), summaryError: '' })

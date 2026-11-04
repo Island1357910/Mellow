@@ -116,12 +116,22 @@ export function PhoneShell() {
     const phone = identities.find((item) => item.id === activeIdentityId)
     if (!phone) return
     let stop = false
-    void storage.listModernCharacters(phone.namespace).then(async (chars) => {
-      const changed = await tickDeliveries(phone.namespace, chars)
-      if (!stop && changed) touchData()
-    })
+    const run = () => {
+      if (document.visibilityState === 'hidden') return
+      void storage.listModernCharacters(phone.namespace).then(async (chars) => {
+        const changed = await tickDeliveries(phone.namespace, chars)
+        if (!stop && changed) touchData()
+      }).catch(() => undefined)
+    }
+    run()
+    const timer = window.setInterval(run, 5_000)
+    document.addEventListener('visibilitychange', run)
+    window.addEventListener('focus', run)
     return () => {
       stop = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', run)
+      window.removeEventListener('focus', run)
     }
   }, [ready, locked, identities, activeIdentityId, touchData])
 

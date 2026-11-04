@@ -6,6 +6,7 @@ import cascadeLayers from '@csstools/postcss-cascade-layers'
 import colorMix from '@csstools/postcss-color-mix-function'
 import oklab from '@csstools/postcss-oklab-function'
 import postcss from 'postcss'
+import logical from 'postcss-logical'
 import { defineConfig } from 'vite'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
@@ -28,7 +29,7 @@ export default defineConfig({
       generateBundle: { order: 'post', async handler(_options, bundle) {
         const css = Object.values(bundle).filter(asset => asset.type === 'asset' && asset.fileName.endsWith('.css')).map(asset => asset.type === 'asset' ? String(asset.source) : '').join('\n')
         if (!css) return
-        const compatible = await postcss([cascadeLayers(), colorMix({ preserve: true }), oklab({ preserve: true })]).process(css, { from: undefined })
+        const compatible = await postcss([logical(), cascadeLayers(), colorMix({ preserve: true }), oklab({ preserve: true })]).process(css, { from: undefined })
         this.emitFile({ type: 'asset', fileName: 'compat.css', source: compatible.css })
       } },
     },

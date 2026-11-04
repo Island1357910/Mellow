@@ -64,6 +64,13 @@ console.log(`Compatibility checks passed: ES5 loader/watchdog, ${legacy.length} 
 
 // Old engines discard whole @scope blocks. Inactive decorations must still be hidden.
 const legacyTree = postcss.parse(css)
+for (const [utility, property] of [['.px-4', 'padding-left'], ['.px-4', 'padding-right'], ['.py-3', 'padding-top'], ['.py-3', 'padding-bottom'], ['.mx-auto', 'margin-left']]) {
+  let found = false
+  legacyTree.walkRules(rule => {
+    if (rule.selector.startsWith(utility + ':')) rule.walkDecls(property, () => { found = true })
+  })
+  assert(found, `${utility} must provide physical ${property} for old Android WebViews`)
+}
 legacyTree.walkAtRules('scope', rule => rule.remove())
 for (const selector of ['.apple-atmosphere', '.apple-widget-motifs', '.halloween-widget-motifs', '.winter-motifs']) {
   let hidden = false

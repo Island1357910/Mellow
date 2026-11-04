@@ -255,7 +255,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const backdrop = chat.backgroundImage ? `center / cover no-repeat url(${chat.backgroundImage})` : chat.background || undefined
 
   return (
-    <div className={`sms-shell relative flex h-full min-h-0 flex-col ${scope}`} style={{ background: backdrop }}>
+    <div className={`sms-shell conversation-shell relative flex h-full min-h-0 flex-col ${scope}`} style={{ background: backdrop }}>
       <style>{bubbleSheet(scope, radius, bubble, chat.bubbleCss)}</style>
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         {selectMode ? (
@@ -347,7 +347,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         ) : null}
         {!selectMode ? (
         <form
-          className="flex items-center gap-1.5 px-3 pt-1 transition-[padding]"
+          className="conversation-composer flex items-center gap-1.5 px-3 pt-1 transition-[padding]"
           style={{ paddingBottom: panel ? 8 : 56 }}
           onSubmit={(event) => {
             event.preventDefault()

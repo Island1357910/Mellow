@@ -1,4 +1,4 @@
-import { loadConfig, loadSave, type StorySave } from '../engine/story.ts'
+import { listSaves, loadConfig, loadSave, type StorySave } from '../engine/story.ts'
 import { messagePreview } from './messagePreview.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character } from '../types/index.ts'
@@ -26,11 +26,11 @@ function mentioned(text: string, character: Character): boolean {
 
 /** 写在短信最后一条玩家消息后面，压过短信旧记录的惯性。 */
 export const SMS_RELATION_LOCK =
-  '（不要写进回复：关系和情绪以线下已经发生的结果为准，不允许把这条短信的旧记录当成最重要的依据。玩家刚刚这一句如果是新的，要接住，但不要延续已经在线下结束的争吵、冷战或翻旧账。）'
+  '（不要写进回复：接续你亲历的线下与短信经历，同一事件以时间更晚的结果为准。接住玩家的新消息，不要退回已经结束的冲突，也不要把见面误当作双方现在仍在一起。）'
 
 const SMS_PRIORITY = `【优先级·高于上面全部短信记录】
-线下见面已经发生的事，比这条短信里的旧聊天更重要。不允许把短信上下文设成最重要的依据。
-短信记录只用来接玩家刚刚发来的这一句，不能拿来推翻线下的结果。
+短信和线下都是连续的真实经历，同一事件以时间更晚的结果为准，不能固定偏向任何一个渠道。
+下面只提供你自己参与的线下片段；没有提供的其他角色私事不是你的记忆。
 若线下已经吵过又和好、已经解释、已经约定、情绪已经缓下来，现在必须按线下最新的关系和情绪回短信。
 禁止继续冷战、翻旧账、装作还在生气、装作线下没发生。
 同一件事两边都写过时，以时间更晚的结果为准：线下更新的和好，不能被更早的短信怒气盖回去。
@@ -38,8 +38,8 @@ const SMS_PRIORITY = `【优先级·高于上面全部短信记录】
 若下面的现场里没有你，不要假装你在场，也不要拿别人的事改你们的关系；有你，或以你的名义发生过，就以这里为准。`
 
 const OFFLINE_PRIORITY = `【优先级·高于上面全部线下记录】
-手机短信里已经发生的事，比更早的线下剧情更重要。不允许把线下上下文设成最重要的依据。
-线下记录只用来接眼前这一幕的场景和动作，不能拿来推翻短信里的结果。
+手机短信和线下剧情是连续的真实经历，同一事件以时间更晚的结果为准，不能固定偏向任何一个渠道。
+每个角色只能知道自己的私聊以及亲历的线下场景，不能互相读取私聊。
 若短信里已经吵过又和好、已经解释、已经约定、情绪已经缓下来，现在必须按短信最新的关系和情绪往下写。
 禁止继续吵、翻旧账、装作还在生气、装作短信没说过。
 同一件事两边都写过时，以时间更晚的结果为准：短信更新的和好，不能被更早的线下怒气盖回去；线下末尾如果已经比短信更新，就接住线下末尾，不要退回短信里更早的吵架。
@@ -52,47 +52,55 @@ export async function smsBridgeForStory(phoneNamespace: string, chars: Character
   const chats = (await storage.listChats(phoneNamespace)).filter(
     (chat) => chat.kind === 'dm' && chat.memberIds.some((id) => ids.has(id)),
   )
-  const bits: string[] = []
+  const bits: Array<{ at: number; text: string }> = []
   for (const chat of chats) {
     const char = chars.find((item) => chat.memberIds.includes(item.id))
     const rows = (await storage.listMessages(phoneNamespace, chat.id)).filter(
       (item) => !item.hidden && item.kind !== 'system',
     )
-    for (const row of rows.slice(-20)) {
+    for (const row of rows.slice(-10)) {
       const who = row.role === 'user' ? '对方（玩家）' : char?.nickname || char?.name || '角色'
-      bits.push(`[${stamp(row.createdAt)}] ${who}：${messagePreview(row.content, row.kind).slice(0, 320)}`)
+      bits.push({ at: row.createdAt, text: `[${stamp(row.createdAt)} · ${char?.name ?? '角色'} 的私聊，仅本人知情] ${who}：${messagePreview(row.content, row.kind).slice(0, 320)}` })
     }
   }
   if (bits.length === 0) return ''
-  return `${OFFLINE_PRIORITY}\n【手机短信·必须接上】这些是手机里已经发生的对话。约见面、让来找、说过的话、吵完又和好，线下都要接着，不能装作不知道。\n${bits.join('\n')}`
+  const recent = bits.sort((a, b) => a.at - b.at).slice(-20).map(item => item.text).join('\n')
+  return `${OFFLINE_PRIORITY}\n【手机短信·必须接上】每段私聊只属于标注的角色，其他在场角色不自动知道。所有记录按真实发生时间排列，同一事件以较晚结果为准；线下当前的新动作和已经发生的后续仍有效。\n${recent}`
 }
 
 function offlineExcerpt(save: StorySave, character: Character): string {
-  const summaries = [...save.summaries].slice(-3)
-  const summaryText = summaries
-    .map((item) => `[${stamp(item.createdAt)}] ${item.kind === 'big' ? '前情' : '近况'}：${item.text.trim().slice(0, 500)}`)
-    .join('\n')
-  const lines = save.lines.slice(-16)
+  // Old summaries contain everyone's experiences, so never broadcast them to a DM.
+  let present = false
+  const lines = save.lines.filter(line => {
+    if (line.participantIds) present = line.participantIds.includes(character.id)
+    else if (line.role === 'user') {
+      // Legacy scenes have no participant metadata. Only expose explicitly named
+      // passages, rather than guessing that every continuation belongs to this person.
+      present = mentioned(stripHtml(line.content), character)
+    } else if (mentioned(stripHtml(line.content), character)) present = true
+    return present
+  }).slice(-12)
+  if (!lines.length) return ''
   const body = lines
     .map((line) => {
       const who = line.role === 'user' ? '对方（玩家）' : '现场'
-      return `[${stamp(line.createdAt)}] ${who}：${stripHtml(line.content).slice(0, 420)}`
+      const text = stripHtml(line.content)
+      return `[${stamp(line.createdAt)}] ${who}：${text.length > 650 ? `${text.slice(0, 250)}…${text.slice(-400)}` : text}`
     })
     .join('\n')
-  const haystack = `${summaryText}\n${body}`
-  const present = mentioned(haystack, character)
-  const head = present
-    ? `${character.name} 在这段线下里出现过，或这段就是刚和对方一起发生的。关系以这里的最新结果为准。`
-    : `若下面没有 ${character.name}，不要假装在场。`
-  return [head, summaryText, body].filter(Boolean).join('\n')
+  return `${character.name} 参与的线下经历（不代表你们此刻仍在同一地点）：\n${body}`
 }
 
 /** 短信读线下：线下里的关系结果高于短信旧记录。 */
 export async function storyBridgeForSms(phoneNamespace: string, character: Character): Promise<string> {
   const config = await loadConfig(phoneNamespace)
-  const saveId = config.activeSaveId
+  const saveId = config.activeSaveId || (await listSaves(phoneNamespace))[0]?.id
   if (!saveId) return ''
-  const save = await loadSave(phoneNamespace, saveId)
+  let save = await loadSave(phoneNamespace, saveId)
+  if (!save) {
+    const latest = (await listSaves(phoneNamespace))[0]
+    if (latest) save = await loadSave(phoneNamespace, latest.id)
+  }
   if (!save || save.lines.length === 0) return ''
   const text = offlineExcerpt(save, character)
   if (!text.trim()) return ''

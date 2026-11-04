@@ -83,6 +83,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
         if (!current && rows[0]) current = await loadSave(namespace, rows[0].id)
         if (!current) current = await putSave(namespace, newSave('存档 1'))
         nextConfig.activeSaveId = current.id
+        await saveConfig(namespace, nextConfig)
       }
       if (!alive) return
       setChars(people)
@@ -357,7 +358,7 @@ function StoryView(props: {
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
 
   return (
-    <div className={sc('shell', 'sms-shell relative flex h-full min-h-0 flex-col')} style={{ ...candy, background: backdrop }}>
+    <div className={sc('shell', 'sms-shell conversation-shell relative flex h-full min-h-0 flex-col')} style={{ ...candy, background: backdrop }}>
       {reading.customCss.trim() ? <style>{reading.customCss}</style> : null}
       <header className={sc('header', 'flex items-center gap-2 px-3 pb-2 pt-12')}>
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}>
@@ -445,7 +446,7 @@ function StoryView(props: {
       </div>
 
       <form
-        className={sc('composer', 'flex items-end gap-1.5 px-3 pb-14 pt-1')}
+        className={sc('composer', 'conversation-composer flex shrink-0 items-end gap-1.5 px-3 pb-14 pt-1')}
         onSubmit={(event) => {
           event.preventDefault()
           void send()

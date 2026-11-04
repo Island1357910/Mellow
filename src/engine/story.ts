@@ -12,6 +12,8 @@ export interface StoryLine {
   role: 'user' | 'assistant'
   content: string
   createdAt: number
+  /** 本段在场角色，供主线短信读取；旧存档按场景中的明确姓名推断。 */
+  participantIds?: string[]
 }
 
 export interface StorySummary {
@@ -550,8 +552,15 @@ function fill(text: string, charName: string, userName: string): string {
 
 /** 线下：最近几条里被提到的角色，就把他们的完整设定连上。 */
 export function focusChars(chars: Character[], save: StorySave, extra = ''): Character[] {
-  const recent = `${save.lines.slice(-6).map((item) => item.content).join('\n')}\n${extra}`
-  return chars.filter((item) => [item.name, item.nickname, item.remark].some((name) => name && name.trim().length > 0 && recent.includes(name.trim())))
+  const named = (text: string) => chars.filter(item => [item.name, item.nickname, item.remark].some(name => name?.trim() && text.includes(name.trim())))
+  const requested = named(extra)
+  if (requested.length) return requested
+  for (const item of [...save.lines].reverse()) {
+    if (item.participantIds?.length) return chars.filter(person => item.participantIds!.includes(person.id))
+    const people = named(item.content)
+    if (people.length) return people
+  }
+  return []
 }
 
 function memoryBlock(save: StorySave): { text: string; covered: number } {
@@ -669,7 +678,7 @@ export function buildStoryPrompt(input: {
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
-  if (mode === 'offline' && input.smsBridge?.trim()) systems.push(clipTail(input.smsBridge, 1200))
+  if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
 
   const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
   const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focusChars(chars, save).flatMap(cardRegex)) : [])]
@@ -682,7 +691,7 @@ export function buildStoryPrompt(input: {
   if (mode === 'offline' && input.smsBridge?.trim()) {
     const last = messages[messages.length - 1]
     if (last?.role === 'user') {
-      last.content = `${last.content}\n\n（不要写进正文：关系和情绪以手机短信里已经发生的结果为准，不允许把更早的线下记录当成最重要的依据。玩家刚刚这一下如果是新的，要接住，但不要延续已经在短信里结束的争吵、冷战或翻旧账。）`
+      last.content = `${last.content}\n\n（不要写进正文：接续各角色自己知道的短信与线下经历，同一事件以时间较晚的结果为准。玩家刚刚的新动作仍要接住，不要退回已经结束的冲突，也不要共享其他人的私聊。）`
     }
   }
   return messages
