@@ -1,0 +1,50 @@
+name: Publish verified signed APK 1.1.11
+on:
+  push:
+    branches: ['codex/release-upload-1-1-11']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Reassemble and verify the locally signed APK
+        run: node .release-upload/assemble.mjs
+      - run: npm ci
+      - name: Build the matching website
+        run: npm run build
+        env:
+          BASE_PATH: /
+          BUILD_ID: web-1.1.11-4b7a404
+      - name: Upload verified signed release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl --fail-with-body --retry 2 --connect-timeout 20 --max-time 180 -H "Authorization: Bearer $GH_TOKEN" -H 'Content-Type: application/vnd.android.package-archive' -H 'Expect:' --data-binary @Mellow-1.1.11.apk 'https://uploads.github.com/repos/Island1357910/Mellow/releases/433535113/assets?name=Mellow-1.1.11.apk' -o uploaded-asset.json
+          node -e "const fs=require('fs'),a=JSON.parse(fs.readFileSync('uploaded-asset.json'));if(a.size!==15283120||a.digest!=='sha256:83e8f6b53a54d487f5cf03e7ca69b72de745936ec8b477512a4f584c8d452e78')throw Error('Uploaded APK digest mismatch');console.log('Signed release asset digest verified')"
+          curl --fail-with-body --retry 2 --connect-timeout 20 --max-time 60 -H "Authorization: Bearer $GH_TOKEN" -H 'Content-Type: text/plain' --data-binary @Mellow-1.1.11.sha256.txt 'https://uploads.github.com/repos/Island1357910/Mellow/releases/433535113/assets?name=Mellow-1.1.11.sha256.txt' -o uploaded-checksum.json
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: website
+      - name: Publish website and official APK mirror
+        run: |
+          cp -R dist/. website/
+          cp Mellow-1.1.11.apk Mellow-1.1.11.sha256.txt website/downloads/
+          echo mymellow.top > website/CNAME
+          cd website
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Publish Mellow 1.1.11 group memory fixes, winter themes and verified APK'
+          git push origin HEAD:gh-pages
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --method PATCH repos/Island1357910/Mellow/releases/433535113 --input .release-upload/release.json --jq '{html_url,draft}'
