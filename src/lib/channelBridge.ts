@@ -45,8 +45,7 @@ const OFFLINE_PRIORITY = `【优先级·高于上面全部线下记录】
 同一件事两边都写过时，以时间更晚的结果为准：短信更新的和好，不能被更早的线下怒气盖回去；线下末尾如果已经比短信更新，就接住线下末尾，不要退回短信里更早的吵架。
 只有玩家在线下刚刚做出、且短信里还没发生过的事，才按眼前这一幕推进。`
 
-/** 线下读手机：短信里的关系结果高于线下旧记录。 */
-export async function smsBridgeForStory(phoneNamespace: string, chars: Character[]): Promise<string> {
+export async function smsFacts(phoneNamespace: string, chars: Character[]): Promise<string> {
   if (chars.length === 0) return ''
   const ids = new Set(chars.map((item) => item.id))
   const chats = (await storage.listChats(phoneNamespace)).filter(
@@ -64,7 +63,13 @@ export async function smsBridgeForStory(phoneNamespace: string, chars: Character
     }
   }
   if (bits.length === 0) return ''
-  const recent = bits.sort((a, b) => a.at - b.at).slice(-20).map(item => item.text).join('\n')
+  return bits.sort((a, b) => a.at - b.at).slice(-20).map((item) => item.text).join('\n')
+}
+
+/** 线下读手机：短信里的关系结果高于线下旧记录。 */
+export async function smsBridgeForStory(phoneNamespace: string, chars: Character[]): Promise<string> {
+  const recent = await smsFacts(phoneNamespace, chars)
+  if (!recent) return ''
   return `${OFFLINE_PRIORITY}\n【手机短信·必须接上】每段私聊只属于标注的角色，其他在场角色不自动知道。所有记录按真实发生时间排列，同一事件以较晚结果为准；线下当前的新动作和已经发生的后续仍有效。\n${recent}`
 }
 
@@ -91,18 +96,25 @@ function offlineExcerpt(save: StorySave, character: Character): string {
   return `${character.name} 参与的线下经历（不代表你们此刻仍在同一地点）：\n${body}`
 }
 
-/** 短信读线下：线下里的关系结果高于短信旧记录。 */
-export async function storyBridgeForSms(phoneNamespace: string, character: Character): Promise<string> {
+export async function activeOfflineSave(phoneNamespace: string) {
   const config = await loadConfig(phoneNamespace)
   const saveId = config.activeSaveId || (await listSaves(phoneNamespace))[0]?.id
-  if (!saveId) return ''
-  let save = await loadSave(phoneNamespace, saveId)
-  if (!save) {
-    const latest = (await listSaves(phoneNamespace))[0]
-    if (latest) save = await loadSave(phoneNamespace, latest.id)
-  }
+  if (!saveId) return null
+  const save = await loadSave(phoneNamespace, saveId)
+  if (save) return save
+  const latest = (await listSaves(phoneNamespace))[0]
+  return latest ? loadSave(phoneNamespace, latest.id) : null
+}
+
+export function offlineFacts(save: StorySave, character: Character): string {
+  return offlineExcerpt(save, character)
+}
+
+/** 短信读线下：线下里的关系结果高于短信旧记录。 */
+export async function storyBridgeForSms(phoneNamespace: string, character: Character): Promise<string> {
+  const save = await activeOfflineSave(phoneNamespace)
   if (!save || save.lines.length === 0) return ''
-  const text = offlineExcerpt(save, character)
+  const text = offlineFacts(save, character)
   if (!text.trim()) return ''
   return `${SMS_PRIORITY}\n【线下见面·必须接上】\n${text}`
 }

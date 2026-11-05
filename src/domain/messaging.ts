@@ -20,6 +20,7 @@ import { buildSmsReplySegments, SMS_SPLIT, stripVoicePrefix } from '../lib/smsRe
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
+import { smsSeenHistory } from '../engine/prompt.ts'
 import { useMellow } from '../store/useMellow.ts'
 import { chatMemoryNote, scheduleChatMemory } from '../lib/chatMemory.ts'
 
@@ -200,21 +201,24 @@ function replyNote(chat: Chat): string {
 }
 
 const PROFILE_RULE = `你的头像、个性签名、昵称由你自己做主。只有你真心想改时，才在回复里单独写一行指令（对方看不到指令本身）：
-【换头像】——换成对方在聊天里最近发来的那张图片，比如对方提议用情侣头像并发了图，而你愿意；
+玩家发来的图片按先后编号，图1最早，数字最大的是刚发的那张。玩家说「这张」「刚发的」，就用数字最大的编号；玩家点明第几张，就用那个编号。
+【换头像：图N】——N 必须是你真正想用的那一张。有多张图时不能不写编号，也不能猜另一张。只有一张图时可以只写【换头像】。
 【改签名：新的签名】；
 【改昵称：新的昵称】。
 不想改就不用写，也可以拒绝对方。`
 
 interface ProfileChange {
   avatar: boolean
+  avatarIndex?: number
   signature?: string
   nickname?: string
 }
 
 function takeProfileChange(content: string): { text: string; change: ProfileChange } {
   const change: ProfileChange = { avatar: false }
-  let text = content.replace(/【换头像】/g, () => {
+  let text = content.replace(/【换头像(?:\s*[:：]\s*图?\s*(\d+))?】/g, (_, raw: string | undefined) => {
     change.avatar = true
+    if (raw) change.avatarIndex = Number(raw)
     return ''
   })
   text = text.replace(/【改签名[:：]\s*([^】]*)】/g, (_, value: string) => {
@@ -232,26 +236,37 @@ async function applyProfileChange(namespace: string, character: Character, chatI
   const notes: string[] = []
   const next: Character = { ...character, updatedAt: Date.now() }
   const shown = character.nickname || character.name
+  let changed = false
   if (change.avatar) {
-    const image = [...history].reverse().find((item) => item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:'))
+    const images = smsSeenHistory(history).filter((item) => item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:'))
+    const image = change.avatarIndex ? images[change.avatarIndex - 1] : images.length === 1 ? images[0] : undefined
     if (image) {
       next.avatar = image.content
-      notes.push(`${shown} 换上了你发来的头像`)
+      changed = true
+      notes.push(`${shown} 换上了你发来的${change.avatarIndex ? `图${change.avatarIndex}` : '头像'}`)
+    } else if (change.avatarIndex) {
+      notes.push(`${shown} 想换头像，但没有图${change.avatarIndex}，所以没换`)
+    } else if (images.length > 1) {
+      notes.push(`${shown} 愿意换头像，但这会儿有 ${images.length} 张图，没有写明用哪一张，所以没换`)
+    } else {
+      notes.push(`${shown} 想换头像，但这会儿没有能用的图片`)
     }
   }
   if (change.signature !== undefined && change.signature !== character.signature) {
     next.signature = change.signature
+    changed = true
     notes.push(change.signature ? `${shown} 把签名改成了「${change.signature}」` : `${shown} 清空了签名`)
   }
   if (change.nickname && change.nickname !== shown) {
     next.nickname = change.nickname
+    changed = true
     notes.push(`${shown} 把昵称改成了「${change.nickname}」`)
     for (const chat of await storage.listChats(namespace)) {
       if (chat.kind === 'dm' && chat.memberIds[0] === character.id) await storage.putChat(namespace, { ...chat, title: change.nickname })
     }
   }
   if (notes.length === 0) return notes
-  await storage.putCharacter(namespace, next)
+  if (changed) await storage.putCharacter(namespace, next)
   for (const [index, note] of notes.entries()) {
     await storage.putMessage(namespace, { ...textMessage({ chatId, role: 'system', kind: 'system', content: note, charId: character.id }), createdAt: Date.now() + 20 + index })
   }

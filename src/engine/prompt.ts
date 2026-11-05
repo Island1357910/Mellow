@@ -59,7 +59,7 @@ export function buildSmsMessages(input: {
   triggerNote?: string
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall } = input
-  const history = input.history.filter((item) => item.kind !== 'system').slice(-30)
+  const history = smsSeenHistory(input.history)
   const recent = history
     .slice(-6)
     .map((item) => item.content)
@@ -102,12 +102,15 @@ export function buildSmsMessages(input: {
   systems.push(SCENE_HOLD)
 
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
+  let imageNo = 0
   for (const item of history) {
+    const numbered = item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:') ? ++imageNo : 0
+    const body = numbered ? `（发来一张图片，编号图${numbered}）` : describeMessage(item)
     messages.push({
       role: item.role === 'assistant' && (!input.groupMembers || item.charId === character.id) ? 'assistant' : 'user',
       content: input.groupMembers
-        ? `[发送者：${item.role === 'user' ? identity.name : input.groupMembers.find(member => member.id === item.charId)?.name ?? '未知成员'}；ID：${item.role === 'user' ? identity.id : item.charId ?? '未知'}] ${describeMessage(item)}`
-        : describeMessage(item),
+        ? `[发送者：${item.role === 'user' ? identity.name : input.groupMembers.find(member => member.id === item.charId)?.name ?? '未知成员'}；ID：${item.role === 'user' ? identity.id : item.charId ?? '未知'}] ${body}`
+        : body,
     })
   }
   if (input.priority?.trim()) {
@@ -199,6 +202,10 @@ export function buildCallMessages(input: {
     frequencyPenalty: preset?.data.frequency_penalty ?? 0,
     presencePenalty: preset?.data.presence_penalty ?? 0,
   }
+}
+
+export function smsSeenHistory(history: ChatMessage[]): ChatMessage[] {
+  return history.filter((item) => item.kind !== 'system').slice(-30)
 }
 
 export function describeMessage(item: ChatMessage): string {

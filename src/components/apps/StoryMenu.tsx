@@ -23,6 +23,7 @@ import {
   type StorySave,
 } from '../../engine/story.ts'
 import { downloadJson } from '../../lib/download.ts'
+import { syncOfflineWithSms } from '../../lib/channelSync.ts'
 import { uid } from '../../lib/id.ts'
 import type { Character, Identity } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
@@ -283,7 +284,7 @@ function SavesTab(props: TabProps) {
 
 function MemoryTab(props: TabProps) {
   const { config, save } = props
-  const [busy, setBusy] = useState<'small' | 'big' | null>(null)
+  const [busy, setBusy] = useState<'small' | 'big' | 'sync' | null>(null)
   const write = async (kind: 'small' | 'big') => {
     setBusy(kind)
     try {
@@ -310,6 +311,15 @@ function MemoryTab(props: TabProps) {
         <p className="mt-2 text-[11px] leading-5" style={dim}>字数不设上限，按你填的范围写。很长的回复会分成几段续写。</p>
         <p className="mt-3 text-[11px] leading-5" style={dim}>发送最近 {config.keepRounds} 轮原文及已有摘要；更早的原文仍保存在本机，未整理的部分可点「现在写小总结」后使用。现在发送：{save.summaries.length ? '摘要 + ' : ''}第 {rawFrom + 1} 段起的原文，共 {save.lines.length - rawFrom} 段。</p>
       </Block>
+      {props.mode === 'offline' ? (
+        <Block title="和短信互通">
+          <p className="text-[11px] leading-5" style={dim}>回复时会自动带上另一边的近况。点一下，把当前在场角色的私聊写进这档线下，也把他们亲历的线下写进各自的私聊长期记忆。</p>
+          <button type="button" className="chip chip-lilac mt-3 py-2" disabled={busy !== null} onClick={() => {
+            setBusy('sync')
+            void syncOfflineWithSms(props.namespace, save).then((text) => props.onNote(text)).catch(() => props.onNote('互通没写成，请再试一次')).finally(() => setBusy(null))
+          }}>{busy === 'sync' ? '正在互通…' : '和短信手动互通'}</button>
+        </Block>
+      ) : null}
       <Block title="自动总结">{save.summaryError && <PillNote tone="butter">上次总结失败：{save.summaryError}。可现在重试，或等待下一轮回复。</PillNote>}
         <SwitchRow label="自动写小总结" hint="按新生成的回复轮数触发，与保留原文轮数分开计算；失败会保留正文并在下轮重试" on={config.autoSummary} onClick={() => props.onConfig({ autoSummary: !config.autoSummary })} />
         <div className="mt-1 grid grid-cols-2 gap-2">

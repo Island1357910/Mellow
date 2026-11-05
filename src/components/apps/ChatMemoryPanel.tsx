@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { isAiJobRunning } from '../../engine/aiJobs.ts'
 import { chatMemoryJobKey, normalizeChatMemory, patchChatMemory, pendingChatTurns, readChatMemory, scheduleChatMemory } from '../../lib/chatMemory.ts'
+import { syncChatWithOffline } from '../../lib/channelSync.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { ChatMessage } from '../../types/index.ts'
 import { NumericInput } from '../ui/NumericInput.tsx'
@@ -12,6 +13,7 @@ export function ChatMemoryPanel(props: { namespace: string; chatId: string; mess
   const [loadedAt, setLoadedAt] = useState(Date.now)
   const [draft, setDraft] = useState<string | null>(null)
   const [note, setNote] = useState('')
+  const [syncing, setSyncing] = useState(false)
   useEffect(() => {
     let alive = true
     void readChatMemory(props.namespace, props.chatId).then(value => { if (alive) { setMemory(value); setLoadedAt(Date.now()) } }).catch(() => { if (alive) setNote('长期记忆读取失败，请重新打开会话。') })
@@ -35,6 +37,12 @@ export function ChatMemoryPanel(props: { namespace: string; chatId: string; mess
       <NumericInput className="soft-input mt-1" aria-label="记忆整理轮数" min={1} max={100} value={memory.interval} onValueChange={interval => void update({ interval })}/>
     </label>
     <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>玩家发言后获得角色回复计 1 轮，连发和主动消息不额外计数。待整理 {pending} 轮 · 已整理 {memory.rounds} 轮。历史积压每次按一批整理。</p>
+    {props.group ? null : (
+      <button type="button" className="chip chip-lilac" disabled={syncing} onClick={() => {
+        setSyncing(true)
+        void syncChatWithOffline(props.namespace, props.chatId).then((text) => setNote(text)).catch(() => setNote('互通没写成，请再试一次')).finally(() => setSyncing(false))
+      }}>{syncing ? '正在互通…' : '和线下手动互通'}</button>
+    )}
     <button type="button" className="chip chip-solid" disabled={busy || pending === 0} onClick={() => {
       if (scheduleChatMemory(props.namespace, props.chatId, true)) { setNote('正在整理，退出页面后仍会继续'); useMellow.getState().touchData() }
     }}>{busy ? '正在整理…' : memory.error ? '重试整理' : '立即整理'}</button>

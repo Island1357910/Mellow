@@ -26,6 +26,23 @@ const TAP_MS = 400
 
 type PressPoint = { x: number; y: number; t: number; id: number }
 
+function swallowOpeningClick() {
+  let stop: ((event: Event) => void) | null = null
+  const cleanup = () => {
+    if (stop) window.removeEventListener('click', stop, true)
+    window.removeEventListener('pointerdown', cleanup, true)
+    window.clearTimeout(timer)
+  }
+  stop = (event: Event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    cleanup()
+  }
+  window.addEventListener('click', stop, true)
+  window.addEventListener('pointerdown', cleanup, true)
+  const timer = window.setTimeout(cleanup, 800)
+}
+
 function useLaunchPress(onOpen: () => void, armed: () => boolean, holdClick: () => void) {
   const press = useRef<PressPoint | null>(null)
   const handled = useRef(false)
@@ -43,6 +60,7 @@ function useLaunchPress(onOpen: () => void, armed: () => boolean, holdClick: () 
       handled.current = true
       onOpen()
       holdClick()
+      swallowOpeningClick()
     },
     onClick() {
       if (handled.current) {
