@@ -7,7 +7,7 @@ export const MARKET_LISTINGS: MarketListing[] = [
   { id: 'duotao', name: '多淘', category: 'life', description: '加进购物车再一起结账。可以买给自己，也可以买给某个人。大概两三天到。', status: 'ready' },
   { id: 'flash', name: '闪送', category: 'life', description: '像点一份吃的。进购物车结账，同样要等送达。', status: 'ready' },
   { id: 'huizhen', name: '回针', category: 'social', description: '绑定之后看 TA 愿意打开的应用。右上角是你给 TA 看的权限。', status: 'ready' },
-  { id: 'table', name: '桌游', category: 'fun', description: '海龟汤、剧本杀、你画我猜、你说我猜、狼人杀、UNO、五子棋、象棋。双人或多人都行。', status: 'ready' },
+  { id: 'table', name: '桌游', category: 'fun', description: '海龟汤、你说我猜、谁是卧底、谁是瞎掰王、狼人杀、UNO、五子棋、象棋。题库更全，双人或多人都行。', status: 'ready' },
   { id: 'pet', name: '宠物日记', category: 'life', description: '喂一喂、玩一玩，把家里的小动物记下来。', status: 'ready' },
   { id: 'plant', name: '植物管家', category: 'life', description: '浇水、发蔫、被忘记。', status: 'ready' },
   { id: 'body', name: '身体记录', category: 'life', description: '睡觉、吃饭、身体。关心的人以后会问。', status: 'ready' },

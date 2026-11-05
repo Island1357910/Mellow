@@ -13,6 +13,7 @@ import { candyStyle } from '../../lib/candy.ts'
 import { aiMove as goAi, emptyGrid, winner, type Grid, type Stone } from '../../lib/gomoku.ts'
 import { aiMove as chessAi, applyMove, legalMoves, PIECE_NAME, setupBoard, winnerOf, type Board } from '../../lib/xiangqi.ts'
 import { aiChoice, canPlayFromHand, drawForTurn, freshMatch, playCard, topCard, UNO_COLOR, UNO_LABEL, type UnoCard, type UnoColor, type UnoMatch } from '../../lib/uno.ts'
+import { BLUFFS, SAYS, SOUPS, SPY_PAIRS } from '../../data/tableDecks.ts'
 import { nextSeat, pickAt, shuffle } from '../../lib/tableTurn.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
@@ -26,6 +27,8 @@ const { askLine } = moduleAi('table')
 const GAMES = [
   { id: 'soup', name: '海龟汤', blurb: '只问是或不是', min: 2, max: 2, emoji: '🐢', tint: '#D7E7F8', accent: '#7FB8E0' },
   { id: 'say', name: '你说我猜', blurb: '用话说，别用那个词', min: 2, max: 4, emoji: '💬', tint: '#F8E6C0', accent: '#E9B949' },
+  { id: 'spy', name: '谁是卧底', blurb: '词很像，别说破', min: 4, max: 8, emoji: '🎭', tint: '#F6D6C9', accent: '#E08A6A' },
+  { id: 'bluff', name: '谁是瞎掰王', blurb: '编一个像真的', min: 3, max: 8, emoji: '🎲', tint: '#E7F3C9', accent: '#8FB56A' },
   { id: 'wolf', name: '狼人杀', blurb: '夜里闭上眼', min: 4, max: 8, emoji: '🌙', tint: '#E6DDF8', accent: '#B9A3E3' },
   { id: 'uno', name: 'UNO', blurb: '颜色或数字', min: 2, max: 6, emoji: '🃏', tint: '#F8D0DC', accent: '#EE9AB0' },
   { id: 'gomoku', name: '五子棋', blurb: '五子连起来', min: 2, max: 2, emoji: '⚫', tint: '#D5F0E4', accent: '#8EB5A6' },
@@ -58,18 +61,31 @@ function useTableEvent() {
 function mayYield(info:{person:Character;bond:number}|undefined){return Boolean(info&&info.bond>=50&&!/好胜|争强|不服输|认真/.test(info.person.personality)&&Math.random()<.22)}
 
 const NPCS = ['店员', '邻居', '路人', '晚班', '楼对面', '花店']
-const SOUPS = [
-  { surface: '一个男人走进酒吧，要了一杯水。酒保拿枪指着他。男人说了谢谢，走了。', truth: '男人在打嗝。酒保用枪吓他，嗝停了。', yes: ['嗝', '打嗝', '吓'], no: ['死', '杀', '毒', '抢'] },
-  { surface: '电梯里只有两个人。门开的时候，其中一个开始哭。', truth: '他们是陌生人。哭的人发现自己按错了楼层，而那一层是已经搬走的家。', yes: ['楼', '家', '错', '搬'], no: ['鬼', '杀', '爱情'] },
-  { surface: '女人每天给花浇水。某一天她没有浇，花反而开了。', truth: '她浇的是盐水。这一天她忘了，雨水才是真的水。', yes: ['盐', '雨', '水'], no: ['人', '死', '魔法'] },
-]
-const SAYS = [
-  { word: '热可可', hints: ['是热的', '捧在手里', '有一点甜'] },
-  { word: '末班车', hints: ['很晚', '会关门', '有靠窗的位子'] },
-  { word: '红伞', hints: ['下雨才拿出来', '颜色醒目', '撑在头顶'] },
-  { word: '夜灯', hints: ['很小', '睡觉时还亮着', '暖的'] },
-  { word: '围巾', hints: ['绕一圈', '风大的时候用', '软的'] },
-]
+
+function another<T>(list: readonly T[], same: (item: T) => boolean, current: T): T {
+  return pickAt(list.filter((item) => !same(item))) ?? current
+}
+
+function firstAlive(flags: boolean[], from = 0) {
+  for (let index = from; index < flags.length; index += 1) if (flags[index]) return index
+  return -1
+}
+
+function compactText(text: string) {
+  return text.replace(/\s/g, '').replace(/[。！？!?.，,]/g, '')
+}
+
+function oneLine(text: string, max = 40) {
+  const line = text.split('\n').map((item) => item.trim()).find(Boolean) ?? ''
+  return line.replace(/^["「『]+|["」』]+$/g, '').slice(0, max)
+}
+
+function dealSpy(names: string[]) {
+  const pair = pickAt(SPY_PAIRS) ?? SPY_PAIRS[0]
+  const count = names.length >= 7 ? 2 : 1
+  const spies = new Set(shuffle(names.map((_, index) => index)).slice(0, count))
+  return names.map((_, index) => ({ word: spies.has(index) ? pair.spy : pair.civilian, spy: spies.has(index) }))
+}
 function usePhone() {
   const identities = useMellow((state) => state.identities)
   const activeIdentityId = useMellow((state) => state.activeIdentityId)
@@ -109,7 +125,7 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
   const tableEvent = useTableEvent()
   const dataRevision = useMellow((state) => state.dataRevision)
   const hostIndex = 1
-  const [soup] = useState(() => SOUPS[Math.floor(Math.random() * SOUPS.length)] ?? SOUPS[0])
+  const [soup, setSoup] = useState(() => pickAt(SOUPS) ?? SOUPS[0])
   const sessionId = props.names.join('-')
   const bagKey = `table_soup_${sessionId}_${soup?.surface ?? ''}`
   const [turns, setTurns] = useState<Array<{ who: string; q: string; a: string }>>([])
@@ -117,9 +133,11 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
   const [open, setOpen] = useState(false)
   const [asker, setAsker] = useState(0)
   useEffect(() => {
+    let live = true
     void storage.getBag<{ turns: Array<{ who: string; q: string; a: string }> }>(props.namespace, bagKey).then((saved) => {
-      if (saved?.turns?.length) setTurns(saved.turns)
+      if (live && saved?.turns?.length) setTurns(saved.turns)
     })
+    return () => { live = false }
   }, [props.namespace, bagKey, dataRevision])
   if (!soup) return null
   const host = props.names[hostIndex] ?? '主持人'
@@ -168,7 +186,19 @@ function Soup(props: { names: string[]; namespace: string; onBack: () => void })
           </article>
         ))}
       </div>
-      {open ? <div className="mt-3"><PillNote tone="lilac">{soup.truth}</PillNote></div> : <button type="button" className="chip mt-3" onClick={() => { setOpen(true); tableEvent('海龟汤已公布汤底：'+soup.truth,true) }}>公布汤底</button>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {open ? <PillNote tone="lilac">{soup.truth}</PillNote> : <button type="button" className="chip" onClick={() => { setOpen(true); tableEvent('海龟汤已公布汤底：'+soup.truth,true) }}>公布汤底</button>}
+        <button type="button" className="chip" onClick={() => {
+          if (!soup) return
+          const next = another(SOUPS, (item) => item.surface === soup.surface, soup)
+          setSoup(next)
+          setTurns([])
+          setOpen(false)
+          setDraft('')
+          setAsker(0)
+          tableEvent('海龟汤换了一题。新的汤面已公开，汤底仍不可说。', false, true)
+        }}>换一题</button>
+      </div>
       {asker === 0 ? (
         <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void ask() }}>
           <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="是不是…" className="soft-input" />
@@ -401,6 +431,287 @@ function Wolf(props: { names: string[]; onBack: () => void }) {
       {phase === 'end' ? (
         <div className="mt-3"><PillNote tone={wolvesAlive === 0 ? 'mint' : 'peach'}>{seats.map((seat) => `${seat.name} ${seat.role}`).join('、')}</PillNote></div>
       ) : null}
+    </Screen>
+  )
+}
+
+function Undercover(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
+  const [deal, setDeal] = useState(() => dealSpy(props.names))
+  const [alive, setAlive] = useState(() => props.names.map(() => true))
+  const [phase, setPhase] = useState<'talk' | 'vote' | 'end'>('talk')
+  const [speaker, setSpeaker] = useState(0)
+  const [lines, setLines] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('轮流描述自己的词，不要把词说出来。')
+  const [retry, setRetry] = useState(0)
+  const ticket = useRef(0)
+  const mine = deal[0]
+  const move = (from: number, flags: boolean[]) => {
+    const next = firstAlive(flags, from)
+    if (next < 0) setPhase('vote')
+    else setSpeaker(next)
+  }
+  useEffect(() => {
+    if (phase !== 'talk' || speaker <= 0 || !alive[speaker]) return
+    const current = ++ticket.current
+    const name = props.names[speaker] ?? '玩家'
+    const word = deal[speaker]?.word ?? ''
+    setBusy(true)
+    setError('')
+    void hostAsk(`你在玩谁是卧底。你拿到的词是「${word}」。用一句日常口语描述它，让别人觉得你们拿到的是同一个词。不要说出「${word}」，不要拆开这个词，不要说自己是不是卧底。只写这一句。`, '现在描述', 80)
+      .then((line) => {
+        if (ticket.current !== current) return
+        const spoken = oneLine(line, 80).replaceAll(word, '这个') || '我想了想，先不说太满。'
+        setLines((list) => [...list, `${name}：${spoken}`])
+        tableEvent(`谁是卧底：${name}描述：${spoken}`)
+        setBusy(false)
+        move(speaker + 1, alive)
+      })
+      .catch((reason) => {
+        if (ticket.current !== current) return
+        setBusy(false)
+        setError(reason instanceof Error ? reason.message : '这一句没说出来，请再试一次')
+      })
+    return () => { ticket.current += 1 }
+  }, [phase, speaker, alive, deal, props.names, tableEvent, retry])
+  const speak = () => {
+    const text = draft.trim()
+    if (!text || busy || phase !== 'talk' || speaker !== 0 || !mine) return
+    if (compactText(text).includes(compactText(mine.word))) { setError('不能把词说出来'); return }
+    setError('')
+    setDraft('')
+    const name = props.names[0] ?? '我'
+    setLines((list) => [...list, `${name}：${text}`])
+    tableEvent(`谁是卧底：${name}描述：${text}`)
+    move(1, alive)
+  }
+  const vote = async (name: string) => {
+    if (busy || phase !== 'vote') return
+    setBusy(true)
+    setError('')
+    const tally: Record<string, number> = {}
+    if (alive[0] && name) tally[name] = 1
+    const voters = props.names.map((seat, index) => ({ seat, index })).filter((item) => item.index > 0 && alive[item.index])
+    const results = await Promise.all(voters.map(async (item) => {
+      const options = props.names.filter((candidate, index) => alive[index] && candidate !== item.seat)
+      let pick = pickAt(options) ?? ''
+      try {
+        const answer = oneLine(await hostAsk(`你在玩谁是卧底。你拿到的词是「${deal[item.index]?.word ?? ''}」。根据已经公开的描述，投出最像拿到了另一个近义词的人。不能投自己，也不能投已经出局的人。只回复候选人的名字。`, `候选人：${options.join('、')}\n描述：\n${lines.join('\n')}`, 40), 20)
+        pick = options.find((candidate) => answer.includes(candidate)) ?? pick
+      } catch { /* 这一票改由本地代投，游戏继续 */ }
+      return pick
+    }))
+    for (const pick of results) if (pick) tally[pick] = (tally[pick] ?? 0) + 1
+    const ranked = Object.entries(tally).sort((left, right) => right[1] - left[1])
+    const top = ranked[0]
+    const tied = !top || ranked.filter((item) => item[1] === top[1]).length > 1
+    const summary = Object.entries(tally).map(([seat, count]) => `${seat} ${count}票`).join('、') || '没有人投票'
+    setLines((list) => [...list, `票数：${summary}`])
+    tableEvent(`谁是卧底公开投票：${summary}`)
+    if (tied) {
+      setNote('平票，没有人出局。再描述一轮。')
+      setLines((list) => [...list, '—— 新一轮描述 ——'])
+      setPhase('talk')
+      setSpeaker(firstAlive(alive))
+      setBusy(false)
+      return
+    }
+    const out = top[0]
+    const nextFlags = alive.map((on, index) => on && props.names[index] !== out)
+    setAlive(nextFlags)
+    const spies = deal.filter((item, index) => nextFlags[index] && item.spy).length
+    const civilians = deal.filter((item, index) => nextFlags[index] && !item.spy).length
+    if (spies === 0 || spies >= civilians) {
+      const civilianWin = spies === 0
+      setPhase('end')
+      setNote(civilianWin ? `${out} 出局。卧底都出去了，平民赢。` : `${out} 出局。卧底还在场，卧底赢。`)
+      tableEvent(civilianWin ? '谁是卧底：平民赢了' : '谁是卧底：卧底赢了', true)
+    } else {
+      setNote(`${out} 出局，游戏继续。`)
+      setLines((list) => [...list, '—— 新一轮描述 ——'])
+      setPhase('talk')
+      setSpeaker(firstAlive(nextFlags))
+      tableEvent(`谁是卧底：${out} 出局，继续描述。`)
+    }
+    setBusy(false)
+  }
+  const again = () => {
+    setDeal(dealSpy(props.names))
+    setAlive(props.names.map(() => true))
+    setPhase('talk')
+    setSpeaker(0)
+    setLines([])
+    setDraft('')
+    setError('')
+    setNote('新的一局。轮流描述，不要把词说出来。')
+    tableEvent('谁是卧底再来一局。每个人只知道自己的词。', false, true)
+  }
+  if (!mine) return null
+  const votingNames = props.names.flatMap((name, index) => (alive[index] && index !== 0 ? [name] : []))
+  return (
+    <Screen title="谁是卧底" subtitle={phase === 'end' ? '本局结束' : phase === 'vote' ? '投票出局' : `${props.names[speaker] ?? '我'} 在描述`} onBack={props.onBack}>
+      <RoundTable names={props.names} turn={phase === 'talk' ? speaker : null} out={phase === 'end' ? undefined : alive.map((on) => !on)} badges={phase === 'end' ? deal.map((item) => item.spy ? '卧底' : '平民') : undefined} caption={note} />
+      <PillNote>{phase === 'end' ? `你的词是「${mine.word}」，你是${mine.spy ? '卧底' : '平民'}。` : `你的词：${mine.word}`}</PillNote>
+      <div className="mt-3 space-y-2 text-sm leading-6" aria-live="polite">{lines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
+      {phase === 'talk' && speaker === 0 && alive[0] ? (
+        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); speak() }}>
+          <input className="soft-input min-w-0" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="描述这个词，别说破" />
+          <button className="chip shrink-0" disabled={busy || !draft.trim()}>说</button>
+        </form>
+      ) : null}
+      {phase === 'talk' && speaker > 0 ? <p className="mt-3 text-xs" style={{ color: 'var(--m-text-secondary)' }}>{busy ? `${props.names[speaker] ?? '对方'} 正在想怎么说…` : '等这一句说完。'}</p> : null}
+      {error ? <p role="status" className="mt-2 text-xs">{error}</p> : null}
+      {error && phase === 'talk' && speaker > 0 ? <button type="button" className="chip mt-2" onClick={() => setRetry((value) => value + 1)}>让 TA 再说一次</button> : null}
+      {phase === 'vote' ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {alive[0] ? votingNames.map((name) => <button key={name} type="button" className="chip" disabled={busy} onClick={() => void vote(name)}>投 {name}</button>) : <button type="button" className="chip" disabled={busy} onClick={() => void vote('')}>{busy ? '投票中…' : '看其他人投票'}</button>}
+        </div>
+      ) : null}
+      {phase === 'end' ? (
+        <>
+          <div className="mt-3"><PillNote tone="lilac">{deal.map((item, index) => `${props.names[index] ?? ''} ${item.spy ? '卧底' : '平民'} · ${item.word}`).join('、')}</PillNote></div>
+          <button type="button" className="chip chip-solid mt-3" onClick={again}>再来一局</button>
+        </>
+      ) : null}
+      <details className="menu-card mt-4 text-xs leading-6"><summary>玩法说明</summary><p>多数人拿到同一个词，卧底拿到一个很像的词。你看不出自己是哪一种。每人用一句话描述，不能把词说出来。然后投票，票数最高的人出局；平票就没人出局，再描述一轮。卧底全部出局则平民赢。卧底还在、且人数不少于平民，则卧底赢。4 到 6 人有 1 个卧底，7 到 8 人有 2 个。</p></details>
+    </Screen>
+  )
+}
+
+type BluffEntry = { text: string; author: string | null; truth: boolean }
+
+function Bluff(props: { names: string[]; onBack: () => void }) {
+  const tableEvent = useTableEvent()
+  const [card, setCard] = useState(() => pickAt(BLUFFS) ?? BLUFFS[0])
+  const [phase, setPhase] = useState<'write' | 'vote' | 'show'>('write')
+  const [draft, setDraft] = useState('')
+  const [entries, setEntries] = useState<BluffEntry[]>([])
+  const [scores, setScores] = useState(() => props.names.map(() => 0))
+  const [gained, setGained] = useState(() => props.names.map(() => 0))
+  const [votes, setVotes] = useState<Array<{ name: string; text: string }>>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async () => {
+    const text = oneLine(draft, 24)
+    if (!text || busy || phase !== 'write' || !card) return
+    setBusy(true)
+    setError('')
+    setDraft('')
+    const mine = props.names[0] ?? '我'
+    const authored = [{ author: mine, text }]
+    const replies = await Promise.all(props.names.slice(1).map(async (name) => {
+      try {
+        const line = await hostAsk(`你在玩谁是瞎掰王。题目是：「${card.question}」请编一个听起来像真的短答案，不超过16个字。你不知道标准答案。不要解释，不要说自己在编，只写答案本身。`, '写一个答案', 40)
+        return { author: name, text: oneLine(line, 24) || '我说不准' }
+      } catch {
+        return { author: name, text: '我说不准' }
+      }
+    }))
+    authored.push(...replies)
+    const built: BluffEntry[] = []
+    let truthTaken = false
+    for (const item of authored) {
+      if (compactText(item.text) === compactText(card.answer)) {
+        if (!truthTaken) {
+          built.push({ text: card.answer, author: item.author, truth: true })
+          truthTaken = true
+        }
+        continue
+      }
+      built.push({ text: item.text, author: item.author, truth: false })
+    }
+    if (!truthTaken) built.push({ text: card.answer, author: null, truth: true })
+    setEntries(shuffle(built))
+    setVotes([])
+    setPhase('vote')
+    setBusy(false)
+    tableEvent(`谁是瞎掰王题目：${card.question}。答案已混在选项里，还不能公布。`)
+  }
+  const vote = async (index: number) => {
+    if (busy || phase !== 'vote' || !card) return
+    const chosen = entries[index]
+    if (!chosen || chosen.author === props.names[0]) return
+    setBusy(true)
+    const castVotes: Array<{ name: string; index: number }> = [{ name: props.names[0] ?? '我', index }]
+    const aiVotes = await Promise.all(props.names.slice(1).map(async (name) => {
+      const own = entries.find((item) => item.author === name)
+      const options = entries.filter((item) => item.author !== name)
+      let pick = pickAt(options) ?? options[0]
+      try {
+        const answer = oneLine(await hostAsk(`你在玩谁是瞎掰王。题目是：「${card.question}」下面只有一条是标准答案，其余是别人编的。你写的是「${own?.text ?? ''}」。选出最像标准答案的一条，不能选你自己写的。只回复那条答案的原文。`, options.map((item) => item.text).join('\n'), 40), 24)
+        pick = options.find((item) => compactText(item.text) === compactText(answer)) ?? options.find((item) => answer.includes(item.text)) ?? pick
+      } catch { /* 这一票随机选一条不像自己的 */ }
+      return { name, index: pick ? entries.indexOf(pick) : -1 }
+    }))
+    for (const item of aiVotes) if (item.index >= 0) castVotes.push(item)
+    const delta = props.names.map(() => 0)
+    const shown: Array<{ name: string; text: string }> = []
+    for (const item of castVotes) {
+      const entry = entries[item.index]
+      if (!entry) continue
+      shown.push({ name: item.name, text: entry.text })
+      const voter = props.names.indexOf(item.name)
+      if (entry.truth && voter >= 0) delta[voter] = (delta[voter] ?? 0) + 2
+      if (!entry.truth && entry.author) {
+        const author = props.names.indexOf(entry.author)
+        if (author >= 0) delta[author] = (delta[author] ?? 0) + 1
+      }
+    }
+    setScores((current) => current.map((score, seat) => score + (delta[seat] ?? 0)))
+    setGained(delta)
+    setVotes(shown)
+    setPhase('show')
+    setBusy(false)
+    tableEvent(`谁是瞎掰王公布标准答案：${card.answer}。本轮：${props.names.map((name, seat) => `${name}+${delta[seat] ?? 0}`).join('、')}`)
+  }
+  const nextCard = () => {
+    if (!card) return
+    setCard(another(BLUFFS, (item) => item.question === card.question, card))
+    setPhase('write')
+    setEntries([])
+    setVotes([])
+    setDraft('')
+    setError('')
+    setGained(props.names.map(() => 0))
+    tableEvent('谁是瞎掰王换了一题。标准答案先不要说。', false, true)
+  }
+  if (!card) return null
+  return (
+    <Screen title="谁是瞎掰王" subtitle={phase === 'write' ? '编一个像真的答案' : phase === 'vote' ? '哪一条是标准答案' : '这一题揭晓了'} onBack={props.onBack}>
+      <RoundTable names={props.names} caption={props.names.map((name, index) => `${name} ${scores[index] ?? 0}分`).join(' · ')} />
+      <article className="menu-card text-sm leading-6">{card.question}</article>
+      {phase === 'write' ? (
+        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void submit() }}>
+          <input className="soft-input min-w-0" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="写一个短答案" maxLength={24} />
+          <button className="chip shrink-0" disabled={busy || !draft.trim()}>{busy ? '收答案…' : '写好了'}</button>
+        </form>
+      ) : null}
+      {phase === 'vote' ? (
+        <div className="mt-3 space-y-2">
+          {entries.map((item, index) => {
+            const own = item.author === props.names[0]
+            return <button key={`${item.author ?? 'deck'}-${index}`} type="button" className="menu-card block w-full text-left text-sm" disabled={busy || own} onClick={() => void vote(index)}>{item.text}{own ? '（你写的）' : ''}</button>
+          })}
+        </div>
+      ) : null}
+      {phase === 'show' ? (
+        <div className="mt-3 space-y-2">
+          {entries.map((item, index) => (
+            <article key={`${item.text}-${index}`} className="menu-card text-sm">
+              <p>{item.text}</p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>{item.truth ? `标准答案${item.author ? ` · ${item.author} 写中了` : ''}` : `${item.author ?? '题库'} 编的`}</p>
+            </article>
+          ))}
+          <div className="text-xs leading-6">{votes.map((item, index) => <p key={`${item.name}-${index}`}>{item.name} 投了「{item.text}」</p>)}</div>
+          <PillNote tone="mint">{props.names.map((name, index) => `${name} 本轮 +${gained[index] ?? 0}`).join('、')}</PillNote>
+          <button type="button" className="chip chip-solid" onClick={nextCard}>下一题</button>
+        </div>
+      ) : null}
+      {error ? <p role="status" className="mt-2 text-xs">{error}</p> : null}
+      <details className="menu-card mt-4 text-xs leading-6"><summary>玩法说明</summary><p>题目是一条冷知识，标准答案先藏起来。每个人写一个听起来像真的短答案，标准答案会混进选项。投票时看不出是谁写的，也不能投自己写的那条。投中标准答案得 2 分。有人把你的假答案当成真的，每骗到一人得 1 分。写中标准答案本身不再额外加分。</p></details>
     </Screen>
   )
 }
@@ -686,6 +997,8 @@ export function TableApp(props: { onBack: () => void }) {
   )
   if (playing && game === 'soup') view = <Soup names={names} namespace={phone.namespace} onBack={leave} />
   if (playing && game === 'say') view = <Say names={names} namespace={phone.namespace} onBack={leave} />
+  if (playing && game === 'spy') view = <Undercover names={names} onBack={leave} />
+  if (playing && game === 'bluff') view = <Bluff names={names} onBack={leave} />
   if (playing && game === 'wolf') view = <Wolf names={names} onBack={leave} />
   if (playing && game === 'uno') view = <Uno names={names} onBack={leave} />
   if (playing && game === 'gomoku') view = <Gomoku names={names} onBack={leave} />
