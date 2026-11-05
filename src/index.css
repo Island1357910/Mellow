@@ -130,9 +130,12 @@ button {
 
 .home-pager {
   position: relative;
+  z-index: 0;
+  isolation: isolate;
   height: 100%;
   width: 100%;
   overflow: hidden;
+  overflow: clip;
   touch-action: none;
 }
 
@@ -160,7 +163,7 @@ button {
 }
 
 .home-track.is-settle {
-  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .home-page {
@@ -1356,6 +1359,7 @@ button {
   position: absolute;
   left: 0;
   top: 0;
+  z-index: 24;
   display: flex;
   width: 232px;
   max-height: 320px;
@@ -1431,7 +1435,7 @@ button {
 }
 .desk-pet-compose input,
 .desk-pet-compose button { border-radius: 999px; }
-.desk-pet-compose input { min-width: 0; flex: 1; padding: 6px 10px; background: white; }
+.desk-pet-compose input { min-width: 0; flex: 1; padding: 6px 10px; background: white; font-size: 16px; }
 .desk-pet-compose button { padding: 6px 10px; background: var(--m-primary); }
 
 .desk-pet-bar strong { flex: 1; font-size: 13px; }
@@ -1444,7 +1448,16 @@ button {
   line-height: 1;
 }
 
-.desk-pet-scroll { overflow: auto; padding: 8px 10px 12px; }
+.desk-pet-scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px 12px; }
+.desk-pet-card.is-typing {
+  top: 44px;
+  right: 12px;
+  left: 12px;
+  width: auto;
+  max-height: none;
+  z-index: 45;
+  transform: none;
+}
 .desk-pet-scroll::-webkit-scrollbar { width: 4px; }
 .desk-pet-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(90, 60, 70, 0.28); }
 .desk-pet-block {

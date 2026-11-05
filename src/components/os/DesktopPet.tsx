@@ -57,6 +57,7 @@ export function DesktopPet() {
   const patchSettings = useMellow((state) => state.patchSettings)
   const pet = settings.home.pet
   const root = useRef<HTMLDivElement>(null)
+  const card = useRef<HTMLElement>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const drag = useRef<{ id: number; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null)
   const step = useRef(1)
@@ -69,6 +70,8 @@ export function DesktopPet() {
   const [lines, setLines] = useState<PetLine[]>([{ who: 'her', text: '我是低头。玩法上拿不准的，直接问我就好。' }])
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
+  const [typing, setTyping] = useState(false)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const [face, setFace] = useState(0)
   useEffect(() => {
     if (!pet?.shown || asking) return
@@ -90,7 +93,33 @@ export function DesktopPet() {
   useEffect(() => {
     const node = scroll.current
     if (node && tab === 'chat') node.scrollTop = node.scrollHeight
-  }, [lines, asking, tab])
+  }, [lines, asking, tab, typing])
+  useEffect(() => {
+    if (!typing) return
+    const pin = () => {
+      const viewport = window.visualViewport
+      const overlap = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0
+      setKeyboardInset(overlap > 80 ? overlap : 0)
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+      const pager = root.current?.parentElement
+      if (pager) pager.scrollTop = 0
+    }
+    pin()
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', pin)
+    viewport?.addEventListener('scroll', pin)
+    window.addEventListener('resize', pin)
+    return () => {
+      viewport?.removeEventListener('resize', pin)
+      viewport?.removeEventListener('scroll', pin)
+      window.removeEventListener('resize', pin)
+    }
+  }, [typing])
+  useEffect(() => {
+    if (!open) setTyping(false)
+  }, [open])
   if (!pet?.shown) return null
   const codes = openRedeemCodes()
   const portrait = FACES[asking ? 0 : face] ?? FACES[0]
@@ -167,7 +196,16 @@ export function DesktopPet() {
       .finally(() => setAsking(false))
   }
 
+  const finishTyping = () => {
+    window.setTimeout(() => {
+      const active = document.activeElement
+      if (active && card.current?.contains(active)) return
+      setTyping(false)
+    }, 160)
+  }
+
   return (
+    <>
     <div
       ref={root}
       className="desk-pet"
@@ -180,10 +218,14 @@ export function DesktopPet() {
       <button type="button" className="desk-pet-face" aria-label={open ? '收起低头' : '和低头说话'} aria-expanded={open}>
         <img src={portrait} alt="" />
       </button>
+    </div>
       {open ? (
         <section
-          className="desk-pet-card"
-          style={{ transform: `translate3d(${cardShift.x}px, ${cardShift.y}px, 0)` }}
+          ref={card}
+          className={typing ? 'desk-pet-card is-typing' : 'desk-pet-card'}
+          style={typing
+            ? { bottom: keyboardInset > 0 ? keyboardInset + 8 : 64 }
+            : { transform: `translate3d(${place.x + cardShift.x}px, ${place.y + cardShift.y}px, 0)` }}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <header className="desk-pet-bar">
@@ -226,12 +268,12 @@ export function DesktopPet() {
           </div>
           {tab === 'chat' ? (
             <form className="desk-pet-compose" onSubmit={ask}>
-              <input aria-label="对低头说" value={question} maxLength={200} onChange={(event) => setQuestion(event.target.value)} placeholder="问问怎么玩" />
-              <button type="submit" disabled={asking || !question.trim()}>{asking ? '…' : '发送'}</button>
+              <input aria-label="对低头说" value={question} maxLength={200} enterKeyHint="send" onFocus={() => setTyping(true)} onBlur={finishTyping} onChange={(event) => setQuestion(event.target.value)} placeholder="问问怎么玩" />
+              <button type="submit" disabled={asking || !question.trim()} onPointerDown={(event) => event.preventDefault()}>{asking ? '…' : '发送'}</button>
             </form>
           ) : null}
         </section>
       ) : null}
-    </div>
+    </>
   )
 }

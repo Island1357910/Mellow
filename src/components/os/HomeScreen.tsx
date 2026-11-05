@@ -43,6 +43,7 @@ export function HomeScreen() {
   const pageCount = 1 + appPages.length
   const pagerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ x: number; y: number; id: number; active: boolean; t: number } | null>(null)
+  const rearranging = useRef(false)
   const suppressClick = useRef(false)
   const [index, setIndex] = useState(0)
   const [dragX, setDragX] = useState(0)
@@ -65,6 +66,17 @@ export function HomeScreen() {
   if (index > pageCount - 1) setIndex(pageCount - 1)
   const page = Math.min(index, pageCount - 1)
 
+  useEffect(() => {
+    const node = pagerRef.current
+    if (!node) return
+    const pin = () => {
+      if (node.scrollLeft) node.scrollLeft = 0
+      if (node.scrollTop) node.scrollTop = 0
+    }
+    pin()
+    node.addEventListener('scroll', pin)
+    return () => node.removeEventListener('scroll', pin)
+  }, [])
   useEffect(() => {
     const node = pagerRef.current
     if (!node) return
@@ -118,19 +130,21 @@ export function HomeScreen() {
   }
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) return
+    suppressClick.current = false
+    if (rearranging.current || event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) return
     const target = event.target
     if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) return
     dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, t: performance.now() }
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rearranging.current) return
     const drag = dragRef.current
     if (!drag || drag.id !== event.pointerId) return
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     if (!drag.active) {
-      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.05) return
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return
       drag.active = true
       setSettling(false)
       try {
@@ -155,15 +169,16 @@ export function HomeScreen() {
       // 捕获可能已经结束
     }
     if (!drag.active) return
-    suppressClick.current = true
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     const speed = dx / Math.max(16, performance.now() - drag.t)
-    const flick = Math.abs(dx) >= 16 && Math.abs(dx) > Math.abs(dy) && Math.abs(speed) >= 0.42
+    const flick = Math.abs(dx) >= 12 && Math.abs(dx) > Math.abs(dy) && Math.abs(speed) >= 0.18
+    const turned = dx <= -16 || dx >= 16 || flick
+    if (turned) suppressClick.current = true
     setSettling(true)
     setDragX(0)
-    if (dx <= -28 || (flick && dx < 0)) setIndex((current) => Math.min(pageCount - 1, current + 1))
-    else if (dx >= 28 || (flick && dx > 0)) setIndex((current) => Math.max(0, current - 1))
+    if (dx <= -16 || (flick && dx < 0)) setIndex((current) => Math.min(pageCount - 1, current + 1))
+    else if (dx >= 16 || (flick && dx > 0)) setIndex((current) => Math.max(0, current - 1))
   }
 
   const saveBoard = (next: HomeCell[]) => {
@@ -189,7 +204,6 @@ export function HomeScreen() {
 
   const holdCell = (event: ReactPointerEvent<HTMLButtonElement>, index: number, cell: HomeCell) => {
     if (event.button !== 0) return
-    event.stopPropagation()
     const pointerId = event.pointerId
     const startX = event.clientX
     const startY = event.clientY
@@ -200,6 +214,7 @@ export function HomeScreen() {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
+      rearranging.current = false
       if (!active || ev.pointerId !== pointerId) return
       suppressClick.current = true
       const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
@@ -261,6 +276,10 @@ export function HomeScreen() {
     }
     const timer = window.setTimeout(() => {
       active = true
+      rearranging.current = true
+      dragRef.current = null
+      setSettling(true)
+      setDragX(0)
       suppressClick.current = true
       const pager = pagerRef.current?.getBoundingClientRect()
       const size = 68
@@ -654,7 +673,6 @@ function HomeSlot(props: {
     <button
       type="button"
       data-home-index={props.index}
-      data-no-swipe
       className={props.merging ? 'app-launch is-merge flex flex-col items-center gap-1.5' : 'app-launch flex flex-col items-center gap-1.5'}
       aria-label={cell.kind === 'folder' ? `${name}，${cell.appIds.length} 个应用` : name}
       onPointerDown={props.onHold}
