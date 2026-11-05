@@ -53,7 +53,7 @@ export function AppGlyph(props: { id: string; tint: string; size?: number; ignor
       ) : custom ? (
         <span className="text-xl">{custom}</span>
       ) : (
-        <Icon size={box > 52 ? 26 : 22} strokeWidth={1.75} />
+        <Icon size={box > 52 ? 26 : box >= 40 ? 22 : Math.max(11, Math.round(box * 0.62))} strokeWidth={1.75} />
       )}
     </span>
   )

@@ -1,6 +1,6 @@
 import { isTrustedVoiceCache } from '../engine/minimax.ts'
 import { normalizeApiBindings } from './apiModules.ts'
-import type { AppSettings, BackupSettings, DecorCard, HomeLayout, PresetMode, ProactiveLevel } from '../types/index.ts'
+import type { AppSettings, BackupSettings, DecorCard, DeskPetPlace, HomeCell, HomeLayout, PresetMode, ProactiveLevel } from '../types/index.ts'
 
 function legacyProactiveMinutes(level: ProactiveLevel | undefined): number {
   if (level === 'high') return 30
@@ -84,6 +84,30 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
   }
 }
 
+function normalizeBoard(raw: HomeCell[] | undefined): HomeCell[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const cells: HomeCell[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    if (item.kind === 'gap') {
+      cells.push({ kind: 'gap' })
+      continue
+    }
+    if (item.kind === 'app' && typeof item.id === 'string' && item.id.trim()) cells.push({ kind: 'app', id: item.id })
+    if (item.kind === 'folder' && typeof item.id === 'string' && Array.isArray(item.appIds)) {
+      const appIds = item.appIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      if (appIds.length < 2) continue
+      cells.push({ kind: 'folder', id: item.id, name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 12) : '应用组', appIds })
+    }
+  }
+  return cells
+}
+
+function normalizePet(raw: DeskPetPlace | undefined): DeskPetPlace | undefined {
+  if (!raw || typeof raw.x !== 'number' || typeof raw.y !== 'number') return undefined
+  return { shown: raw.shown === true, x: raw.x, y: raw.y }
+}
+
 function normalizeBackup(raw: Partial<BackupSettings & { intervalDays?: number }> | undefined, base: AppSettings['backup']): AppSettings['backup'] {
   const merged = { ...base, ...raw }
   let intervalHours = merged.intervalHours
@@ -125,6 +149,8 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
       page3: home?.page3 ?? false,
       page4: home?.page4 ?? false,
       decors: mergeDecors(home?.decors),
+      board: normalizeBoard(home?.board),
+      pet: normalizePet(home?.pet),
     },
     minimax: {
       ...base.minimax,

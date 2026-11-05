@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict'
+import { clampPet, ejectApp, ejectTo, mergeCell, moveCell, placeCell, resolveBoard } from '../src/lib/homeBoard.ts'
+import { openRedeemCodes } from '../src/lib/redeem.ts'
+
+const installed = ['diary', 'star', 'spark']
+const board = resolveBoard(installed, undefined)
+assert.equal(board[0]?.kind, 'app')
+const moved = moveCell(board, 0, 2)
+assert.notEqual(moved[0], board[0])
+const parked = placeCell(board, 0, board.length + 1)
+assert.equal(parked[0]?.kind, 'gap')
+assert.equal(parked.at(-1)?.kind, 'app')
+assert.equal(parked.at(-1)?.kind === 'app' ? parked.at(-1)?.id : '', board[0]?.kind === 'app' ? board[0].id : '')
+const keptGap = resolveBoard(installed, parked)
+assert.equal(keptGap[0]?.kind, 'gap')
+const merged = mergeCell(board, 1, 0, 'folder_test')
+const folder = merged.find((cell) => cell.kind === 'folder')
+assert.ok(folder && folder.kind === 'folder' && folder.appIds.length === 2)
+const leaving = folder && folder.kind === 'folder' ? folder.appIds[1]! : ''
+const ejected = ejectApp(merged, 'folder_test', leaving)
+assert.equal(ejected.some((cell) => cell.kind === 'folder'), false)
+const dragged = ejectTo(merged, 'folder_test', leaving, merged.length + 1)
+assert.equal(dragged.some((cell) => cell.kind === 'folder'), false)
+assert.equal(dragged.at(-1)?.kind === 'app' ? dragged.at(-1)?.id : '', leaving)
+assert.equal(ejectTo(merged, 'folder_test', leaving, merged.findIndex((cell) => cell.kind === 'folder')), merged)
+const kept = resolveBoard(installed, merged)
+assert.ok(kept.some((cell) => cell.kind === 'folder'))
+const dropped = resolveBoard([], merged)
+assert.equal(dropped.some((cell) => cell.kind === 'folder' && cell.appIds.includes('diary')), false)
+const spot = clampPet(-20, 10, 300, 500, 76)
+assert.equal(spot.x, 0)
+assert.equal(spot.y, 36)
+const far = clampPet(999, 999, 300, 500, 76)
+assert.equal(far.x, 300 - 76)
+assert.equal(far.y, 500 - 76 - 140)
+assert.ok(openRedeemCodes(Date.parse('2026-11-05T12:00:00+08:00')).some((item) => item.code === '半糖Mellow'))
+assert.equal(openRedeemCodes(Date.parse('2026-11-05T12:00:00+08:00')).some((item) => item.code === '和你一起的万圣节'), false)
+console.log('home board ok')

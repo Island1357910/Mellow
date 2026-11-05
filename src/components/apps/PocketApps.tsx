@@ -6,6 +6,7 @@ import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import { RemoveChip } from '../ui/RemoveChip.tsx'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
 function clock(): number {
@@ -219,6 +220,7 @@ export function PetApp(props: { onBack: () => void }) {
             <article key={item.id} className="menu-card">
               {item.at ? <p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{new Date(item.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</p> : null}
               <p className="mt-1 text-sm leading-6">{item.text}</p>
+              <RemoveChip onRemove={() => { const next = { ...pet, log: pet.log.filter((row) => row.id !== item.id) }; setPet(next); void storage.setBag(phone.namespace, 'pet', next) }} />
             </article>
           ))}
         </div>
@@ -280,6 +282,7 @@ export function PlantApp(props: { onBack: () => void }) {
               <button type="button" className="chip chip-mint" onClick={() => patch(item.id, { water: clamp(item.water + 28) }, '刚浇过，土是深的')}>浇水</button>
               <button type="button" className="chip chip-butter" onClick={() => patch(item.id, { sun: clamp(item.sun + 24), water: clamp(item.water - 6) }, '挪到有光的地方')}>晒一晒</button>
               <button type="button" className="chip" onClick={() => patch(item.id, { water: clamp(item.water - 8), sun: clamp(item.sun - 4) }, '今天没管它')}>放着</button>
+              <RemoveChip onRemove={() => save(plants.filter((row) => row.id !== item.id))} label="移走这盆" />
             </div>
           </article>
         ))}
@@ -332,6 +335,7 @@ export function BodyApp(props: { onBack: () => void }) {
           <article key={item.id} className="menu-card text-sm">
             <RecordDate at={item.at}/><span className="mr-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.kind}</span>
             {item.text}
+            <div><RemoveChip onRemove={() => save(rows.filter((row) => row.id !== item.id))} /></div>
           </article>
         ))}
       </div>
@@ -384,6 +388,7 @@ export function DreamApp(props: { onBack: () => void }) {
             {item.echo ? <p className="mt-2 text-sm leading-6" style={{ color: 'var(--m-text-secondary)' }}>{item.echo}</p> : (
               <button type="button" className="chip mt-2" disabled={busy === item.id} onClick={() => void air(item)}>{busy === item.id ? '正在播…' : '播一则'}</button>
             )}
+            <div><RemoveChip onRemove={() => save(rows.filter((row) => row.id !== item.id))} /></div>
           </article>
         ))}
       </div>
@@ -438,6 +443,7 @@ export function SparkApp(props: { onBack: () => void }) {
             <div className="mt-2 flex gap-1.5">
               <button type="button" className="chip" onClick={() => save(rows.map((row) => row.id === item.id ? { ...row, pinned: !row.pinned } : row))}>{item.pinned ? '取消钉住' : '钉住'}</button>
               {!item.more ? <button type="button" className="chip chip-butter" disabled={busy === item.id} onClick={() => void expand(item)}>{busy === item.id ? '展开中' : '展开'}</button> : null}
+              <RemoveChip onRemove={() => save(rows.filter((row) => row.id !== item.id))} />
             </div>
           </article>
         ))}
@@ -538,6 +544,7 @@ export function MusicApp(props: { onBack: () => void }) {
             <RecordDate at={item.at}/><p className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{item.mood || '未标'}</p>
             <p className="text-sm font-medium">{item.title}</p>
             <p className="mt-1 text-sm leading-6">{item.line}</p>
+            <RemoveChip onRemove={() => save(rows.filter((row) => row.id !== item.id))} />
           </article>
         ))}
       </div>

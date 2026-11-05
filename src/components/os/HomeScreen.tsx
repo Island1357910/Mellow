@@ -1,6 +1,9 @@
 import { Search } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { homePages, type PhoneApp } from '../../data/apps.ts'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { APP_BY_ID, HOME_PAGE_CAP, type PhoneApp } from '../../data/apps.ts'
+import { uid } from '../../lib/id.ts'
+import { chunkBoard, ejectTo, mergeCell, moveCell, placeCell, renameFolder, resolveBoard } from '../../lib/homeBoard.ts'
+import type { HomeCell } from '../../types/index.ts'
 import { rememberSearch } from '../../domain/glance.ts'
 import { DEFAULT_DECORS } from '../../lib/defaults.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -8,6 +11,7 @@ import { formatClock } from '../../lib/format.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { DecorCard } from '../../types/index.ts'
 import { AppGlyph } from './AppGlyph.tsx'
+import { DesktopPet } from './DesktopPet.tsx'
 import { MemoWidget, MoodWidget, PhotoFrame, StampWidget, TodoWidget } from './HomeWidgets.tsx'
 import { MusicPlayer, PlayerSheet } from './MusicPlayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
@@ -29,10 +33,14 @@ export function HomeScreen() {
   const patchSettings = useMellow((state) => state.patchSettings)
   const phone = identities.find((item) => item.id === activeIdentityId)
   const unread = inbox.reduce((sum, chat) => sum + chat.unread, 0)
-  const { page2, page3 } = homePages(settings.installedApps)
   const home = settings.home
-  const dock = page2.filter((app) => app.dock).concat(page3.filter((app) => app.dock))
-  const pageCount = page3.length > 0 ? 3 : 2
+  const board = resolveBoard(settings.installedApps, home.board)
+  const appPages = chunkBoard(board)
+  const dock = board.flatMap((cell) => (cell.kind === 'app' ? [cell.id] : cell.kind === 'folder' ? cell.appIds : [])).flatMap((id) => {
+    const app = APP_BY_ID[id]
+    return app?.dock ? [app] : []
+  })
+  const pageCount = 1 + appPages.length
   const pagerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ x: number; y: number; id: number; active: boolean; t: number } | null>(null)
   const suppressClick = useRef(false)
@@ -45,6 +53,14 @@ export function HomeScreen() {
   const [pad, setPad] = useState<string | null>(null)
   const [birthdayStamp, setBirthdayStamp] = useState(0)
   const [playerSheet, setPlayerSheet] = useState(false)
+  const [openFolder, setOpenFolder] = useState<string | null>(null)
+  const [liftFolder, setLiftFolder] = useState(false)
+  const [ghost, setGhost] = useState<{ x: number; y: number; name: string; tint: string; merge: boolean; empty: boolean; over: number | null } | null>(null)
+  const boardRef = useRef(board)
+  boardRef.current = board
+  const pageCountRef = useRef(pageCount)
+  pageCountRef.current = pageCount
+  const flipAt = useRef(0)
   const activeApp = useMellow((state) => state.activeApp)
   if (index > pageCount - 1) setIndex(pageCount - 1)
   const page = Math.min(index, pageCount - 1)
@@ -101,14 +117,14 @@ export function HomeScreen() {
     void patchSettings({ home: { ...home, decors } })
   }
 
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) return
     const target = event.target
     if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) return
     dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, t: performance.now() }
   }
 
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag || drag.id !== event.pointerId) return
     const dx = event.clientX - drag.x
@@ -129,7 +145,7 @@ export function HomeScreen() {
     setDragX(next)
   }
 
-  const finishDrag = (event: PointerEvent<HTMLDivElement>) => {
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     dragRef.current = null
     if (!drag || drag.id !== event.pointerId) return
@@ -148,6 +164,189 @@ export function HomeScreen() {
     setDragX(0)
     if (dx <= -28 || (flick && dx < 0)) setIndex((current) => Math.min(pageCount - 1, current + 1))
     else if (dx >= 28 || (flick && dx > 0)) setIndex((current) => Math.max(0, current - 1))
+  }
+
+  const saveBoard = (next: HomeCell[]) => {
+    const current = useMellow.getState().settings.home
+    void patchSettings({ home: { ...current, board: next } })
+  }
+
+  const openCell = (cell: HomeCell) => {
+    if (suppressClick.current || cell.kind === 'gap') return
+    if (cell.kind === 'folder') {
+      setOpenFolder(cell.id)
+      return
+    }
+    openApp(cell.id)
+  }
+
+  const cellLabel = (cell: HomeCell) => {
+    if (cell.kind === 'folder') return { name: cell.name, tint: APP_BY_ID[cell.appIds[0] ?? '']?.tint ?? '#E7B7C9' }
+    if (cell.kind === 'gap') return { name: '空位', tint: '#E7B7C9' }
+    const app = APP_BY_ID[cell.id]
+    return { name: app?.name ?? '应用', tint: app?.tint ?? '#E7B7C9' }
+  }
+
+  const holdCell = (event: ReactPointerEvent<HTMLButtonElement>, index: number, cell: HomeCell) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    const pointerId = event.pointerId
+    const startX = event.clientX
+    const startY = event.clientY
+    let active = false
+    const label = cellLabel(cell)
+    const finish = (ev: PointerEvent) => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      if (!active || ev.pointerId !== pointerId) return
+      suppressClick.current = true
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
+      const over = hit ? Number(hit.dataset.homeIndex) : null
+      setGhost(null)
+      if (over === null || over === index || Number.isNaN(over)) return
+      const current = boardRef.current
+      const target = current[over]
+      if (!target || target.kind === 'gap') {
+        saveBoard(placeCell(current, index, over))
+        return
+      }
+      const rect = hit!.getBoundingClientRect()
+      const lx = (ev.clientX - rect.left) / rect.width
+      const ly = (ev.clientY - rect.top) / rect.height
+      const merge = lx > 0.2 && lx < 0.8 && ly > 0.08 && ly < 0.82
+      saveBoard(merge ? mergeCell(current, index, over, uid('folder')) : moveCell(current, index, over))
+    }
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!active) {
+        if (Math.hypot(dx, dy) > 10) {
+          window.clearTimeout(timer)
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', finish)
+          window.removeEventListener('pointercancel', finish)
+        }
+        return
+      }
+      ev.preventDefault()
+      const pager = pagerRef.current?.getBoundingClientRect()
+      if (pager && performance.now() - flipAt.current > 680) {
+        const localX = ev.clientX - pager.left
+        if (localX < 28) {
+          flipAt.current = performance.now()
+          setIndex((current) => Math.max(0, current - 1))
+        } else if (pager.width - localX < 28) {
+          flipAt.current = performance.now()
+          setIndex((current) => Math.min(pageCountRef.current - 1, current + 1))
+        }
+      }
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
+      const over = hit ? Number(hit.dataset.homeIndex) : null
+      const target = over === null ? undefined : boardRef.current[over]
+      const empty = over !== null && over !== index && (!target || target.kind === 'gap')
+      let merge = false
+      if (hit && target && target.kind !== 'gap' && over !== null && over !== index) {
+        const rect = hit.getBoundingClientRect()
+        const lx = (ev.clientX - rect.left) / rect.width
+        const ly = (ev.clientY - rect.top) / rect.height
+        merge = lx > 0.2 && lx < 0.8 && ly > 0.08 && ly < 0.82
+      }
+      const size = 68
+      const x = pager ? Math.min(Math.max(0, ev.clientX - pager.left - size / 2), pager.width - size) : 0
+      const y = pager ? Math.min(Math.max(0, ev.clientY - pager.top - 28), pager.height - size) : 0
+      setGhost({ x, y, name: label.name, tint: label.tint, merge, empty, over })
+    }
+    const timer = window.setTimeout(() => {
+      active = true
+      suppressClick.current = true
+      const pager = pagerRef.current?.getBoundingClientRect()
+      const size = 68
+      const x = pager ? Math.min(Math.max(0, startX - pager.left - size / 2), pager.width - size) : 0
+      const y = pager ? Math.min(Math.max(0, startY - pager.top - 28), pager.height - size) : 0
+      setGhost({ x, y, name: label.name, tint: label.tint, merge: false, empty: false, over: null })
+    }, 460)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+  }
+
+  const holdFolderApp = (event: ReactPointerEvent<HTMLButtonElement>, appId: string) => {
+    if (event.button !== 0 || !openFolder) return
+    event.stopPropagation()
+    const folderId = openFolder
+    const pointerId = event.pointerId
+    const startX = event.clientX
+    const startY = event.clientY
+    let active = false
+    const app = APP_BY_ID[appId]
+    const label = { name: app?.name ?? '应用', tint: app?.tint ?? '#E7B7C9' }
+    const finish = (ev: PointerEvent) => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      setLiftFolder(false)
+      if (!active || ev.pointerId !== pointerId) return
+      suppressClick.current = true
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
+      const over = hit ? Number(hit.dataset.homeIndex) : null
+      setGhost(null)
+      const current = boardRef.current
+      const folderIndex = current.findIndex((cell) => cell.kind === 'folder' && cell.id === folderId)
+      if (over === null || Number.isNaN(over) || over === folderIndex) return
+      const next = ejectTo(current, folderId, appId, over)
+      saveBoard(next)
+      if (!next.some((cell) => cell.kind === 'folder' && cell.id === folderId)) setOpenFolder(null)
+    }
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
+      if (!active) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 10) {
+          window.clearTimeout(timer)
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', finish)
+          window.removeEventListener('pointercancel', finish)
+        }
+        return
+      }
+      ev.preventDefault()
+      const pager = pagerRef.current?.getBoundingClientRect()
+      if (pager && performance.now() - flipAt.current > 680) {
+        const localX = ev.clientX - pager.left
+        if (localX < 28) {
+          flipAt.current = performance.now()
+          setIndex((current) => Math.max(0, current - 1))
+        } else if (pager.width - localX < 28) {
+          flipAt.current = performance.now()
+          setIndex((current) => Math.min(pageCountRef.current - 1, current + 1))
+        }
+      }
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
+      const over = hit ? Number(hit.dataset.homeIndex) : null
+      const target = over === null ? undefined : boardRef.current[over]
+      const folderIndex = boardRef.current.findIndex((cell) => cell.kind === 'folder' && cell.id === folderId)
+      const empty = over !== null && over !== folderIndex && (!target || target.kind === 'gap')
+      const size = 68
+      const x = pager ? Math.min(Math.max(0, ev.clientX - pager.left - size / 2), pager.width - size) : 0
+      const y = pager ? Math.min(Math.max(0, ev.clientY - pager.top - 28), pager.height - size) : 0
+      setGhost({ x, y, name: label.name, tint: label.tint, merge: false, empty, over })
+    }
+    const timer = window.setTimeout(() => {
+      active = true
+      suppressClick.current = true
+      setLiftFolder(true)
+      const pager = pagerRef.current?.getBoundingClientRect()
+      const size = 68
+      const x = pager ? Math.min(Math.max(0, startX - pager.left - size / 2), pager.width - size) : 0
+      const y = pager ? Math.min(Math.max(0, startY - pager.top - 28), pager.height - size) : 0
+      setGhost({ x, y, name: label.name, tint: label.tint, merge: false, empty: false, over: null })
+    }, 460)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
   }
 
   return (
@@ -191,29 +390,36 @@ export function HomeScreen() {
           {phone ? <PageFill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
         </div>
       </section>
-      <section className="home-page relative z-10">
-        <div className="launcher-col launcher-apps">
-          {phone ? <Page2Fill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
-          <div className="launcher-board page2-board">
-            {page2.map((app) => (
-              <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} onClick={() => openApp(app.id)} />
-            ))}
-          </div>
-        </div>
-      </section>
-      {page3.length > 0 ? (
-        <section className="home-page relative z-10">
+      {appPages.map((cells, pageIndex) => (
+        <section key={pageIndex} className="home-page relative z-10">
           <div className="launcher-col launcher-apps">
-            <div className="launcher-board" style={{ marginTop: 0, alignContent: 'start' }}>
-              {page3.map((app) => (
-                <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} onClick={() => openApp(app.id)} />
-              ))}
+            {pageIndex === 0 && phone ? <Page2Fill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
+            <div className={pageIndex === 0 ? 'launcher-board page2-board' : 'launcher-board'} style={pageIndex === 0 ? undefined : { marginTop: 0, alignContent: 'start' }}>
+              {Array.from({ length: HOME_PAGE_CAP }, (_, offset) => {
+                const index = pageIndex * HOME_PAGE_CAP + offset
+                const cell = cells[offset]
+                if (!cell || cell.kind === 'gap') {
+                  return <div key={`gap-${index}`} data-home-index={index} className={ghost?.over === index ? 'home-gap is-over' : 'home-gap'} />
+                }
+                return (
+                  <HomeSlot
+                    key={cell.id}
+                    cell={cell}
+                    index={index}
+                    badge={cell.kind === 'app' && cell.id === 'messages' ? unread : 0}
+                    merging={ghost?.merge === true && ghost.over === index}
+                    onOpen={() => openCell(cell)}
+                    onHold={(event) => holdCell(event, index, cell)}
+                  />
+                )
+              })}
             </div>
           </div>
         </section>
-      ) : null}
+      ))}
       </div>
-      <div className="home-toolbar pointer-events-none absolute inset-x-0 bottom-12 z-20 flex flex-col items-center gap-2.5">
+      {!activeApp && home.pet?.shown ? <DesktopPet /> : null}
+      <div className="home-toolbar pointer-events-none absolute inset-x-0 bottom-12 z-[26] flex flex-col items-center gap-2.5">
         <div className="home-search-wrap pointer-events-auto">
           <button type="button" data-no-swipe className="home-search-trigger" aria-label="搜索或输入网址" onClick={() => setSearchOpen(true)}><span>搜索或输入网址</span><Search size={18}/></button>
         </div>
@@ -230,6 +436,24 @@ export function HomeScreen() {
           ))}
         </div>
       </div>
+      {ghost ? (
+        <div className="home-ghost" style={{ transform: `translate3d(${ghost.x}px, ${ghost.y}px, 0)` }}>
+          <span className="home-ghost-face" style={{ background: ghost.tint }} />
+          <span>{ghost.merge ? '松手放进组里' : ghost.empty ? '松手放到这里' : ghost.name}</span>
+        </div>
+      ) : null}
+      {openFolder ? (
+        <FolderSheet
+          board={board}
+          folderId={openFolder}
+          unread={unread}
+          onClose={() => setOpenFolder(null)}
+          onOpen={(id) => { setOpenFolder(null); openApp(id) }}
+          onRename={(name) => saveBoard(renameFolder(board, openFolder, name))}
+          onHold={holdFolderApp}
+          lifted={liftFolder}
+        />
+      ) : null}
       {searchOpen && <HomeSearchPanel onClose={() => setSearchOpen(false)} onSearch={query => { setSearchOpen(false); runSearch(query) }}/>}
       {browser ? (
         <SimBrowser
@@ -413,9 +637,122 @@ function Page2Fill(props: { namespace: string; decors: DecorCard[]; onDecor: (id
   )
 }
 
-function AppButton(props: { app: PhoneApp; badge: number; compact?: boolean; onClick: () => void }) {
+function HomeSlot(props: {
+  cell: HomeCell
+  index: number
+  badge: number
+  merging: boolean
+  onOpen: () => void
+  onHold: (event: ReactPointerEvent<HTMLButtonElement>) => void
+}) {
+  const cell = props.cell
+  if (cell.kind === 'gap') return null
+  const app = cell.kind === 'app' ? APP_BY_ID[cell.id] : null
+  const tint = app?.tint ?? (cell.kind === 'folder' ? APP_BY_ID[cell.appIds[0] ?? '']?.tint : undefined) ?? '#E7B7C9'
+  const name = cell.kind === 'folder' ? cell.name : app?.name ?? '应用'
   return (
-    <button type="button" onClick={props.onClick} className="app-launch flex flex-col items-center gap-1.5">
+    <button
+      type="button"
+      data-home-index={props.index}
+      data-no-swipe
+      className={props.merging ? 'app-launch is-merge flex flex-col items-center gap-1.5' : 'app-launch flex flex-col items-center gap-1.5'}
+      aria-label={cell.kind === 'folder' ? `${name}，${cell.appIds.length} 个应用` : name}
+      onPointerDown={props.onHold}
+      onClick={props.onOpen}
+    >
+      <span className="relative">
+        {cell.kind === 'folder' ? (
+          <span className="app-folder">
+            {Array.from({ length: 4 }, (_, slot) => {
+              const id = cell.appIds[slot]
+              if (!id) return <span key={slot} className="app-folder-slot is-empty" />
+              return (
+                <span key={id} className="app-folder-slot">
+                  <AppGlyph id={id} tint={APP_BY_ID[id]?.tint ?? tint} size={18} />
+                </span>
+              )
+            })}
+          </span>
+        ) : (
+          <AppGlyph id={cell.id} tint={tint} size={52} />
+        )}
+        {props.badge > 0 ? (
+          <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] text-white" style={{ background: 'var(--m-accent)', height: 16 }}>
+            {props.badge > 9 ? '9+' : props.badge}
+          </span>
+        ) : null}
+      </span>
+      <span className="max-w-full truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{name}</span>
+    </button>
+  )
+}
+
+function FolderSheet(props: {
+  board: HomeCell[]
+  folderId: string
+  unread: number
+  lifted: boolean
+  onClose: () => void
+  onOpen: (id: string) => void
+  onRename: (name: string) => void
+  onHold: (event: ReactPointerEvent<HTMLButtonElement>, appId: string) => void
+}) {
+  const folder = props.board.find((cell) => cell.kind === 'folder' && cell.id === props.folderId)
+  const [name, setName] = useState(folder && folder.kind === 'folder' ? folder.name : '应用组')
+  const [folderPage, setFolderPage] = useState(0)
+  const dragX = useRef(0)
+  if (!folder || folder.kind !== 'folder') return null
+  const pageCount = Math.max(1, Math.ceil(folder.appIds.length / 4))
+  const page = Math.min(folderPage, pageCount - 1)
+  const visible = folder.appIds.slice(page * 4, page * 4 + 4)
+  return (
+    <div className={props.lifted ? 'folder-sheet is-lifted' : 'folder-sheet'} role="dialog" aria-modal="true" aria-label={folder.name} data-no-swipe onPointerDown={(event) => event.stopPropagation()} onClick={props.onClose}>
+      <div className="folder-card" onClick={(event) => event.stopPropagation()}>
+        <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); props.onRename(name) }}>
+          <input aria-label="应用组名称" className="soft-input" maxLength={12} value={name} onChange={(event) => setName(event.target.value)} />
+          <button type="submit" className="chip chip-solid shrink-0">改名</button>
+        </form>
+        <p className="folder-hint">长按图标，拖到桌面上放下</p>
+        <div
+          className="folder-grid"
+          onPointerDown={(event) => {
+            if ((event.target as Element).closest('button')) return
+            dragX.current = event.clientX
+          }}
+          onPointerUp={(event) => {
+            if ((event.target as Element).closest('button')) return
+            const dx = event.clientX - dragX.current
+            if (dx <= -36) setFolderPage((current) => Math.min(pageCount - 1, current + 1))
+            else if (dx >= 36) setFolderPage((current) => Math.max(0, current - 1))
+          }}
+        >
+          {Array.from({ length: 4 }, (_, slot) => {
+            const id = visible[slot]
+            const app = id ? APP_BY_ID[id] : undefined
+            if (!app || !id) return <div key={slot} className="folder-grid-empty" />
+            return (
+              <div key={id} className="folder-grid-item">
+                <AppButton app={app} badge={id === 'messages' ? props.unread : 0} onPointerDown={(event) => props.onHold(event, id)} onClick={() => props.onOpen(id)} />
+              </div>
+            )
+          })}
+        </div>
+        {pageCount > 1 ? (
+          <div className="folder-dots">
+            {Array.from({ length: pageCount }, (_, dot) => (
+              <button key={dot} type="button" aria-label={`应用组第 ${dot + 1} 页`} className={dot === page ? 'is-on' : ''} onClick={() => setFolderPage(dot)} />
+            ))}
+          </div>
+        ) : null}
+        <button type="button" className="chip mt-3" onClick={props.onClose}>完成</button>
+      </div>
+    </div>
+  )
+}
+
+function AppButton(props: { app: PhoneApp; badge: number; compact?: boolean; onClick: () => void; onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void }) {
+  return (
+    <button type="button" onClick={props.onClick} onPointerDown={props.onPointerDown} className="app-launch flex flex-col items-center gap-1.5">
       <span className="relative">
         <AppGlyph id={props.app.id} tint={props.app.tint} size={props.compact ? 48 : 52} />
         {props.badge > 0 ? (

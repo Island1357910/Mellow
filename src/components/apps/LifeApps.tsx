@@ -4,6 +4,7 @@ import { localDay } from '../../lib/earnings.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import { RemoveChip } from '../ui/RemoveChip.tsx'
 import { Screen } from '../ui/primitives.tsx'
 
 type Entry = { id: string; text: string; at: number }
@@ -44,6 +45,6 @@ export function DiaryApp({ onBack }: { onBack: () => void }) {
     <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold">{query?`搜索结果 · ${visible.length} 篇`:selected}</h3><button className="chip chip-solid" disabled={!ready} onClick={()=>{setWriting(true);setEditing('');setText('')}}><NotebookPen size={14}/>写一页</button></div>
     {writing&&<section className="menu-card mb-3"><p className="mb-2 text-xs">{selected} · {editing?'编辑日记':'新的一页'}</p><textarea className="soft-input resize-none leading-7" rows={6} aria-label="日记正文" placeholder="这一天发生了什么？" value={text} onChange={e=>setText(e.target.value)}/><div className="mt-3 flex gap-2"><button className="chip chip-solid" disabled={saving||!text.trim()} onClick={()=>void save()}>{saving?'保存中…':'保存日记'}</button><button className="chip" onClick={()=>{setWriting(false);setText('');setEditing('')}}>取消</button></div></section>}
     {note&&<p role="status" className="mb-3 text-xs">{note}</p>}
-    {!ready?<p className="text-sm">正在翻开日记…</p>:visible.length===0?<p className="menu-card text-sm">{query?'没有找到这段文字':'这一天还没有写下什么。'}</p>:<ol className="space-y-3">{visible.map(entry=><li key={entry.id} className="menu-card"><p className="text-xs" style={{color:'var(--m-text-secondary)'}}>{new Date(entry.at).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</p><p className="my-3 whitespace-pre-wrap break-words text-sm leading-7">{entry.text}</p><button className="chip" onClick={()=>{const date=new Date(entry.at);setSelected(localDay(date));setMonth(new Date(date.getFullYear(),date.getMonth(),1));setEditing(entry.id);setText(entry.text);setWriting(true)}}>编辑这一页</button></li>)}</ol>}
+    {!ready?<p className="text-sm">正在翻开日记…</p>:visible.length===0?<p className="menu-card text-sm">{query?'没有找到这段文字':'这一天还没有写下什么。'}</p>:<ol className="space-y-3">{visible.map(entry=><li key={entry.id} className="menu-card"><p className="text-xs" style={{color:'var(--m-text-secondary)'}}>{new Date(entry.at).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</p><p className="my-3 whitespace-pre-wrap break-words text-sm leading-7">{entry.text}</p><div className="flex flex-wrap gap-2"><button className="chip" onClick={()=>{const date=new Date(entry.at);setSelected(localDay(date));setMonth(new Date(date.getFullYear(),date.getMonth(),1));setEditing(entry.id);setText(entry.text);setWriting(true)}}>编辑这一页</button><RemoveChip onRemove={()=>{if(!phone)return;const next=entries.filter(item=>item.id!==entry.id);setEntries(next);void storage.setBag(phone.namespace,'diary',next)}} label="删除这一页"/></div></li>)}</ol>}
   </Screen></div>
 }

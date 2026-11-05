@@ -362,21 +362,43 @@ function HomeBar() {
   const controlOpen = useMellow((state) => state.controlOpen)
   const setControl = useMellow((state) => state.setControl)
   const startY = useRef<number | null>(null)
+  const held = useRef(false)
+  const timer = useRef(0)
+  const togglePet = () => {
+    const home = useMellow.getState().settings.home
+    const pet = home.pet ?? { shown: false, x: 16, y: 240 }
+    void useMellow.getState().patchSettings({ home: { ...home, pet: { ...pet, shown: !pet.shown } } })
+  }
+  const clearHold = () => window.clearTimeout(timer.current)
   return (
     <div className="pointer-events-none absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3">
       <div
         className="pointer-events-auto grid h-8 w-32 place-items-center"
+        aria-label="主页横条。轻点返回，上滑打开控制中心，长按召唤或收起低头"
         onPointerDown={(event) => {
           startY.current = event.clientY
+          held.current = false
+          clearHold()
+          timer.current = window.setTimeout(() => {
+            held.current = true
+            togglePet()
+          }, 520)
+        }}
+        onPointerMove={(event) => {
+          if (startY.current === null) return
+          if (Math.abs(event.clientY - startY.current) > 12) clearHold()
         }}
         onPointerUp={(event) => {
+          clearHold()
           if (startY.current === null) return
           const delta = event.clientY - startY.current
           startY.current = null
+          if (held.current) return
           if (delta < -28) setControl(true)
           else if (Math.abs(delta) < 12 && controlOpen) setControl(false)
           else if (Math.abs(delta) < 12 && activeApp) closeApp()
         }}
+        onPointerCancel={() => { clearHold(); startY.current = null }}
       >
         <div className="h-1.5 w-28 rounded-full bg-black/25" />
       </div>

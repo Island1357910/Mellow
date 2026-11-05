@@ -10,6 +10,7 @@ import { candyStyle } from '../../lib/candy.ts'
 import { uid } from '../../lib/id.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import { RemoveChip } from '../ui/RemoveChip.tsx'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
 function usePhone() {
@@ -150,6 +151,16 @@ export function StarApp(props: { onBack: () => void }) {
     persist(posts.map((item) => (item.id === id ? { ...item, liked: !item.liked, likes: item.likes + (item.liked ? -1 : 1) } : item)))
   }
 
+  const removePost = (id: string) => {
+    persist(posts.filter((item) => item.id !== id))
+    setBookmarks((current) => {
+      const next = current.filter((item) => item !== id)
+      void storage.setBag(phone.namespace, 'star_bookmarks', next)
+      return next
+    })
+    if (openId === id) setOpenId(null)
+  }
+
   const sendComment = () => {
     if (!opened || !comment.trim() || commentBusy) return
     const mine: FeedComment = { id: uid('cmt'), author: phone.name, text: comment.trim(), at: clock() }
@@ -219,9 +230,10 @@ export function StarApp(props: { onBack: () => void }) {
           <article className="menu-card">
             <div className="mb-4 flex items-center justify-between gap-2"><button className="text-sm font-semibold" onClick={()=>{setBlogger(opened.handle);setOpenId(null)}}>@{opened.handle}</button>{!opened.mine&&followButton(opened.handle)}</div><p className="whitespace-pre-wrap text-sm leading-7">{opened.text}</p>
             <p className="mt-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{when(opened.at)}</p>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" className="chip" style={opened.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(opened.id)}><Heart size={12} /> {opened.likes}</button>
               <span className="chip"><MessageCircle size={12} /> {opened.comments.length}</span>
+              <RemoveChip onRemove={() => removePost(opened.id)} label="删除这条" />
             </div>
             <div className="mt-3 space-y-2">
               {opened.comments.map((item) => (
@@ -258,10 +270,11 @@ export function StarApp(props: { onBack: () => void }) {
                     {!item.mine&&followButton(item.handle)}
                   </div>
                   <button type="button" className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-7" onClick={()=>setOpenId(item.id)}>{item.text}</button>
-                  <div className="star-actions mt-3 grid grid-cols-3 gap-2 border-t border-current/10 pt-3">
+                  <div className="star-actions mt-3 flex flex-wrap gap-2 border-t border-current/10 pt-3">
                     <button type="button" className="chip" style={item.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(item.id)}><Heart size={12} /> {item.likes}</button>
                     <button type="button" className="chip" onClick={() => setOpenId(item.id)}><MessageCircle size={14} /> {item.comments.length}</button>
                     <button className="chip" aria-pressed={bookmarks.includes(item.id)} onClick={()=>bookmark(item.id)}><Bookmark size={14} fill={bookmarks.includes(item.id)?'currentColor':'none'}/>{bookmarks.includes(item.id)?'已收藏':'收藏'}</button>
+                    <RemoveChip onRemove={() => removePost(item.id)} label="删除这条" />
                   </div>
                 </article>
               ))}

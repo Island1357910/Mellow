@@ -26,6 +26,23 @@ export function codeReward(code:string,now:number) {
   }
   throw Error('兑换码不存在，请检查大小写和文字')
 }
+
+export function openRedeemCodes(now = Date.now()): Array<{ code: string; note: string }> {
+  const catalog = [
+    { code: '半糖Mellow', note: '3000 枚，并获得苹果主题。2026 年 11 月 8 日截止。' },
+    { code: '冬天来一杯热可可吧！', note: '2000 枚，热可可主题。2026 年 11 月 10 日截止。' },
+    { code: '冰蓝色初冬', note: '2000 枚，冰蓝主题。2026 年 11 月 10 日截止。' },
+    { code: '和你一起的万圣节', note: '2000 枚。2026 年 11 月 3 日截止。' },
+  ]
+  return catalog.filter((item) => {
+    try {
+      codeReward(item.code, now)
+      return true
+    } catch {
+      return false
+    }
+  })
+}
 export async function restoreRedeemTheme(namespace:string){
   const saved=await storage.getBag<RedeemState>(namespace,'redeem_codes_v1')
   if(saved?.claims?.opening_apple_2026?.themeId===APPLE_THEME.id)await storage.saveTheme(APPLE_THEME)

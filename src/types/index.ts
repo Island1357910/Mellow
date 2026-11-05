@@ -376,10 +376,24 @@ export interface DecorCard {
   tilt: number
 }
 
+export type HomeCell =
+  | { kind: 'app'; id: string }
+  | { kind: 'folder'; id: string; name: string; appIds: string[] }
+  | { kind: 'gap' }
+
+export interface DeskPetPlace {
+  shown: boolean
+  x: number
+  y: number
+}
+
 export interface HomeLayout {
   page3: boolean
   page4: boolean
   decors: DecorCard[]
+  /** 玩家排过的桌面。缺省时按默认顺序。 */
+  board?: HomeCell[]
+  pet?: DeskPetPlace
 }
 
 export interface MinimaxVoice {
