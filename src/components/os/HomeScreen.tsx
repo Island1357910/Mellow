@@ -17,6 +17,44 @@ import { MusicPlayer, PlayerSheet } from './MusicPlayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
 import { SimBrowser } from './SimBrowser.tsx'
 
+const SWIPE_ARM = 32
+const SWIPE_COMMIT = 56
+const FLICK_DISTANCE = 40
+const FLICK_SPEED = 0.42
+const TAP_SLOP = 28
+const TAP_MS = 400
+
+type PressPoint = { x: number; y: number; t: number; id: number }
+
+function useLaunchPress(onOpen: () => void, armed: () => boolean, holdClick: () => void) {
+  const press = useRef<PressPoint | null>(null)
+  const handled = useRef(false)
+  return {
+    onPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+      handled.current = false
+      press.current = { x: event.clientX, y: event.clientY, t: performance.now(), id: event.pointerId }
+    },
+    onPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+      const start = press.current
+      press.current = null
+      if (!start || start.id !== event.pointerId || armed()) return
+      if (performance.now() - start.t >= TAP_MS) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP) return
+      handled.current = true
+      onOpen()
+      holdClick()
+    },
+    onClick() {
+      if (handled.current) {
+        handled.current = false
+        return
+      }
+      if (armed()) return
+      onOpen()
+    },
+  }
+}
+
 export function HomeScreen() {
   const openApp = useMellow((state) => state.openApp)
   const sessionApps = useMellow((state) => state.sessionApps)
@@ -129,11 +167,22 @@ export function HomeScreen() {
     void patchSettings({ home: { ...home, decors } })
   }
 
+  const swipeArmed = () => dragRef.current?.active === true || rearranging.current
+  const holdClick = () => {
+    suppressClick.current = true
+  }
+
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     suppressClick.current = false
-    if (rearranging.current || event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) return
+    if (rearranging.current || event.button !== 0 || identitySheet || browser || searchOpen || pad !== null || playerSheet) {
+      dragRef.current = null
+      return
+    }
     const target = event.target
-    if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) return
+    if (target instanceof Element && target.closest('input, textarea, select, [data-no-swipe]')) {
+      dragRef.current = null
+      return
+    }
     dragRef.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, t: performance.now() }
   }
 
@@ -144,7 +193,7 @@ export function HomeScreen() {
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     if (!drag.active) {
-      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return
+      if (Math.abs(dx) < SWIPE_ARM || Math.abs(dx) < Math.abs(dy) * 1.2) return
       drag.active = true
       setSettling(false)
       try {
@@ -172,13 +221,14 @@ export function HomeScreen() {
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     const speed = dx / Math.max(16, performance.now() - drag.t)
-    const flick = Math.abs(dx) >= 12 && Math.abs(dx) > Math.abs(dy) && Math.abs(speed) >= 0.18
-    const turned = dx <= -16 || dx >= 16 || flick
-    if (turned) suppressClick.current = true
+    const flick = Math.abs(dx) >= FLICK_DISTANCE && Math.abs(dx) > Math.abs(dy) && Math.abs(speed) >= FLICK_SPEED
+    const forward = dx <= -SWIPE_COMMIT || (flick && dx < 0)
+    const back = dx >= SWIPE_COMMIT || (flick && dx > 0)
+    suppressClick.current = true
     setSettling(true)
     setDragX(0)
-    if (dx <= -16 || (flick && dx < 0)) setIndex((current) => Math.min(pageCount - 1, current + 1))
-    else if (dx >= 16 || (flick && dx > 0)) setIndex((current) => Math.max(0, current - 1))
+    if (forward) setIndex((current) => Math.min(pageCount - 1, current + 1))
+    else if (back) setIndex((current) => Math.max(0, current - 1))
   }
 
   const saveBoard = (next: HomeCell[]) => {
@@ -372,6 +422,9 @@ export function HomeScreen() {
     <div
       ref={pagerRef}
       className="home-pager"
+      onPointerDownCapture={() => {
+        suppressClick.current = false
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={finishDrag}
@@ -429,6 +482,8 @@ export function HomeScreen() {
                     merging={ghost?.merge === true && ghost.over === index}
                     onOpen={() => openCell(cell)}
                     onHold={(event) => holdCell(event, index, cell)}
+                    armed={swipeArmed}
+                    holdClick={holdClick}
                   />
                 )
               })}
@@ -451,7 +506,7 @@ export function HomeScreen() {
         </div>
         <div className="dock-bar pointer-events-auto">
           {dock.map((app) => (
-            <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} compact onClick={() => openApp(app.id)} />
+            <AppButton key={app.id} app={app} badge={app.id === 'messages' ? unread : 0} compact onClick={() => openApp(app.id)} armed={swipeArmed} holdClick={holdClick} />
           ))}
         </div>
       </div>
@@ -471,6 +526,8 @@ export function HomeScreen() {
           onRename={(name) => saveBoard(renameFolder(board, openFolder, name))}
           onHold={holdFolderApp}
           lifted={liftFolder}
+          armed={swipeArmed}
+          holdClick={holdClick}
         />
       ) : null}
       {searchOpen && <HomeSearchPanel onClose={() => setSearchOpen(false)} onSearch={query => { setSearchOpen(false); runSearch(query) }}/>}
@@ -663,7 +720,10 @@ function HomeSlot(props: {
   merging: boolean
   onOpen: () => void
   onHold: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  armed: () => boolean
+  holdClick: () => void
 }) {
+  const press = useLaunchPress(props.onOpen, props.armed, props.holdClick)
   const cell = props.cell
   if (cell.kind === 'gap') return null
   const app = cell.kind === 'app' ? APP_BY_ID[cell.id] : null
@@ -675,8 +735,12 @@ function HomeSlot(props: {
       data-home-index={props.index}
       className={props.merging ? 'app-launch is-merge flex flex-col items-center gap-1.5' : 'app-launch flex flex-col items-center gap-1.5'}
       aria-label={cell.kind === 'folder' ? `${name}，${cell.appIds.length} 个应用` : name}
-      onPointerDown={props.onHold}
-      onClick={props.onOpen}
+      onPointerDown={(event) => {
+        press.onPointerDown(event)
+        props.onHold(event)
+      }}
+      onPointerUp={press.onPointerUp}
+      onClick={press.onClick}
     >
       <span className="relative">
         {cell.kind === 'folder' ? (
@@ -714,6 +778,8 @@ function FolderSheet(props: {
   onOpen: (id: string) => void
   onRename: (name: string) => void
   onHold: (event: ReactPointerEvent<HTMLButtonElement>, appId: string) => void
+  armed: () => boolean
+  holdClick: () => void
 }) {
   const folder = props.board.find((cell) => cell.kind === 'folder' && cell.id === props.folderId)
   const [name, setName] = useState(folder && folder.kind === 'folder' ? folder.name : '应用组')
@@ -750,7 +816,7 @@ function FolderSheet(props: {
             if (!app || !id) return <div key={slot} className="folder-grid-empty" />
             return (
               <div key={id} className="folder-grid-item">
-                <AppButton app={app} badge={id === 'messages' ? props.unread : 0} onPointerDown={(event) => props.onHold(event, id)} onClick={() => props.onOpen(id)} />
+                <AppButton app={app} badge={id === 'messages' ? props.unread : 0} onPointerDown={(event) => props.onHold(event, id)} onClick={() => props.onOpen(id)} armed={props.armed} holdClick={props.holdClick} />
               </div>
             )
           })}
@@ -768,9 +834,27 @@ function FolderSheet(props: {
   )
 }
 
-function AppButton(props: { app: PhoneApp; badge: number; compact?: boolean; onClick: () => void; onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void }) {
+function AppButton(props: {
+  app: PhoneApp
+  badge: number
+  compact?: boolean
+  onClick: () => void
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  armed: () => boolean
+  holdClick: () => void
+}) {
+  const press = useLaunchPress(props.onClick, props.armed, props.holdClick)
   return (
-    <button type="button" onClick={props.onClick} onPointerDown={props.onPointerDown} className="app-launch flex flex-col items-center gap-1.5">
+    <button
+      type="button"
+      className="app-launch flex flex-col items-center gap-1.5"
+      onPointerDown={(event) => {
+        press.onPointerDown(event)
+        props.onPointerDown?.(event)
+      }}
+      onPointerUp={press.onPointerUp}
+      onClick={press.onClick}
+    >
       <span className="relative">
         <AppGlyph id={props.app.id} tint={props.app.tint} size={props.compact ? 48 : 52} />
         {props.badge > 0 ? (
