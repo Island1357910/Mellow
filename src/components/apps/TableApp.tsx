@@ -45,7 +45,7 @@ let hostVoice = ''
 
 function hostAsk(system: string, user: string, maxTokens?: number) {
   const extra = hostVoice.trim()
-  return askLine(extra ? `${extra}\n${system}` : system, user, Math.max(768,maxTokens??300),45_000)
+  return askLine(extra ? `${extra}\n${system}` : system, user, maxTokens ?? 300, 45_000)
 }
 
 const TablePeople = createContext<Array<{ person: Character; bond: number }>>([])
@@ -76,8 +76,14 @@ function compactText(text: string) {
 }
 
 function oneLine(text: string, max = 40) {
-  const line = text.split('\n').map((item) => item.trim()).find(Boolean) ?? ''
+  const line = text.replace(/\\n/g, '\n').split('\n').map((item) => item.trim()).find(Boolean) ?? ''
   return line.replace(/^["「『]+|["」』]+$/g, '').slice(0, max)
+}
+
+function hintLines(text: string, word: string) {
+  return text.replace(/\\n/g, '\n').split(/\n+|；|;/).flatMap((row) => row.split(/(?=\d+[.、．])/))
+    .map((item) => item.replace(/^\d+[.、．]\s*/, '').trim())
+    .filter((item) => item && !item.includes(word))
 }
 
 function dealSpy(names: string[]) {
@@ -221,8 +227,8 @@ function Say(props: { names: string[]; namespace: string; onBack: () => void }) 
     if(describer!==0){const good=text.replace(/\s/g,'')===card.word;setLog(l=>[...l,`你猜：${text}`,good?'猜对了！':'还没猜中，再给你一个提示。']);if(good){setDone(true);tableEvent('你说我猜：玩家猜中了'+card.word,true)}else { const hint=card.hints[hints.length]??'可以换个角度想想'; setHints(h=>[...h,hint]); tableEvent('玩家猜：'+text+'，还没猜中。公开新提示：'+hint) };setBusy(false);return}
     const next=[...hints,text];setHints(next);setLog(l=>[...l,`你：${text}`]);tableEvent('你说我猜：玩家给出公开提示：'+text)
     try{for(const name of props.names.slice(1)){const guess=await hostAsk(`你是${name}，正在你说我猜。只能根据玩家实际给出的提示猜一个词，禁止知道答案。只回复一个词。`,next.join('；'),40);setLog(l=>[...l,`${name}：${guess}`]);tableEvent('你说我猜公开猜测：'+name+'：'+guess);if(guess.replace(/[。！\s]/g,'')===card.word){setDone(true);setLog(l=>[...l,'猜对了！']);tableEvent('你说我猜：'+name+'根据玩家提示猜中了'+card.word,true);break}}}catch(e){setError(e instanceof Error?e.message:'没有猜成，请再给一个提示重试')}finally{setBusy(false)}}
-  useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live){const publicHints=line.split('\n').filter(h=>h.trim()&&!h.includes(card.word));setHints(publicHints);tableEvent('你说我猜：'+props.names[describer]+'公布提示：'+publicHints.join('；'))}}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names,tableEvent])
-  return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card text-sm leading-7">{hints.join('；')||'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{tableEvent('你说我猜新一轮开始，角色根据当前提示参与，不得透露词卡答案。',false,true);setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
+  useEffect(()=>{if(describer===0)return;let live=true;setBusy(true);setError('');void hostAsk(`你是${props.names[describer]}。你说我猜中描述「${card.word}」，给3条逐步明确的提示，不要包含答案本身，每行一条。`,'现在给出提示',160).then(line=>{if(live){const publicHints=hintLines(line,card.word);setHints(publicHints);tableEvent('你说我猜：'+props.names[describer]+'公布提示：'+publicHints.join('；'))}}).catch(e=>{if(live){setHints(card.hints);setError(e instanceof Error?e.message:'使用本局词卡提示')}}).finally(()=>{if(live)setBusy(false)});return()=>{live=false}},[round,card,describer,props.names,tableEvent])
+  return <Screen title="你说我猜" subtitle={describer===0?'你描述，其他人猜':'角色描述，你来猜'} onBack={props.onBack}><RoundTable names={props.names} turn={describer} caption="按真实提示猜词"/>{describer===0?<PillNote>你的词：{card.word}</PillNote>:<article className="menu-card space-y-2 text-sm leading-7">{hints.length?hints.map((hint,index)=><p key={index} className="whitespace-pre-wrap">{hint}</p>):'正在准备提示…'}</article>}<div className="mt-3 space-y-2 text-sm" aria-live="polite">{log.map((l,i)=><p key={i}>{l}</p>)}</div>{!done&&<form className="mt-3 flex gap-2" onSubmit={e=>{e.preventDefault();void act()}}><input className="soft-input min-w-0" value={draft} onChange={e=>setDraft(e.target.value)} placeholder={describer===0?'描述这个词':'猜一个词'}/><button className="chip shrink-0" disabled={busy||!draft.trim()}>{busy?'回应中…':describer===0?'说':'猜'}</button></form>}{error&&<p role="status" className="mt-2 text-xs">{error}</p>}<button className="chip mt-3" disabled={busy} onClick={()=>{tableEvent('你说我猜新一轮开始，角色根据当前提示参与，不得透露词卡答案。',false,true);setRound(r=>r+1);setCard(pickAt(SAYS.filter(c=>c.word!==card.word))??SAYS[0]!);setHints([]);setLog([]);setDone(false);setDraft('');setError('')}}>{done?'下一轮':'跳过本轮'}</button></Screen>
 }
 
 function rolesFor(count: number): string[] {

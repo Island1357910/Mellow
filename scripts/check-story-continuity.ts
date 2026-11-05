@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
 import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
-import { buildStoryPrompt, DEFAULT_CONFIG, focusChars, generate, generateStoryReply, mergeStoryContinuation, newSave, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
+import { buildStoryPrompt, DEFAULT_CONFIG, ensureStoryBreaks, focusChars, generate, generateStoryReply, htmlBody, mergeStoryContinuation, newSave, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
 import { runStoryGeneration } from '../src/domain/storyRunner.ts'
 import { storyWorldText, writeWorld } from '../src/lib/worldbook.ts'
 import type { AIMessage, Character } from '../src/types/index.ts'
@@ -37,6 +37,10 @@ for (const char of chars) assert(expanded[0]!.content.includes(`${char.name}本�
 const oldHistory = newSave('旧记录', { lines: Array.from({ length: 40 }, (_, i) => ({ id: `history-${i}`, role: i % 2 ? 'assistant' as const : 'user' as const, content: i < 36 ? '不应超出窗口的旧原文' : `最新剧情${i}`, createdAt: i, participantIds: ['a'] })) })
 const bounded = buildStoryPrompt({ mode: 'offline', save: oldHistory, chars, identity, preset: null, config: { ...DEFAULT_CONFIG, keepRounds: 2 } })
 assert.equal(bounded.length, 5, 'keepRounds applies before summaries exist too')
+const wall = '他走进房间，把伞靠在门边。'.repeat(6)
+assert.equal(ensureStoryBreaks(wall), Array.from({ length: 6 }, () => '他走进房间，把伞靠在门边。').join('\n'))
+assert.equal(ensureStoryBreaks('短句。'), '短句。')
+assert.equal(htmlBody('<span>上一句</span>\n<span>下一句</span>'), '<span>上一句</span><br><span>下一句</span>')
 assert(!bounded.some(row => row.content.includes('不应超出窗口的旧原文')))
 assert.equal(oldHistory.lines.length, 40, 'limiting transmitted history never deletes saved history')
 assert(prompt[0]!.content.includes('最新约定尚未完成'))

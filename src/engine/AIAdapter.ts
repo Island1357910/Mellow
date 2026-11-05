@@ -53,7 +53,20 @@ function sleep(ms: number): Promise<void> {
 }
 
 function invalidParam(message: string): boolean {
-  return /参数无效|参数错误|参数有误|invalid parameter|invalid_request|max_tokens|max_completion_tokens/i.test(message)
+  return /参数无效|参数错误|参数有误|参数校验|invalid parameter|invalidparameter|invalid_request|unsupported parameter|max_tokens|max_completion_tokens/i.test(message)
+}
+
+function explainParam(message: string): string {
+  if (/请求参数校验失败|invalidparameter|参数校验失败/i.test(message)) {
+    return '接口拒绝了这次请求的参数。多半是输出额度超过该模型上限，或这个模型不接受温度、采样和惩罚。可在「设置 → 连接」把输出额度调小，或换一个模型后再试。'
+  }
+  return message
+}
+
+/** 把模型写成两个字符的 \\n 还原成真正换行。已经有换行时不动。 */
+function restoreBreaks(text: string): string {
+  if (!text.includes('\\n') || text.includes('\n')) return text
+  return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
 }
 
 function errorDetail(value: unknown): string {
@@ -112,7 +125,12 @@ function partText(part: unknown): string {
 function messageContent(value: unknown): string {
   if (value == null) return ''
   if (typeof value === 'string') return value
-  if (Array.isArray(value)) return value.map(partText).join('')
+  if (Array.isArray(value)) {
+    const parts = value.map(partText)
+    const texts = parts.map((part) => part.trim()).filter(Boolean)
+    if (texts.length >= 2 && texts.every((part) => part.length >= 12) && parts.every((part) => !part.includes('\n'))) return texts.join('\n')
+    return parts.join('')
+  }
   if (typeof value === 'object') {
     return partText(value).trim()
   }
@@ -131,18 +149,46 @@ function extractContent(data: unknown): string {
   if (!data || typeof data !== 'object') return ''
   const root = data as Record<string, unknown>
   const choice = (root.choices as Array<Record<string, unknown>> | undefined)?.[0]
+  let text = ''
   if (choice) {
     const message = choice.message as Record<string, unknown> | undefined
     if (message) {
       const main = messageContent(message.content)
-      if (main.trim()) return main
-      const fallback = pickString(message.output, message.text)
-      if (fallback) return fallback
+      if (main.trim()) text = main
+      else text = pickString(message.output, message.text)
     }
-    const direct = pickString(choice.text, choice.content, messageContent(choice.message))
-    if (direct) return direct
+    if (!text) text = pickString(choice.text, choice.content, messageContent(choice.message))
   }
-  return pickString(messageContent(root.content), messageContent(root.output), root.output_text, root.response)
+  if (!text) text = pickString(messageContent(root.content), messageContent(root.output), root.output_text, root.response)
+  return restoreBreaks(text)
+}
+
+/** 部分接口只允许开头一条 system，且 user / assistant 必须交替。失败后再用这套结构重试。 */
+function strictMessages(messages: AIMessage[]): AIMessage[] {
+  const systems: string[] = []
+  const dialog: AIMessage[] = []
+  for (const item of messages) {
+    const content = item.content.trim()
+    if (!content) continue
+    if (item.role === 'system') {
+      if (dialog.length === 0) systems.push(content)
+      else {
+        const last = dialog[dialog.length - 1]
+        if (last?.role === 'user') last.content = `${last.content}\n\n${content}`
+        else dialog.push({ role: 'user', content })
+      }
+      continue
+    }
+    const role = item.role === 'assistant' ? 'assistant' : 'user'
+    const last = dialog[dialog.length - 1]
+    if (last?.role === role) last.content = `${last.content}\n\n${content}`
+    else dialog.push({ role, content })
+  }
+  const rows: AIMessage[] = []
+  if (systems.length) rows.push({ role: 'system', content: systems.join('\n\n') })
+  rows.push(...dialog)
+  if (rows[rows.length - 1]?.role !== 'user') rows.push({ role: 'user', content: '请根据以上设定和对话继续，只输出正文。' })
+  return rows
 }
 
 /**
@@ -286,23 +332,36 @@ export class AIAdapter {
     if (typeof request.topP === 'number' && request.topP > 0 && request.topP < 1) normal.top_p = request.topP
     if (request.frequencyPenalty) normal.frequency_penalty = request.frequencyPenalty
     if (request.presencePenalty) normal.presence_penalty = request.presencePenalty
-    return [
+    const budget = normal.max_tokens
+    const rows: Array<Record<string, unknown>> = [
       normal,
       {
         model: this.config.model,
         messages,
-        max_tokens: normal.max_tokens,
+        max_tokens: budget,
       },
       {
         model: this.config.model,
         messages,
-        max_completion_tokens: normal.max_tokens,
+        max_completion_tokens: budget,
       },
       {
         model: this.config.model,
         messages,
       },
     ]
+    if (typeof budget === 'number') {
+      for (const cap of [4096, 2048, 1024]) {
+        if (budget > cap) rows.push({ model: this.config.model, messages, max_tokens: cap })
+      }
+    }
+    const strict = strictMessages(messages)
+    const same = strict.length === messages.length && strict.every((item, index) => item.role === messages[index]?.role && item.content === messages[index]?.content)
+    if (!same) {
+      rows.push({ model: this.config.model, messages: strict, max_tokens: typeof budget === 'number' ? Math.min(budget, 4096) : 4096 })
+      rows.push({ model: this.config.model, messages: strict })
+    }
+    return rows
   }
 
   private async openai(request: AIRequest, continuation = false): Promise<CompletionResult> {
@@ -331,7 +390,8 @@ export class AIAdapter {
         const retryable = response.status === 429 || response.status >= 500
         if (retryable) throw new AIError(last, 'network', retryable)
         if (response.status === 400 && invalidParam(last) && index < payloads.length - 1) continue
-        throw new AIError(last, 'api')
+        const friendly = explainParam(last)
+        throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)
       }
 
       let data: unknown
@@ -365,6 +425,7 @@ export class AIAdapter {
       }
       return { content: '', model: this.config.model, provider: 'openai', truncated }
     }
-    throw new AIError(last, 'api')
+    const friendly = explainParam(last)
+    throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)
   }
 }

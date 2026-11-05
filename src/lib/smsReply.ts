@@ -42,7 +42,8 @@ function splitText(text: string, min: number, max: number): string[] {
 export function buildSmsReplySegments(content: string, range: { min: number; max: number }): ReplySegment[] {
   const min = Math.max(1, Math.min(10, Math.round(range.min) || 1))
   const max = Math.max(min, Math.min(10, Math.round(range.max) || 1))
-  const parts = content.split(/<<<\s*分\s*>>>|\n\s*-{3,}\s*\n|\n\s*\n+/u).map(stripVoicePrefix).filter(Boolean)
+  const normalized = content.includes('\\n') && !content.includes('\n') ? content.replace(/\\n/g, '\n') : content
+  const parts = normalized.split(/<<<\s*分\s*>>>|\n+/u).map(stripVoicePrefix).filter(Boolean)
   const segments = expandReplyParts(parts)
   const textCount = segments.filter(item => item.kind === 'text').length
   let available = Math.max(0, max - textCount)

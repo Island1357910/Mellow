@@ -8,7 +8,7 @@ const originalFetch = globalThis.fetch
 const payloads: Array<Record<string, unknown>> = []
 const messages = [{ role: 'system' as const, content: '原格式和知识边界必须保留。'.repeat(500) }, { role: 'user' as const, content: '在家' }]
 const before = JSON.stringify(messages)
-function replies(rows: Array<{ content?: string; reasoning_content?: string; finish?: string } | Error | number>) {
+function replies(rows: Array<{ content?: string; reasoning_content?: string; finish?: string } | Error | number | string>) {
   payloads.length = 0
   globalThis.fetch = async (_url, init) => {
     payloads.push(JSON.parse(String(init?.body)))
@@ -16,6 +16,7 @@ function replies(rows: Array<{ content?: string; reasoning_content?: string; fin
     assert(next !== undefined, 'unexpected extra request')
     if (next instanceof Error) throw next
     if (typeof next === 'number') return new Response(JSON.stringify({ error: { message: 'invalid parameter max_tokens' } }), { status: next })
+    if (typeof next === 'string') return new Response(JSON.stringify({ error: { message: next } }), { status: 400 })
     return new Response(JSON.stringify({ choices: [{ finish_reason: next.finish ?? 'stop', message: { content: next.content ?? '', reasoning_content: next.reasoning_content } }] }))
   }
 }
@@ -62,6 +63,10 @@ try {
   replies([{ content: '' }, { content: '空正文恢复。' }])
   assert.equal((await adapter.complete({ messages })).content, '空正文恢复。')
   assert.equal(payloads.length, 2)
+  replies(['请求参数校验失败', { content: '第一段\\n第二段' }])
+  assert.equal((await adapter.complete({ messages, antiTruncation: false, maxTokens: 128 })).content, '第一段\n第二段')
+  assert.equal(payloads.length, 2)
+  assert.equal('temperature' in payloads[1], false)
   replies([400, { content: '兼容正文' }])
   assert.equal((await adapter.complete({ messages })).content, '兼容正文')
   assert.equal(payloads[1].max_tokens, 8192)

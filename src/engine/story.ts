@@ -688,6 +688,7 @@ export function buildStoryPrompt(input: {
   systems.push(
     `本次回复纯正文（HTML 标签不计入）目标 ${range.min}～${range.max} 汉字，可上下浮动 10%（约 ${range.lo}～${range.hi} 字）。不要为凑字数重复，也不要只写一两句敷衍。`,
   )
+  systems.push('正文按自然段书写，段与段之间空一行，对白单独成段。不要把整篇挤在同一行。')
   if (sideLike(mode)) {
     const cast = chars.filter(c => (save.charIds?.length ? save.charIds : [save.charId]).includes(c.id))
     for (const person of cast) {
@@ -826,9 +827,15 @@ export async function generate(messages: AIMessage[], preset: Preset | null, max
     temperature: storyTemperature(preset),
     maxTokens: maxTokens ?? 1024,
   })
-  const content = stripReasoning(response.content)
+  const content = ensureStoryBreaks(stripReasoning(response.content))
   if (!content) throw new Error('模型只返回了思考内容，没有剧情正文，请重试或增加输出长度')
   return content
+}
+
+/** 模型把整篇写成一行时，按句末补上换行，已经分段或含 HTML 的不动。 */
+export function ensureStoryBreaks(text: string): string {
+  if (hasHtml(text) || text.includes('\n') || text.length < 40) return text
+  return text.replace(/([。！？][”」』]?)/g, '$1\n').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 export async function generateStoryReply(input: {
@@ -893,11 +900,16 @@ export function htmlBody(text: string): string {
   })
   const body = guarded
     .split(/(<[^>]+>)/)
-    .map((part) => (part.startsWith('<') || part.trim() === '' ? part : part.replace(/\n/g, '<br>')))
+    .map((part) => {
+      if (part.startsWith('<')) return part
+      const breaks = part.match(/\n/g)?.length ?? 0
+      if (part.trim() === '') return breaks ? '<br>'.repeat(Math.min(breaks, 2)) : part
+      return part.replace(/\n/g, '<br>')
+    })
     .join('')
   return body.replace(/@@MELLOW(\d+)@@/g, (_, index: string) => kept[Number(index)] ?? '')
 }
 
 export function frameDoc(id: string, html: string, reading: ReadingStyle, color: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important;line-height:0}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){parent.postMessage({mellowFrame:id,h:measure()},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}br{display:block;margin:0.45em 0}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){parent.postMessage({mellowFrame:id,h:measure()},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
 }
