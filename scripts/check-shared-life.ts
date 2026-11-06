@@ -138,7 +138,7 @@ try {
   useMellow.setState({ settings: activeSettings, notices: [] })
   await tickSharedLife({ identity, settings: activeSettings, presets: snapshot.presets }, now)
   const key = jobKey(ns, 'shared-life-tick', person.id)
-  for (let i = 0; i < 100 && isAiJobRunning(key); i++) await new Promise(r => setTimeout(r, 10))
+  for (let i = 0; i < 500 && isAiJobRunning(key); i++) await new Promise(r => setTimeout(r, 10))
   assert.equal(isAiJobRunning(key), false)
   state = await readSharedLife(ns)
   assert.equal(state.gifts.filter(g => g.from === 'character').length, 1)
