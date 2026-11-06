@@ -1501,7 +1501,9 @@ button {
   line-height: 1;
 }
 
-.desk-pet-scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px 12px; }
+.home-pager .desk-pet-card,
+.home-pager .desk-pet-card :is(button, a, img, span) { touch-action: pan-y; }
+.desk-pet-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px 10px 12px; }
 .desk-pet-card.is-typing {
   top: 44px;
   right: 12px;
