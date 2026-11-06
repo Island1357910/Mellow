@@ -255,7 +255,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const backdrop = chat.backgroundImage ? `center / cover no-repeat url(${chat.backgroundImage})` : chat.background || undefined
 
   return (
-    <div className={`sms-shell conversation-shell relative flex h-full min-h-0 flex-col ${scope}`} style={{ background: backdrop }}>
+    <div className={`sms-shell conversation-shell relative flex h-full min-h-0 flex-col ${scope}`} data-custom-backdrop={backdrop ? '' : undefined} style={{ background: backdrop }}>
       <style>{bubbleSheet(scope, radius, bubble, chat.bubbleCss)}</style>
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         {selectMode ? (
@@ -979,6 +979,7 @@ function ChatMenu(props: {
                     key={color || 'none'}
                     type="button"
                     aria-label={color ? `背景 ${color}` : '默认背景'}
+                    data-holiday-preserve
                     className="h-9 w-9 rounded-full shadow-[0_4px_10px_rgba(120,80,100,0.08)]"
                     style={{ background: color || 'white', outline: !props.chat.backgroundImage && (props.chat.background ?? '') === color ? '2px solid #F3A8BA' : '1px solid rgba(0,0,0,0.06)', outlineOffset: 2 }}
                     onClick={() => props.onPatch({ background: color, backgroundImage: '' })}

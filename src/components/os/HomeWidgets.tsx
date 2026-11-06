@@ -1,3 +1,4 @@
+import { ClinicMotifs } from './ClinicMotifs.tsx'
 import { WinterMotifs } from './WinterMotifs.tsx'
 import { AppleWidgetMotifs } from './AppleMotifs.tsx'
 import { HalloweenGlyph } from './HalloweenMotifs.tsx'
@@ -169,7 +170,10 @@ export function TodoWidget(props: { namespace: string; className?: string }) {
             <button
               type="button"
               aria-label={item.done ? '标记未完成' : '标记完成'}
-              className="grid h-4 w-4 shrink-0 place-items-center rounded-full transition-colors"
+              aria-pressed={item.done}
+              data-theme-control
+              data-on={item.done}
+              className="widget-task-check grid h-4 w-4 shrink-0 place-items-center rounded-full transition-colors"
               style={{ background: item.done ? '#F3A8BA' : 'white', boxShadow: item.done ? 'none' : 'inset 0 0 0 1.5px #F3A8BA' }}
               onClick={() => setItems(items.map((row) => (row.id === item.id ? { ...row, done: !row.done } : row)))}
             >
@@ -218,6 +222,7 @@ function Blossoms() {
     <>
     <AppleWidgetMotifs />
     <WinterMotifs widget />
+    <ClinicMotifs widget />
     <div className="everyday-blossoms pointer-events-none absolute inset-0 overflow-hidden opacity-[0.22]">
       <Flower size={58} color="#F3A8BA" rotate={12} className="absolute -bottom-3 -right-2" />
       <Flower size={30} color="#C9B6E8" rotate={-18} className="absolute bottom-10 right-12" />

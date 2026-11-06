@@ -73,7 +73,7 @@ interface MellowState {
   touchData: () => void
 }
 
-const fallbackTheme = BUNDLED_THEMES[0]
+const fallbackTheme = BUNDLED_THEMES.find(theme => theme.id === 'theme_macaron') ?? BUNDLED_THEMES[0]
 
 let bootFlight: Promise<void> | null = null
 let eventsWired = false
@@ -336,5 +336,7 @@ export function phoneIdentity(state: Pick<MellowState, 'identities' | 'activeIde
 }
 
 export function themeOf(state: Pick<MellowState, 'themes' | 'settings'>): Theme {
-  return state.themes.find((item) => item.id === state.settings.themeId) ?? state.themes[0] ?? fallbackTheme
+  return state.themes.find((item) => item.id === state.settings.themeId)
+    ?? state.themes.find((item) => item.id === fallbackTheme.id)
+    ?? fallbackTheme
 }

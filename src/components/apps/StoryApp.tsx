@@ -8,6 +8,7 @@ import { modePresetId } from '../../lib/defaults.ts'
 import {
   applyRegex,
   deleteSave,
+  DEFAULT_READING,
   displayRules,
   focusChars,
   frameDoc,
@@ -358,7 +359,7 @@ function StoryView(props: {
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
 
   return (
-    <div className={sc('shell', 'sms-shell conversation-shell relative flex h-full min-h-0 flex-col')} style={{ ...candy, background: backdrop }}>
+    <div className={sc('shell', 'sms-shell conversation-shell relative flex h-full min-h-0 flex-col')} data-custom-backdrop={backdrop ? '' : undefined} style={{ ...candy, background: backdrop }}>
       {reading.customCss.trim() ? <style>{reading.customCss}</style> : null}
       <header className={sc('header', 'flex items-center gap-2 px-3 pb-2 pt-12')}>
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}>
@@ -531,7 +532,7 @@ function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<t
     )
   }
   return (
-    <span className={sc('bubble', `is-theirs ${reading.layout === 'novel' ? 'block rounded-[24px] px-4 py-3 shadow-[0_8px_20px_rgba(120,80,100,0.06)]' : 'block rounded-[20px] rounded-bl-[6px] px-3.5 py-2 shadow-[0_6px_14px_rgba(120,80,100,0.06)]'}`)} style={{ background: reading.paper }}>
+    <span className={sc('bubble', `is-theirs ${reading.layout === 'novel' ? 'block rounded-[24px] px-4 py-3 shadow-[0_8px_20px_rgba(120,80,100,0.06)]' : 'block rounded-[20px] rounded-bl-[6px] px-3.5 py-2 shadow-[0_6px_14px_rgba(120,80,100,0.06)]'}`)} data-theme-preserve={reading.paper !== DEFAULT_READING.paper ? '' : undefined} style={{ background: reading.paper }}>
       {inner}
     </span>
   )

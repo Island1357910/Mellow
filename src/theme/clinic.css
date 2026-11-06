@@ -1,0 +1,139 @@
+.device[data-theme-pack="clinic"],
+.modal-portal[data-theme-pack="clinic"] {
+  --clinic-line: #EFCBD2;
+  --clinic-glass: rgba(255, 254, 252, 0.88);
+  --winter-entry: #FAE9E7;
+  --winter-border: var(--clinic-line);
+  --clinic-wall: radial-gradient(ellipse at 50% 36%, #FFFEFC 0%, #FFFEFC00 34%),
+    radial-gradient(ellipse at 88% 8%, #F8D4DE99 0%, transparent 58%),
+    radial-gradient(ellipse at 8% 92%, #F8D8CD80 0%, transparent 60%),
+    linear-gradient(165deg, #FFF8F8 0%, #FFFCFB 46%, #F7E4EA 100%);
+  --winter-bubble-mine: #F9DFE6;
+  --winter-bubble-theirs: var(--m-surface);
+  --winter-bubble-ink: var(--m-text);
+  --m-quote-ink: var(--m-accent);
+  --m-detail-ink: var(--m-accent);
+  --control-key-surface: var(--m-surface);
+  --control-key-ink: var(--m-text);
+  --control-key-border: var(--clinic-line);
+  --control-dot-empty: var(--m-text-secondary);
+  --control-dot-filled: var(--m-accent);
+  --control-pressed: var(--m-accent);
+  --control-pressed-ink: var(--m-surface);
+  --control-error: #963E55;
+  --palette-danger-ink: #963E55;
+}
+
+.clinic-motifs { display: none; pointer-events: none; position: absolute; inset: 0; overflow: hidden; }
+.clinic-motifs > span { position: absolute; display: block; max-width: 26%; }
+.clinic-motifs svg { display: block; width: 100%; height: auto; }
+.device[data-theme-pack="clinic"] .clinic-motifs { display: block; }
+.device[data-theme-pack="clinic"][data-wallpaper="custom"] .clinic-wallpaper { display: none; }
+.clinic-wallpaper > span { isolation: isolate; }
+.clinic-wallpaper > span svg { animation: clinic-drift 14s ease-in-out infinite alternate; }
+.clinic-wallpaper > .clinic-motif-main { max-width: 50%; opacity: .46; filter: blur(.7px); }
+.clinic-wallpaper > .clinic-motif-main svg { animation-duration: 16s; }
+.clinic-wallpaper > .clinic-motif-main::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFFFFFD6 0%, #FFF6F400 68%);
+  filter: blur(10px);
+}
+.clinic-wallpaper > .clinic-motif-distant { max-width: 35%; opacity: .16; filter: blur(2.4px); }
+.clinic-wallpaper > .clinic-motif-distant svg { animation-duration: 22s; animation-delay: -6s; }
+.clinic-wallpaper > .clinic-motif-detail { max-width: 17%; opacity: .3; filter: blur(1.1px); }
+.clinic-wallpaper > .clinic-motif-detail svg { animation-duration: 12s; animation-delay: -3s; }
+.clinic-wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 28% 18%, #FFFFFFE6 0%, transparent 42%),
+    radial-gradient(ellipse at 74% 78%, #FFF4F2CC 0%, transparent 48%),
+    radial-gradient(ellipse at 50% 48%, #FFFFFF80 0%, transparent 58%);
+  filter: blur(2px);
+  animation: clinic-mist 18s ease-in-out infinite alternate;
+}
+.clinic-motifs .clinic-trace { position: absolute; left: 0; bottom: 10%; width: 100%; height: auto; opacity: .12; filter: blur(.8px); }
+.clinic-widget { opacity: 0.22; filter: blur(.4px); }
+@keyframes clinic-drift { from { transform: translateY(0); } to { transform: translateY(-12px); } }
+@keyframes clinic-mist { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -2.5%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .clinic-wallpaper > span svg,
+  .clinic-wallpaper::after { animation: none; }
+}
+.device[data-theme-pack="clinic"] .everyday-blossoms { display: none; }
+
+.device[data-theme-pack="clinic"]:not([data-wallpaper="custom"]) .wallpaper-base { background: var(--clinic-wall) !important; }
+.device[data-theme-pack="clinic"] .wallpaper-wash { opacity: 0; }
+:is(.device, .modal-portal)[data-theme-pack="clinic"] :is(.home-widget, .dock-bar, .desk-pet-card, .folder-card, .home-search-trigger, .notice-banner) {
+  background: rgba(255, 254, 252, 0.62) !important;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 16px 36px rgba(162, 79, 96, 0.07) !important;
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
+.modal-portal[data-theme-pack="clinic"] { background: #52343D62; }
+.device[data-theme-pack="clinic"] :is(.lock-time, .lock-brand, .lock-brand-sub) { color: var(--m-text); }
+.device[data-theme-pack="clinic"] .app-folder { background: var(--winter-entry); border-color: var(--clinic-line); }
+.device[data-theme-pack="clinic"] .pick-card-icon:not([data-holiday-preserve], [data-holiday-preserve] *, .jiushi-phone *) {
+  background: linear-gradient(145deg, var(--m-surface), var(--m-secondary));
+  color: var(--m-accent);
+  border: 1px solid var(--clinic-line);
+}
+.device[data-theme-pack="clinic"] .folder-grid-empty { background: var(--winter-entry); }
+.device[data-theme-pack="clinic"] .folder-dots button { background: var(--clinic-line); }
+.device[data-theme-pack="clinic"] .folder-dots button.is-on { background: var(--m-accent); }
+.device[data-theme-pack="clinic"] .desk-pet-tabs button.is-on { background: var(--m-primary); color: var(--m-text); }
+.device[data-theme-pack="clinic"] .stamp-dot[data-today="true"] { box-shadow: 0 0 0 1.5px var(--m-accent) !important; }
+.device[data-theme-pack="clinic"] .stamp-dot[data-stamped="true"] { background: var(--m-accent) !important; color: var(--m-surface) !important; }
+.device[data-theme-pack="clinic"] .music-widget .vinyl-disc { background-color: #573842 !important; }
+.device[data-theme-pack="clinic"] .music-widget .vinyl-disc[data-disc-style="cd"] {
+  background: conic-gradient(from 30deg, #FFFEFC, #E9ABB9, #FBE3D7, #FDF1F4, #FFFEFC, #E9ABB9, #FFFEFC) !important;
+}
+.device[data-theme-pack="clinic"] .player-tonearm {
+  --tonearm-metal: #D6A4AB;
+  --tonearm-head: #FFF5F0;
+  --tonearm-edge: #6C4654;
+}
+.device[data-theme-pack="clinic"] .password-setup {
+  background: var(--m-surface);
+  border: 1px solid var(--clinic-line);
+}
+.device[data-theme-pack="clinic"] .widget-task-check {
+  background: var(--m-surface) !important;
+  box-shadow: inset 0 0 0 1.5px var(--m-accent) !important;
+}
+.device[data-theme-pack="clinic"] .widget-task-check[data-on="true"] { background: var(--m-accent) !important; }
+
+:is(.device, .modal-portal)[data-theme-pack="clinic"] :is(.control-tile, .player-style-option) {
+  background: var(--m-surface) !important;
+  color: var(--m-text) !important;
+  border: 1px solid var(--clinic-line);
+}
+:is(.device, .modal-portal)[data-theme-pack="clinic"] :is(.control-tile[data-on="true"], .player-style-option[aria-pressed="true"]) {
+  background: var(--m-primary) !important;
+  border-color: var(--m-accent);
+}
+:is(.device, .modal-portal)[data-theme-pack="clinic"] .chip[aria-pressed="true"] {
+  outline: 2px solid var(--m-accent);
+  outline-offset: 1px;
+}
+:is(.device, .modal-portal)[data-theme-pack="clinic"] :is(.chip-mint, .chip-butter, .chip-peach) {
+  --clinic-chip-tint: #FBE3D7;
+}
+:is(.device, .modal-portal)[data-theme-pack="clinic"] :is(.chip-lilac, .chip-sky) {
+  --clinic-chip-tint: #F2CED9;
+}
+:is(.device, .modal-portal)[data-theme-pack="clinic"] .chip:is(.chip-mint, .chip-butter, .chip-peach, .chip-lilac, .chip-sky):not(.chip-solid, .chip-pink, .chip-danger, [data-holiday-preserve] *, [data-theme-preserve] *, .jiushi-phone *) {
+  background: var(--clinic-chip-tint) !important;
+}
+.device[data-theme-pack="clinic"] :is(.offline-bubble, .side-bubble).is-mine:not(.p-0) {
+  background: var(--winter-bubble-mine) !important;
+}
+.device[data-theme-pack="clinic"] :is(.offline-bubble, .side-bubble).is-theirs:not(.p-0):not([data-theme-preserve]) {
+  background: var(--winter-bubble-theirs) !important;
+}

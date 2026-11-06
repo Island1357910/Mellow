@@ -1,4 +1,6 @@
+@import "./theme/palette.css";
 @import "./theme/winter.css";
+@import "./theme/clinic.css";
 @import "tailwindcss";
 @import "./theme/halloween.css";
 @import "./theme/controls.css";
@@ -7,7 +9,7 @@
 
 /* Baseline rules must remain outside @scope for older Android WebViews. */
 .apple-atmosphere, .apple-wallpaper-pattern, .apple-widget-motifs,
-.halloween-wallpaper-pattern, .halloween-widget-motifs, .winter-motifs { display: none; }
+.halloween-wallpaper-pattern, .halloween-widget-motifs, .winter-motifs, .clinic-motifs { display: none; }
 
 :root {
   color-scheme: light;
@@ -1397,7 +1399,7 @@ button {
 .desk-pet-tabs {
   display: grid;
   flex: none;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   padding: 6px 8px 0;
 }
@@ -1406,9 +1408,60 @@ button {
   border-radius: 999px;
   padding: 4px 0;
   background: transparent;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--m-text-secondary);
 }
+
+.desk-pet-card-row,
+.desk-pet-confirm-actions button {
+  border-radius: 12px;
+  background: white;
+  text-align: left;
+}
+
+.desk-pet-card-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px;
+}
+
+.desk-pet-card-row.is-on { outline: 2px solid var(--m-accent); }
+
+.desk-pet-card-row img,
+.desk-pet-card-mark {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.desk-pet-card-mark {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--m-secondary) 70%, white);
+}
+
+.desk-pet-card-row strong,
+.desk-pet-card-row em { display: block; font-style: normal; }
+
+.desk-pet-card-row em { font-size: 10px; color: var(--m-text-secondary); }
+
+.desk-pet-confirm {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: white;
+}
+
+.desk-pet-confirm-actions { display: flex; gap: 6px; margin: 6px 0 0; }
+
+.desk-pet-confirm-actions button { padding: 5px 8px; font-size: 11px; }
+
+.desk-pet-confirm-actions .is-solid { background: var(--m-primary); }
 
 .desk-pet-tabs button.is-on {
   background: white;

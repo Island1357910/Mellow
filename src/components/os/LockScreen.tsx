@@ -1,3 +1,4 @@
+import { ClinicMotifs } from './ClinicMotifs.tsx'
 import { WinterMotifs } from './WinterMotifs.tsx'
 import { AppleAtmosphere } from './AppleMotifs.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -115,6 +116,7 @@ export function Wallpaper() {
       <div className="halloween-wallpaper-pattern pointer-events-none absolute inset-0" aria-hidden="true" />
       <AppleAtmosphere />
       <WinterMotifs />
+      <ClinicMotifs />
     </>
   )
 }

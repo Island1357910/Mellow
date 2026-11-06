@@ -1,4 +1,5 @@
 import { APPLE_THEME } from '../theme/apple.ts'
+import { CLINIC_THEME } from '../theme/clinic.ts'
 import Dexie from 'dexie'
 import { OFFICIAL_PRESETS } from '../data/officialPresets.ts'
 import { sortChats } from '../lib/chats.ts'
@@ -329,7 +330,14 @@ class StorageService {
   }
 
   async listThemes(): Promise<Theme[]> {
-    return this.meta.themes.toArray()
+    const themes = await this.meta.themes.toArray()
+    return themes.map(theme => theme.id === CLINIC_THEME.id ? {
+      ...theme,
+      name: CLINIC_THEME.name,
+      colors: CLINIC_THEME.colors,
+      logo: CLINIC_THEME.logo,
+      shadow: CLINIC_THEME.shadow,
+    } : theme)
   }
 
   async savePreset(preset: Preset): Promise<void> {

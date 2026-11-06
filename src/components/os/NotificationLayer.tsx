@@ -40,7 +40,7 @@ function Banner(props: { notice: Notice }) {
   }
 
   return (
-    <article role="status" aria-live="polite" className="pointer-events-auto rounded-3xl bg-white/90 p-3 shadow-[var(--m-shadow)] backdrop-blur">
+    <article role="status" aria-live="polite" className="notice-banner pointer-events-auto rounded-3xl bg-white/90 p-3 shadow-[var(--m-shadow)] backdrop-blur">
       <button
         type="button"
         className="block w-full text-left"

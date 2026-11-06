@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import type { Theme } from '../types/index.ts'
 
 export function themePack(id: string): string | undefined {
-  return ({ theme_red_apple_love: 'apple', theme_winter_cocoa: 'cocoa', theme_ice_early_winter: 'ice' } as Record<string, string>)[id]
+  return ({ theme_red_apple_love: 'apple', theme_winter_cocoa: 'cocoa', theme_ice_early_winter: 'ice', theme_no_needles_day: 'clinic' } as Record<string, string>)[id]
 }
 
 export function themeStyle(theme: Theme): CSSProperties {

@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
-import { HALLOWEEN_CODE_START,HALLOWEEN_CODE_END,APPLE_CODE_START,APPLE_CODE_END,codeReward,redeemCode,WINTER_CODE_END,type RedeemState } from '../src/lib/redeem.ts'
+import { HALLOWEEN_CODE_START,HALLOWEEN_CODE_END,APPLE_CODE_START,APPLE_CODE_END,CLINIC_CODE_END,codeReward,openRedeemCodes,redeemCode,WINTER_CODE_END,type RedeemState } from '../src/lib/redeem.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { readCoins } from '../src/lib/wallet.ts'
+import { CLINIC_GIFT } from '../src/theme/clinic.ts'
 import { WINTER_GIFTS } from '../src/theme/winter.ts'
 import { claimAccountReward, restoreRedeemTheme } from '../src/lib/redeem.ts'
 import { APPLE_THEME } from '../src/theme/apple.ts'
@@ -55,4 +56,16 @@ for (const gift of WINTER_GIFTS) {
   assert.deepEqual(themeFromUnknown(gift.theme)?.colors, gift.theme.colors)
 }
 assert.equal(await readCoins('winter-new-identity'), newIdentityBalance + 4000)
+assert.equal(codeReward(CLINIC_GIFT.code, CLINIC_CODE_END - 1).coins, 1500)
+assert.equal(codeReward(CLINIC_GIFT.code, CLINIC_CODE_END - 1).themeId, CLINIC_GIFT.theme.id)
+assert.throws(() => codeReward(CLINIC_GIFT.code, CLINIC_CODE_END), /到期/)
+assert(!openRedeemCodes(CLINIC_CODE_END).some(item => item.code === CLINIC_GIFT.code))
+const clinicBefore = await readCoins('clinic-redeem')
+const clinicClaims = await Promise.allSettled(Array.from({ length: 4 }, () => redeemCode('clinic-redeem', CLINIC_GIFT.code, CLINIC_CODE_END - 1)))
+assert.equal(clinicClaims.filter(result => result.status === 'fulfilled').length, 1)
+assert.equal(await readCoins('clinic-redeem'), clinicBefore + 1500)
+await assert.rejects(redeemCode('clinic-expired', CLINIC_GIFT.code, CLINIC_CODE_END), /到期/)
+await claimAccountReward('clinic-expired', CLINIC_GIFT.id, CLINIC_CODE_END)
+await restoreRedeemTheme('clinic-redeem')
+assert((await storage.listThemes()).some(theme => theme.id === CLINIC_GIFT.theme.id && theme.name === CLINIC_GIFT.theme.name))
 console.log('release regression ok: exact redemption windows, repeat-claim exclusion, atomic currency rewards, apple theme/logo roundtrip, all forum boards and long-form preservation')
