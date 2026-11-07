@@ -1,8 +1,6 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
-import { useConnectionsTab } from '../../lib/connectionsTabs.ts'
-import { useTogether } from '../../lib/together.ts'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Gift, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
+import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
@@ -27,12 +25,9 @@ import { ChatMemoryPanel } from './ChatMemoryPanel.tsx'
 import { StickerShelf } from './StickerShelf.tsx'
 import { apiErrorText } from '../../lib/apiErrorText.ts'
 
-type ToolId = 'life' | 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
+type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon'
 
 const DM_TOOLS: Array<{ id: ToolId; label: string; tint: string; icon: ReactNode }> = [
-  { id: 'life', label: '共同生活', tint: '#DBE6D4', icon: <PartyPopper size={20}/> },
-  { id: 'gift', label: '礼物', tint: '#F3E3FB', icon: <Gift size={20}/> },
-  { id: 'music', label: '一起听 / 读', tint: '#D5F0E4', icon: <Music size={20} /> },
   { id: 'album', label: '相册', tint: '#D7E7F8', icon: <Image size={20} /> },
   { id: 'sticker', label: '表情包', tint: '#F8E6C0', icon: <Smile size={20} /> },
   { id: 'redpacket', label: '红包', tint: '#FBD5D5', icon: <Mail size={20} /> },
@@ -412,11 +407,11 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
                   <StickerShelf onBack={() => setPanel('tools')} onSend={(url) => void send(url, 'sticker')} />
                 ) : (
                   <>
-                    <div className="grid grid-cols-4 gap-x-2 gap-y-3">
+                    <div className="flex items-start justify-between gap-1">
                       {tools.map((tool) => {
                         const on = tool.id === 'anon' && anon
                         return (
-                          <button key={tool.id} type="button" className="flex flex-col items-center gap-1.5 text-[11px]" onClick={() => void runTool(tool.id)}>
+                          <button key={tool.id} type="button" className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-[11px]" onClick={() => void runTool(tool.id)}>
                             <span className="grid h-12 w-12 place-items-center rounded-[18px] transition-transform active:scale-90" style={{ background: tool.tint, boxShadow: on ? 'inset 0 0 0 2px #8a7ca8' : 'none' }}>{tool.icon}</span>
                             {on ? '匿名中' : tool.label}
                           </button>
@@ -496,7 +491,6 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   )
 
   async function runTool(id: ToolId) {
-    if(id==='life'){if(primary)await storage.setBag(props.identity.namespace,'life_selected_char',primary.id);useMellow.getState().openApp('life');return}
     if (id === 'album') {
       const input = document.createElement('input')
       input.type = 'file'
@@ -519,18 +513,12 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
       setAnon((value) => !value)
       return
     }
-    if (id === 'redpacket' || id === 'transfer' || id === 'gift') {
+    if (id === 'redpacket' || id === 'transfer') {
       setPanel(null)
       setSheet(id)
       return
     }
     if (id === 'party') return send('发起了群派对，大家快来', 'party')
-    if (id === 'music') {
-      await useTogether.getState().load(props.identity.namespace)
-      if (props.chat.kind === 'dm') await useTogether.getState().patch({ charId: props.chat.memberIds[0] ?? '' })
-      useConnectionsTab.getState().setTab('together')
-      useMellow.getState().openApp('connections')
-    }
   }
 }
 

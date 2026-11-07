@@ -14,6 +14,7 @@ export interface StagePrefs {
   every: number
   turns: number
   lastError: string
+  kinds: string[]
 }
 
 export interface StagePlay {
@@ -29,12 +30,18 @@ export interface StagePlay {
   seed: number
 }
 
-const DEFAULT_PREFS: StagePrefs = { enabled: false, every: 6, turns: 0, lastError: '' }
+const DEFAULT_PREFS: StagePrefs = { enabled: false, every: 6, turns: 0, lastError: '', kinds: STAGE_KINDS.map((item) => item.id) }
 const tails = new Map<string, Promise<void>>()
 
 export function clampStageEvery(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_PREFS.every
   return Math.max(2, Math.min(20, Math.round(value)))
+}
+
+function knownKinds(value: unknown): string[] {
+  const known = new Set(STAGE_KINDS.map((item) => item.id))
+  if (!Array.isArray(value)) return [...known]
+  return value.filter((item): item is string => typeof item === 'string' && known.has(item))
 }
 
 export async function loadStagePrefs(namespace: string): Promise<StagePrefs> {
@@ -44,6 +51,7 @@ export async function loadStagePrefs(namespace: string): Promise<StagePrefs> {
     every: clampStageEvery(saved?.every ?? DEFAULT_PREFS.every),
     turns: Math.max(0, Math.min(40, Math.round(saved?.turns ?? 0))),
     lastError: typeof saved?.lastError === 'string' ? saved.lastError.slice(0, 48) : '',
+    kinds: knownKinds(saved?.kinds),
   }
 }
 
@@ -53,6 +61,7 @@ export async function saveStagePrefs(namespace: string, prefs: StagePrefs): Prom
     every: clampStageEvery(prefs.every),
     turns: Math.max(0, Math.min(40, Math.round(prefs.turns))),
     lastError: prefs.lastError.slice(0, 48),
+    kinds: knownKinds(prefs.kinds),
   })
 }
 
@@ -81,10 +90,12 @@ export async function loadStagePlays(namespace: string): Promise<StagePlay[]> {
   return saved.map(asPlay).filter((item): item is StagePlay => item !== null)
 }
 
-function pickKind(previous?: string): StageKind {
-  const pool = STAGE_KINDS.filter((item) => item.id !== previous)
-  const list = pool.length ? pool : STAGE_KINDS
-  return list[Math.floor(Math.random() * list.length)] ?? STAGE_KINDS[0]!
+function pickKind(enabled: string[], previous?: string): StageKind | null {
+  const allow = new Set(enabled)
+  const pool = STAGE_KINDS.filter((item) => allow.has(item.id) && item.id !== previous)
+  const list = pool.length ? pool : STAGE_KINDS.filter((item) => allow.has(item.id))
+  if (!list.length) return null
+  return list[Math.floor(Math.random() * list.length)] ?? null
 }
 
 function clip(text: string, max: number): string {
@@ -120,7 +131,12 @@ async function writeStage(input: { namespace: string; character: Character; play
   }
   await saveStagePrefs(input.namespace, { ...prefs, turns: 0 })
   const plays = await loadStagePlays(input.namespace)
-  const kind = pickKind(plays[0]?.kindId)
+  const kind = pickKind(prefs.kinds, plays[0]?.kindId)
+  if (!kind) {
+    await saveStagePrefs(input.namespace, { ...prefs, turns: 0, lastError: '还没有选要生成的种类' })
+    window.dispatchEvent(new CustomEvent('mellow-stage'))
+    return
+  }
   try {
     const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({
@@ -162,6 +178,17 @@ async function writeStage(input: { namespace: string; character: Character; play
     await storage.setBag(input.namespace, PLAYS_KEY, [play, ...plays].slice(0, MAX_PLAYS))
     await saveStagePrefs(input.namespace, { ...prefs, turns: 0, lastError: '' })
     window.dispatchEvent(new CustomEvent('mellow-stage'))
+    const identity = useMellow.getState().identities.find((item) => item.namespace === input.namespace)
+    if (identity) {
+      void useMellow.getState().pushNotice({
+        kind: 'toast',
+        title: '写成了一场小剧场',
+        body: `${play.title} · ${kind.name}`,
+        appId: 'stage',
+        identityId: identity.id,
+        priority: 3,
+      })
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '这场没写成'
     await saveStagePrefs(input.namespace, { ...prefs, turns: 0, lastError: message.slice(0, 42) || '这场没写成' })

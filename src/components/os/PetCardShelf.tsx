@@ -5,26 +5,28 @@ import { useMellow } from '../../store/useMellow.ts'
 import { Screen } from '../ui/primitives.tsx'
 
 export function PetCardShelf(props: { onOpen: (card: ShelfCard) => void }) {
-  const group = (era: ShelfCard['era'], title: string) => (
-    <>
-      <p className="desk-pet-label">{title}</p>
-      {SHELF_CARDS.filter((card) => card.era === era).map((card) => (
-        <button key={card.id} type="button" className="desk-pet-card-row" onClick={() => props.onOpen(card)}>
-          {card.file.endsWith('.png')
-            ? <img src={shelfCardUrl(card)} alt="" />
-            : <span className="desk-pet-card-mark" aria-hidden="true">🌾</span>}
-          <span><strong>{card.name}</strong><em>{card.blurb}</em></span>
-        </button>
-      ))}
-    </>
+  const group = (era: ShelfCard['era'], title: string, note: string) => (
+    <section>
+      <p className="bazaar-era"><strong>{title}</strong><span>{note}</span></p>
+      <div className="bazaar-grid">
+        {SHELF_CARDS.filter((card) => card.era === era).map((card) => (
+          <button key={card.id} type="button" className="bazaar-card" onClick={() => props.onOpen(card)}>
+            {card.file.endsWith('.png')
+              ? <img src={shelfCardUrl(card)} alt="" />
+              : <span className="bazaar-mark" aria-hidden="true">🌾</span>}
+            <strong>{card.name}</strong>
+            <em>{card.blurb}</em>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 
   return (
-    <section className="desk-pet-block">
-      <p>点一张卡片，先看简介，再决定要不要装进当前这台小手机。</p>
-      {group('modern', '现代')}
-      {group('ancient', '古风')}
-    </section>
+    <div className="bazaar-shelf">
+      {group('modern', '现代', '装进短信')}
+      {group('ancient', '古风', '装进旧世')}
+    </div>
   )
 }
 
@@ -67,7 +69,7 @@ export function ShelfDetail(props: { card: ShelfCard; onBack: () => void }) {
         {card.file.endsWith('.png')
           ? <img src={shelfCardUrl(card)} alt="" />
           : <span className="bazaar-mark" aria-hidden="true">🌾</span>}
-        <p><strong>{card.blurb}</strong></p>
+        <p className="bazaar-lead"><strong>{card.blurb}</strong></p>
         <p>{card.intro}</p>
         <p className="bazaar-where">{shelfWhere(card)}</p>
         <p className="bazaar-where">{identity ? `当前身份是「${identity.name}」。装错就会进另一台小手机。` : '还没有当前身份。先到「设置 → 身份」选一台小手机。'}</p>
