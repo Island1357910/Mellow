@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NeteaseDirectPlugin.class);
+        registerPlugin(PhoneNotifyPlugin.class);
         super.onCreate(savedInstanceState);
         if (bridge == null || bridge.getWebView() == null) {
             showStartupHelp();
@@ -77,6 +78,15 @@ public class MainActivity extends BridgeActivity {
         });
         panel.addView(browser);
         setContentView(panel);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().onResume();
+            bridge.getWebView().resumeTimers();
+        }
     }
 
     @Override

@@ -22,6 +22,8 @@ import { DuotaoApp, FlashApp } from '../apps/ShopApps.tsx'
 import { StarApp } from '../apps/StarFeed.tsx'
 import { JiushiApp } from '../apps/JiushiApp.tsx'
 import { TableApp } from '../apps/TableApp.tsx'
+import { BazaarApp } from '../apps/BazaarApp.tsx'
+import { StageApp } from '../apps/StageApp.tsx'
 import { WorldForgeApp } from '../apps/WorldForgeApp.tsx'
 import { APP_BY_ID } from '../../data/apps.ts'
 import { maybeAskAboutLock } from '../../domain/locks.ts'
@@ -30,6 +32,7 @@ import { findIdentity, resolveIdentityId } from '../../engine/identity.ts'
 import { tickDeliveries } from '../../lib/delivery.ts'
 import { tickNearbyLife } from '../../lib/nearbyLife.ts'
 import { tickProactive } from '../../lib/proactive.ts'
+import { syncPhoneNotify } from '../../lib/phoneNotify.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { formatClock } from '../../lib/format.ts'
 import { themeOf, useMellow } from '../../store/useMellow.ts'
@@ -150,6 +153,15 @@ export function PhoneShell() {
     const timer = window.setInterval(run, 60_000)
     return () => window.clearInterval(timer)
   }, [ready, locked, identities, activeIdentityId, settings, presets])
+
+  const proactiveWas = useRef<number | null>(null)
+  useEffect(() => {
+    if (!ready || locked) return
+    const minutes = settings.proactiveMinutes
+    const turnedOn = proactiveWas.current === 0 && minutes > 0
+    proactiveWas.current = minutes
+    void syncPhoneNotify(minutes > 0, turnedOn)
+  }, [ready, locked, settings.proactiveMinutes])
 
   useEffect(() => {
     if (!ready || locked) return
@@ -297,6 +309,10 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <MapApp onBack={props.onBack} />
     case 'table':
       return <TableApp onBack={props.onBack} />
+    case 'bazaar':
+      return <BazaarApp onBack={props.onBack} />
+    case 'stage':
+      return <StageApp onBack={props.onBack} />
     case 'pet':
       return <PetApp onBack={props.onBack} />
     case 'plant':

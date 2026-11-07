@@ -23,6 +23,7 @@ import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { smsSeenHistory } from '../engine/prompt.ts'
 import { useMellow } from '../store/useMellow.ts'
 import { chatMemoryNote, scheduleChatMemory } from '../lib/chatMemory.ts'
+import { maybeWriteStage } from '../lib/stage.ts'
 
 const replyLocks = new Set<string>()
 import { storage } from '../storage/StorageService.ts'
@@ -364,6 +365,7 @@ export async function replyInChat(input: {
       parts,
       voiceReady: Boolean(input.voiceReady),
       history: all,
+      proactive: Boolean(input.proactive),
       makeMessage: (part, kind) =>
         textMessage({ chatId: input.chat.id, role: 'assistant', kind, content: part, charId: input.character.id }),
     })
@@ -372,6 +374,10 @@ export async function replyInChat(input: {
     if (replies.length) scheduleChatMemory(input.namespace, input.chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
     if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})
+    if (!input.proactive && input.chat.kind === 'dm' && replies.length) {
+      const playerLine = [...history].reverse().find((item) => item.role === 'user')?.content ?? ''
+      maybeWriteStage({ namespace: input.namespace, character: input.character, playerLine, reply: text })
+    }
     return last
   } catch (error) {
     const message =

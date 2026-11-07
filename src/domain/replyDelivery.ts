@@ -3,6 +3,7 @@ import { messagePreview } from '../lib/messagePreview.ts'
 import { storage } from '../storage/StorageService.ts'
 import { useMellow } from '../store/useMellow.ts'
 import type { Character, Chat, ChatMessage, Identity } from '../types/index.ts'
+import { phoneIsAway, showPhoneMessage } from '../lib/phoneNotify.ts'
 import { shouldReplyAsVoice } from './voiceReply.ts'
 
 function sleep(ms: number): Promise<void> {
@@ -44,18 +45,23 @@ async function maybeNotify(input: {
   chat: Chat
   character: Character
   message: ChatMessage
+  popup: boolean
 }): Promise<void> {
-  if (input.chat.muted || isViewingChat(input.chat.id)) return
+  const away = phoneIsAway()
+  const onThisChat = !away && isViewingChat(input.chat.id)
+  if (input.chat.muted || onThisChat) return
+  const body = messagePreview(input.message.content, input.message.kind)
   await useMellow.getState().pushNotice({
     kind: 'message',
     title: input.character.name,
-    body: messagePreview(input.message.content, input.message.kind),
+    body,
     appId: 'messages',
     identityId: input.identity.id,
     chatId: input.chat.id,
     charId: input.character.id,
     priority: input.chat.specialCare ? 5 : 4,
   })
+  if (input.popup) void showPhoneMessage(input.character.name, body)
 }
 
 export async function deliverReplyParts(input: {
@@ -66,6 +72,7 @@ export async function deliverReplyParts(input: {
   parts: Array<{ kind: 'text' | 'sticker'; content: string }>
   voiceReady: boolean
   history: ChatMessage[]
+  proactive?: boolean
   makeMessage: (part: string, kind: ChatMessage['kind'], index: number) => ChatMessage
 }): Promise<ChatMessage[]> {
   const replies: ChatMessage[] = []
@@ -100,7 +107,13 @@ export async function deliverReplyParts(input: {
       meta: { chatId: input.chat.id, charId: input.character.id, messageId: reply.id },
     })
     if (reply.role === 'assistant') {
-      await maybeNotify({ identity: input.identity, chat, character: input.character, message: reply })
+      await maybeNotify({
+        identity: input.identity,
+        chat,
+        character: input.character,
+        message: reply,
+        popup: index === 0 && (Boolean(input.proactive) || phoneIsAway()),
+      })
     }
   }
 

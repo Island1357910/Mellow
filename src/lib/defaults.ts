@@ -54,6 +54,7 @@ export function defaultSettings(activeIdentityId = ''): AppSettings {
     fourthWall: false,
     proactive: 'off',
     proactiveMinutes: 0,
+    tableTalk: true,
     dnd: false,
     quietHours: false,
     dndStart: '23:00',
@@ -163,5 +164,6 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
     proactiveMinutes: typeof raw?.proactiveMinutes === 'number'
       ? Math.max(0, Math.min(10_080, Math.round(raw.proactiveMinutes)))
       : legacyProactiveMinutes(raw?.proactive),
+    tableTalk: raw?.tableTalk !== false,
   }
 }

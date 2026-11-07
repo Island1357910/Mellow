@@ -19,6 +19,8 @@ export const MARKET_LISTINGS: MarketListing[] = [
   { id: 'forum', name: '论坛', category: 'social', description: '发帖、看帖、评论。也可以丢一句想看的剧情，让路人或角色写出来。', status: 'ready' },
   { id: 'jiushi', name: '旧世', category: 'story', description: '穿书入境：导入古风卡、入幕演绎、传书短笺。与 modern 短信分开，模拟旧世小手机。', status: 'ready' },
   { id: 'worldforge', name: '世界搭建', category: 'create', description: '手写一段世界观，或导入 JSON/txt/doc，AI 整理后拆成世界书 + 多位角色。', status: 'ready' },
+  { id: 'bazaar', name: '角色市集', category: 'social', description: '随身角色卡都在这里。点进卡片先看简介，确认当前身份后再装。现代进短信，古风进旧世。', status: 'ready' },
+  { id: 'stage', name: '小剧场', category: 'fun', description: '和角色聊天时，按你定的频率偶尔生成一场。可以关掉。封面按气氛变化，点进去看全文。', status: 'ready' },
 ]
 
 export const CATEGORY_LABEL: Record<MarketListing['category'], string> = {

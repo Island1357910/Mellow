@@ -431,6 +431,8 @@ export interface AppSettings {
   proactive?: ProactiveLevel
   /** 玩家多少分钟没回消息，角色会主动发一条；0 表示关闭 */
   proactiveMinutes: number
+  /** 桌游进行时是否和角色说话 */
+  tableTalk: boolean
   /** 手动免打扰 */
   dnd: boolean
   /** 是否启用免打扰时段 */

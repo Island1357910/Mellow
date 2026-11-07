@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createTableReactions, type TableMoment } from '../../lib/tableReactions.ts'
 import { appendTableHistory, parseTableSpeech, tableEntry, type TableEntry, type TableSummary } from '../../lib/tableHistory.ts'
+import { useMellow } from '../../store/useMellow.ts'
 import { TableBubbles } from './TableHistory.tsx'
 import { ModalPortal } from '../ui/primitives.tsx'
 import type { Character } from '../../types/index.ts'
@@ -14,6 +15,10 @@ export function TableConversation({ game, names, people, ask, namespace, session
   session: TableSummary
 }) {
   const currentPeople = useRef(people)
+  const tableTalk = useMellow((state) => state.settings.tableTalk !== false)
+  const patchSettings = useMellow((state) => state.patchSettings)
+  const talk = useRef(tableTalk)
+  talk.current = tableTalk
   useEffect(() => { currentPeople.current = people }, [people])
   const [entries, setEntries] = useState<TableEntry[]>([])
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [saveError, setSaveError] = useState('')
@@ -59,13 +64,17 @@ ${currentPeople.current.map(({ person, bond }) => `${person.name}：${person.per
         return JSON.stringify(spoken)
       },
       onLines: () => {}, onBusy: setBusy, onError: setError,
-      onReply: answer => add(parseTableSpeech(answer, names.slice(1)).map(line => tableEntry('speech', line.text, line.speaker))),
+      onReply: answer => {
+        if (!talk.current) return
+        add(parseTableSpeech(answer, names.slice(1)).map(line => tableEntry('speech', line.text, line.speaker)))
+      },
     })
     reactions.current = queue
+    const speak = (moment: TableMoment) => { if (talk.current) queue.push(moment) }
     const armIdle = () => {
       clearTimeout(idle)
       if (!finished && game !== '狼人杀') idle = setTimeout(() => {
-        if (!document.hidden) queue.push({ text: '玩家正在思考，保持当前局面，轻声鼓励或聊一句，不催促、不编造新进展。' })
+        if (!document.hidden && talk.current) speak({ text: '玩家正在思考，保持当前局面，轻声鼓励或聊一句，不催促、不编造新进展。' })
       }, 45_000)
     }
     const receive = (event: Event) => {
@@ -76,13 +85,13 @@ ${currentPeople.current.map(({ person, bond }) => `${person.name}：${person.per
       if (moment.roundStart) finished = false
       if (finished) return
       finished = Boolean(moment.finished)
-      queue.push(moment); armIdle()
+      speak(moment); armIdle()
     }
     window.addEventListener('mellow-table-event', receive)
     const opening = setTimeout(() => {
       const text = `${game}开局，${names.join('、')}已入座。`
       add([tableEntry('event', text)])
-      if (!finished) queue.push({ text: text + '简短招呼并准备开始。' + (game === '狼人杀' ? '这是入夜前的招呼，不讨论身份。' : '') })
+      if (!finished) speak({ text: text + '简短招呼并准备开始。' + (game === '狼人杀' ? '这是入夜前的招呼，不讨论身份。' : '') })
       armIdle()
     }, 0)
     // Register the initial record even when the first role request fails.
@@ -98,14 +107,15 @@ ${currentPeople.current.map(({ person, bond }) => `${person.name}：${person.per
     const entry = tableEntry('player', text, names[0])
     setEntries(previous => [...previous, entry])
     savePending.current.push({ entries: [entry] }); persist.current()
-    setDraft(''); reactions.current?.push({ text, player: true })
+    setDraft('')
+    if (talk.current) reactions.current?.push({ text, player: true })
   }
   return <section className="table-talk">
-    <header className="flex items-center justify-between gap-2"><strong className="text-xs">桌边互动</strong><button className="chip text-xs" onClick={() => setHistoryOpen(true)}>历史对话</button></header>
+    <header className="flex items-center justify-between gap-2"><strong className="text-xs">桌边互动</strong><span className="flex gap-1"><button type="button" className="chip text-xs" aria-pressed={!tableTalk} onClick={() => void patchSettings({ tableTalk: !tableTalk })}>{tableTalk ? '关掉对话' : '打开对话'}</button><button className="chip text-xs" onClick={() => setHistoryOpen(true)}>历史对话</button></span></header>
     <div className="table-talk-scroll"><TableBubbles entries={entries.slice(-8)}/>{busy && <p role="status" className="text-xs mt-2">同桌正在开口…</p>}<div ref={bottom}/></div>
     {error && <p role="status" className="text-xs">{error}<button className="chip ml-2" disabled={busy} onClick={() => reactions.current?.retry()}>重试互动</button></p>}
     {saveError && <p role="status" className="text-xs">{saveError}<button className="chip" onClick={() => persist.current()}>重试保存</button></p>}
-    <form className="table-reply" onSubmit={e => { e.preventDefault(); send() }}><input aria-label="回复同桌角色" className="soft-input min-w-0 flex-1" placeholder="和同桌说句话…" value={draft} maxLength={2000} onChange={e => setDraft(e.target.value)}/><button className="chip shrink-0" disabled={busy || !draft.trim()}>发送</button></form>
+    {tableTalk ? <form className="table-reply" onSubmit={e => { e.preventDefault(); send() }}><input aria-label="回复同桌角色" className="soft-input min-w-0 flex-1" placeholder="和同桌说句话…" value={draft} maxLength={2000} onChange={e => setDraft(e.target.value)}/><button className="chip shrink-0" disabled={busy || !draft.trim()}>发送</button></form> : <p className="text-xs">这局不和角色说话，游戏照常进行。</p>}
     {historyOpen && <ModalPortal onClose={() => setHistoryOpen(false)}><section onClick={event => event.stopPropagation()} className="table-history-modal" role="dialog" aria-modal="true" aria-label="本局历史对话"><header><strong>本局历史对话</strong><button className="chip" onClick={() => setHistoryOpen(false)}>关闭</button></header><div className="table-history-scroll"><TableBubbles entries={entries}/>{!entries.some(entry => entry.kind !== 'event') && <p className="text-sm">本局还没有对话。</p>}</div></section></ModalPortal>}
   </section>
 }
