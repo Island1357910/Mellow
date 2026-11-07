@@ -53,8 +53,9 @@ function useLaunchPress(onOpen: () => void, armed: () => boolean, holdClick: () 
     },
     onPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
       const start = press.current
+      if (!start || start.id !== event.pointerId) return
       press.current = null
-      if (!start || start.id !== event.pointerId || armed()) return
+      if (armed()) return
       if (performance.now() - start.t >= TAP_MS) return
       if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP) return
       handled.current = true
@@ -228,8 +229,8 @@ export function HomeScreen() {
 
   const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
-    dragRef.current = null
     if (!drag || drag.id !== event.pointerId) return
+    dragRef.current = null
     try {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     } catch {
@@ -245,6 +246,7 @@ export function HomeScreen() {
     suppressClick.current = true
     setSettling(true)
     setDragX(0)
+    if (event.type === 'pointercancel') return
     if (forward) setIndex((current) => Math.min(pageCount - 1, current + 1))
     else if (back) setIndex((current) => Math.max(0, current - 1))
   }
@@ -271,23 +273,25 @@ export function HomeScreen() {
   }
 
   const holdCell = (event: ReactPointerEvent<HTMLButtonElement>, index: number, cell: HomeCell) => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || rearranging.current) return
     const pointerId = event.pointerId
     const startX = event.clientX
     const startY = event.clientY
     let active = false
     const label = cellLabel(cell)
     const finish = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
       window.clearTimeout(timer)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
       rearranging.current = false
-      if (!active || ev.pointerId !== pointerId) return
+      if (!active) return
       suppressClick.current = true
+      setGhost(null)
+      if (ev.type === 'pointercancel') return
       const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
       const over = hit ? Number(hit.dataset.homeIndex) : null
-      setGhost(null)
       if (over === null || over === index || Number.isNaN(over)) return
       const current = boardRef.current
       const target = current[over]
@@ -361,7 +365,7 @@ export function HomeScreen() {
   }
 
   const holdFolderApp = (event: ReactPointerEvent<HTMLButtonElement>, appId: string) => {
-    if (event.button !== 0 || !openFolder) return
+    if (event.button !== 0 || rearranging.current || !openFolder) return
     event.stopPropagation()
     const folderId = openFolder
     const pointerId = event.pointerId
@@ -371,16 +375,19 @@ export function HomeScreen() {
     const app = APP_BY_ID[appId]
     const label = { name: app?.name ?? '应用', tint: app?.tint ?? '#E7B7C9' }
     const finish = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
       window.clearTimeout(timer)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
       setLiftFolder(false)
-      if (!active || ev.pointerId !== pointerId) return
+      rearranging.current = false
+      if (!active) return
       suppressClick.current = true
+      setGhost(null)
+      if (ev.type === 'pointercancel') return
       const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-home-index]')
       const over = hit ? Number(hit.dataset.homeIndex) : null
-      setGhost(null)
       const current = boardRef.current
       const folderIndex = current.findIndex((cell) => cell.kind === 'folder' && cell.id === folderId)
       if (over === null || Number.isNaN(over) || over === folderIndex) return
@@ -423,6 +430,7 @@ export function HomeScreen() {
     }
     const timer = window.setTimeout(() => {
       active = true
+      rearranging.current = true
       suppressClick.current = true
       setLiftFolder(true)
       const pager = pagerRef.current?.getBoundingClientRect()
@@ -440,7 +448,11 @@ export function HomeScreen() {
     <div
       ref={pagerRef}
       className="home-pager"
-      onPointerDownCapture={() => {
+      onPointerDownCapture={(event) => {
+        if (!event.isPrimary || rearranging.current) {
+          event.stopPropagation()
+          return
+        }
         suppressClick.current = false
       }}
       onPointerDown={onPointerDown}
@@ -448,10 +460,13 @@ export function HomeScreen() {
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       onClickCapture={(event) => {
-        if (!suppressClick.current) return
-        suppressClick.current = false
+        const pointer = event.nativeEvent
+        const secondary = pointer instanceof PointerEvent && pointer.pointerType !== '' && !pointer.isPrimary
+        if (!secondary && !rearranging.current && !suppressClick.current) return
         event.preventDefault()
         event.stopPropagation()
+        if (secondary || rearranging.current) return
+        suppressClick.current = false
       }}
     >
       <div
