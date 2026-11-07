@@ -1,0 +1,28 @@
+name: Publish Mellow website
+on:
+  push:
+    branches: [gh-pages]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: mellow-pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
