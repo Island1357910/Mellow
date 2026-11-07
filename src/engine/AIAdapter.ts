@@ -1,5 +1,5 @@
 import type { AIMessage, AIRequest, AIResponse, ApiConfig, GenerationSettings } from '../types/index.ts'
-import { stripReasoning } from '../lib/reasoning.ts'
+import { mergeThought, takeReasoning } from '../lib/reasoning.ts'
 import { apiErrorText } from '../lib/apiErrorText.ts'
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
@@ -28,6 +28,48 @@ interface ReadyConfig {
 }
 
 interface CompletionResult extends AIResponse { reasoningOnly?: boolean }
+
+function apiReasoning(data: unknown): string {
+  if (!data || typeof data !== 'object') return ''
+  const root = data as Record<string, unknown>
+  const choice = (root.choices as Array<Record<string, unknown>> | undefined)?.[0]
+  const message = choice?.message as Record<string, unknown> | undefined
+  const bits: string[] = []
+  const push = (value: unknown) => {
+    const text = reasoningText(value)
+    if (text) bits.push(text)
+  }
+  push(message?.reasoning_content)
+  push(message?.reasoning)
+  push(choice?.reasoning)
+  const walk = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const part of value) walk(part)
+      return
+    }
+    if (!isReasoningPart(value) || !value || typeof value !== 'object') return
+    const row = value as Record<string, unknown>
+    push(row.text)
+    push(row.content)
+    push(row.summary)
+  }
+  walk(message?.content)
+  walk(root.content)
+  walk(root.output)
+  return mergeThought(...bits)
+}
+
+function reasoningText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (Array.isArray(value)) return mergeThought(...value.map(reasoningText))
+  if (!value || typeof value !== 'object') return ''
+  const row = value as Record<string, unknown>
+  return mergeThought(
+    typeof row.text === 'string' ? row.text : '',
+    typeof row.content === 'string' ? row.content : '',
+    reasoningText(row.summary),
+  )
+}
 
 function joinContinuation(head: string, tail: string): string {
   if (tail.startsWith(head)) return tail
@@ -242,6 +284,7 @@ export class AIAdapter {
     const original: AIRequest = { ...request, maxTokens: budget, timeoutMs: Math.max(request.timeoutMs ?? 0, (this.config.generation?.timeoutSeconds ?? 180) * 1000) }
     let result = await this.completeWithRetry(original)
     let content = result.content
+    let reasoning = result.reasoning?.trim() ?? ''
     let recovered = false
     if (enabled) {
       // At most two additional model generations. Never send hidden reasoning back to the provider.
@@ -256,9 +299,10 @@ export class AIAdapter {
             messages: [...request.messages, ...(content ? [{ role: 'assistant' as const, content }] : []), { role: 'user', content: task }],
           }, Boolean(content))
         } catch (error) {
-          if (content) return { content, model: this.config.model, provider: 'openai', truncated: true, recovered: true }
+          if (content) return { content, reasoning, model: this.config.model, provider: 'openai', truncated: true, recovered: true }
           throw error
         }
+        if (!reasoning && result.reasoning?.trim()) reasoning = result.reasoning.trim()
         const previous = content
         if (result.content) content = content ? joinContinuation(content, result.content) : result.content
         if (previous && content === previous) result.truncated = true
@@ -269,7 +313,7 @@ export class AIAdapter {
     if (!content) throw new AIError(result.reasoningOnly
       ? '接口只返回了思考内容，没有可显示的正文。请在 API 设置中增加输出额度，或使用能返回正文的模型。'
       : '接口返回了空正文，未能恢复。请检查接口或更换模型后重试。', 'api')
-    return { content, model: this.config.model, provider: 'openai', truncated: Boolean(result.truncated || result.reasoningOnly), recovered }
+    return { content, reasoning, model: this.config.model, provider: 'openai', truncated: Boolean(result.truncated || result.reasoningOnly), recovered }
   }
 
   private async completeWithRetry(request: AIRequest): Promise<CompletionResult> {
@@ -407,23 +451,26 @@ export class AIAdapter {
         throw new AIError(apiErrorText(detail), 'api', false, detail)
       }
       const rawContent = extractContent(data)
-      const content = stripReasoning(rawContent)
+      const split = takeReasoning(rawContent)
+      const content = split.content
+      const reasoning = mergeThought(apiReasoning(data), split.reasoning)
       const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null
       const reason = meta?.choices?.[0]?.finish_reason ?? meta?.incomplete_details?.reason ?? meta?.stop_reason
       const truncated = reason === 'length' || reason === 'max_tokens' || reason === 'max_output_tokens' || meta?.status === 'incomplete'
       if (reason === 'content_filter') throw new AIError('接口未生成正文，请查看所选模型的内容限制。', 'api')
       if (content) return {
         content: (continuation ? rawContent.match(/^\s*/)?.[0] ?? '' : '') + content + (truncated ? rawContent.match(/\s*$/)?.[0] ?? '' : ''),
+        reasoning,
         model: this.config.model, provider: 'openai', truncated,
       }
       const root = data as { choices?: Array<{ message?: { reasoning_content?: unknown; reasoning?: unknown; content?: unknown } }>; content?: unknown; output?: unknown }
       const message = root?.choices?.[0]?.message
       const reasoningParts = [message?.content, root?.content, root?.output].some(value =>
         Array.isArray(value) ? value.some(isReasoningPart) : isReasoningPart(value))
-      if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts) {
-        return { content: '', model: this.config.model, provider: 'openai', reasoningOnly: true, truncated }
+      if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts || reasoning) {
+        return { content: '', reasoning, model: this.config.model, provider: 'openai', reasoningOnly: true, truncated }
       }
-      return { content: '', model: this.config.model, provider: 'openai', truncated }
+      return { content: '', reasoning, model: this.config.model, provider: 'openai', truncated }
     }
     const friendly = explainParam(last)
     throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)

@@ -48,7 +48,15 @@ assert(prompt.some(m => m.content.includes('阿白收好了雨伞')))
 const original = AIAdapter.fromStored
 let requests: Array<{ messages: AIMessage[]; maxTokens?: number }> = []
 let answer = '三人走到门外，阿墨撑开伞，阿白在旁等候。'.repeat(5)
-AIAdapter.fromStored = async () => ({ complete: async (request: { messages: AIMessage[]; maxTokens?: number }) => { requests.push(request); return { content: answer } } }) as unknown as AIAdapter
+AIAdapter.fromStored = async () => ({ complete: async (request: { messages: AIMessage[]; maxTokens?: number }) => {
+  requests.push(request)
+  const system = request.messages[0]?.content ?? ''
+  if (system.includes('谁此刻在现场')) {
+    const asked = request.messages.map((item) => item.content).join('\n')
+    return { content: asked.includes('阿墨2.0') ? '{"ids":["ver"]}' : '{"ids":["b","c"]}' }
+  }
+  return { content: answer }
+} }) as unknown as AIAdapter
 try {
   const unchanged = JSON.stringify(prompt)
   await generate(prompt, null)
@@ -69,9 +77,17 @@ try {
   const save = await putSave(ns, newSave('双人现场', { lines: [{ id: 'bc', role: 'user', content: '继续', createdAt: 1, participantIds: ['b', 'c'] }] }))
   requests = []
   await runStoryGeneration({ namespace: ns, saveId: save.id, mode: 'offline', identity, presetId: '', presets: [] })
-  assert(requests[0]!.messages[0]!.content.includes('阿墨专属世界书'))
-  assert(requests[0]!.messages[0]!.content.includes('阿白专属世界书'))
-  assert(!requests[0]!.messages[0]!.content.includes('阿青专属世界书'))
+  const storyCall = requests.find((item) => item.messages[0]?.content.includes('阿墨专属世界书'))
+  assert(storyCall, 'the story request follows the cast recognition')
+  assert(storyCall!.messages[0]!.content.includes('阿白专属世界书'))
+  assert(!storyCall!.messages[0]!.content.includes('阿青专属世界书'))
+  const versioned = person('ver', '阿墨2.0')
+  await storage.putCharacter(ns, versioned)
+  const versionSave = await putSave(ns, newSave('版本卡', { lines: [{ id: 'go', role: 'user', content: '去找阿墨', createdAt: 2 }] }))
+  requests = []
+  await runStoryGeneration({ namespace: ns, saveId: versionSave.id, mode: 'offline', identity, presetId: '', presets: [] })
+  const versionStory = requests.find((item) => item.messages.some((message) => message.content.includes('阿墨2.0独有的身份结尾')))
+  assert(versionStory, 'a card named 阿墨2.0 is present when the scene says 阿墨')
   await writeWorld(ns, [{ id: 'unrelated', title: '未触发条目', charId: b.id, keys: '旅行，机场', content: '不应该自动发送的无关条目', enabled: true, updatedAt: 1 }, { id: 'related', title: '茶馆条目', charId: b.id, keys: '茶馆', content: '应该发送的相关条目', enabled: true, updatedAt: 1 }])
   const world = await storyWorldText(ns, [b], '我们在茶馆坐下')
   assert(world.includes('应该发送的相关条目'))

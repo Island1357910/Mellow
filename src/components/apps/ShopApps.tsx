@@ -1,4 +1,3 @@
-import { HomeLifePanel } from './HomeLifePanel.tsx'
 import { ShoppingBag } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { moduleAi, readJson } from '../../lib/ask.ts'
@@ -45,7 +44,7 @@ function ShopApp(props: {
 }) {
   const phone = usePhone()
   const paying = useRef(false)
-  const [tab, setTab] = useState<'browse' | 'cart' | 'orders' | 'life'>('browse')
+  const [tab, setTab] = useState<'browse' | 'cart' | 'orders'>('browse')
   const [merchant,setMerchant]=useState(''),[checkoutStore,setCheckoutStore]=useState('')
   const [cat, setCat] = useState('全部')
   const [detail, setDetail] = useState<Goods | null>(null)
@@ -190,12 +189,11 @@ function ShopApp(props: {
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle(props.tint, '#F8D0DC', '#D5F0E4')}>
       <Screen title={props.title} subtitle={`余额 ${coins} 枚 · 购物车 ${count}`} onBack={props.onBack}>
-        <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/70 p-1 text-xs">
-          {([['browse', '逛'], ['cart', `购物车${count ? ` ${count}` : ''}`], ['orders', '订单'],['life','生活']] as const).map(([id, label]) => (
+        <div className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white/70 p-1 text-xs">
+          {([['browse', '逛'], ['cart', `购物车${count ? ` ${count}` : ''}`], ['orders', '订单']] as const).map(([id, label]) => (
             <button key={id} type="button" className="rounded-full py-1.5" style={{ background: tab === id ? props.tint : 'transparent' }} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
-        {tab==='life'&&<HomeLifePanel namespace={phone.namespace} onBalance={setCoins}/>}
         {tab === 'browse' ? (
           <>
             <details className="menu-card mb-3"><summary className="cursor-pointer text-sm">没找到想要的？请店员找货</summary><form className="mt-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void seek() }}>

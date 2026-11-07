@@ -3,10 +3,11 @@ import { smsBridgeForStory } from '../lib/channelBridge.ts'
 import { jiushiLetterBridgeForStory } from '../lib/jiushiBridge.ts'
 import { isJiushiCharacter, jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
 import { jiushiWorldNs } from '../lib/jiushiPhone.ts'
+import { directivePrompt } from '../lib/directives.ts'
+import { offlineFocus } from '../lib/offlineCast.ts'
 import { enabledWorldText, storyWorldText } from '../lib/worldbook.ts'
 import {
   buildStoryPrompt,
-  focusChars,
   generateStoryReply,
   line,
   loadConfig,
@@ -45,7 +46,7 @@ export async function runStoryGeneration(input: {
     null,
   )
   const worldNs = input.mode === 'jiushi' ? jiushiWorldNs(phoneNs) : phoneNs
-  const focus = input.mode === 'offline' ? focusChars(chars, save, input.nudge) : []
+  const focus = input.mode === 'offline' ? await offlineFocus(chars, save, input.nudge) : []
   const world = input.mode === 'offline'
     ? await storyWorldText(worldNs, focus, `${save.lines.slice(-6).map(item => item.content).join('\n')}\n${input.nudge ?? ''}`)
     : await enabledWorldText(worldNs, save.charId ?? chars[0]?.id)
@@ -61,6 +62,12 @@ export async function runStoryGeneration(input: {
       ? await jiushiLetterBridgeForStory(phoneNs, jiushiFocus.length ? jiushiFocus : chars.filter(isJiushiCharacter).slice(0, 4))
       : ''
   const jiushiConfig = input.mode === 'jiushi' ? await loadJiushiConfig(phoneNs) : null
+  const directiveIds = input.mode === 'offline'
+    ? focus.map((person) => person.id)
+    : input.mode === 'side'
+      ? (save.charIds?.length ? save.charIds : [save.charId].filter((id): id is string => Boolean(id)))
+      : []
+  const writing = input.mode === 'jiushi' ? { text: '', cot: '' } : await directivePrompt(phoneNs, directiveIds)
   const messages = buildStoryPrompt({
     mode: input.mode,
     config,
@@ -72,8 +79,11 @@ export async function runStoryGeneration(input: {
     world,
     smsBridge: [smsBridge, letterBridge].filter(Boolean).join('\n'),
     jiushiBlock: jiushiConfig ? jiushiPromptBlock(jiushiConfig) : undefined,
+    directives: writing.text,
+    cot: writing.cot,
+    castIds: input.mode === 'offline' ? focus.map((person) => person.id) : undefined,
   })
-  const content = await generateStoryReply({
+  const reply = await generateStoryReply({
     mode: input.mode,
     messages,
     preset,
@@ -83,7 +93,7 @@ export async function runStoryGeneration(input: {
   const participantIds = focus.map(person => person.id)
   const lines = save.lines.map((item, index) => input.mode === 'offline' && index === save.lines.length - 1 && item.role === 'user'
     ? { ...item, participantIds } : item)
-  let next = await putSave(input.namespace, { ...save, lines: [...lines, { ...line('assistant', content), ...(input.mode === 'offline' ? { participantIds } : {}) }] })
+  let next = await putSave(input.namespace, { ...save, lines: [...lines, { ...line('assistant', reply.content), ...(input.mode === 'offline' || input.mode === 'side' ? { reasoning: reply.reasoning } : {}), ...(input.mode === 'offline' ? { participantIds } : {}) }] })
   if (needsSummary(next, config)) {
     try {
       next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds, input.mode), summaryError: '' })

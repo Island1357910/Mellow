@@ -23,6 +23,8 @@ import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { smsSeenHistory } from '../engine/prompt.ts'
 import { useMellow } from '../store/useMellow.ts'
 import { chatMemoryNote, scheduleChatMemory } from '../lib/chatMemory.ts'
+import { directivePrompt } from '../lib/directives.ts'
+import { mergeThought, takeReasoning } from '../lib/reasoning.ts'
 import { loadStickerLibrary, visibleStickers } from '../lib/stickerLibrary.ts'
 import { maybeWriteStage } from '../lib/stage.ts'
 
@@ -36,6 +38,8 @@ function textMessage(input: {
   kind?: ChatMessage['kind']
   content: string
   charId: string | null
+  reasoning?: string
+  roundId?: string
 }): ChatMessage {
   return {
     id: uid('msg'),
@@ -46,7 +50,12 @@ function textMessage(input: {
     charId: input.charId,
     createdAt: Date.now(),
     status: 'sent',
+    ...(input.reasoning?.trim() ? { reasoning: input.reasoning.trim(), roundId: input.roundId } : {}),
   }
+}
+
+function replyThought(content: string, reasoning?: string): string {
+  return mergeThought(reasoning, takeReasoning(content).reasoning)
 }
 
 async function touchChat(namespace: string, stale: Chat, lastMessage: string, unreadDelta: number, lastKind: ChatMessage['kind'] = 'text'): Promise<Chat> {
@@ -322,6 +331,7 @@ export async function replyInChat(input: {
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
     const stickers = visibleStickers(await loadStickerLibrary())
+    const writing = await directivePrompt(input.namespace, [input.character.id])
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -333,6 +343,8 @@ export async function replyInChat(input: {
       proactive: input.proactive,
       triggerNote: input.triggerNote,
       stickers,
+      directives: writing.text,
+      cot: writing.cot,
       note: [
         replyNote(input.chat),
         await chatMemoryNote(input.namespace, input.chat.id),
@@ -359,6 +371,8 @@ export async function replyInChat(input: {
       maxTokens: Math.min(1600, 220 * max),
     })
     const { text, change } = takeProfileChange(stripThinkingFromSms(response.content))
+    const thought = replyThought(response.content, response.reasoning)
+    const roundId = uid('round')
     const parts = buildSmsReplySegments(text || '……', range, stickers)
     const replies = await deliverReplyParts({
       namespace: input.namespace,
@@ -370,7 +384,7 @@ export async function replyInChat(input: {
       history: all,
       proactive: Boolean(input.proactive),
       makeMessage: (part, kind) =>
-        textMessage({ chatId: input.chat.id, role: 'assistant', kind, content: part, charId: input.character.id }),
+        textMessage({ chatId: input.chat.id, role: 'assistant', kind, content: part, charId: input.character.id, reasoning: thought, roundId }),
     })
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
@@ -441,6 +455,7 @@ export async function deliverSms(input: {
     const life = await nearbyLifeNote(input.namespace, input.character)
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const stickers = visibleStickers(await loadStickerLibrary())
+    const writing = await directivePrompt(input.namespace, [input.character.id])
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -450,6 +465,8 @@ export async function deliverSms(input: {
       fourthWall: input.fourthWall,
       priority: storyBridge,
       stickers,
+      directives: writing.text,
+      cot: writing.cot,
       note: [replyNote(input.chat), await chatMemoryNote(input.namespace, input.chat.id), await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const adapter = await moduleAdapter('messages')
@@ -466,6 +483,8 @@ export async function deliverSms(input: {
       role: 'assistant',
       content: stripVoicePrefix(stripThinkingFromSms(response.content)) || '……',
       charId: input.character.id,
+      reasoning: replyThought(response.content, response.reasoning),
+      roundId: uid('round'),
     })
     await storage.putMessage(input.namespace, reply)
     await touchChat(input.namespace, chat, reply.content, 1, reply.kind)

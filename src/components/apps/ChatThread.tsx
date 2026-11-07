@@ -18,6 +18,7 @@ import type { BubbleStyle, Character, Chat, ChatMessage, Identity, MessageKind }
 import { PillNote } from '../ui/primitives.tsx'
 import { VoiceSelect } from './SettingsPanels.tsx'
 import { parseReplySegments } from '../../lib/stickerReply.ts'
+import { ThoughtSheet } from './ThoughtSheet.tsx'
 import { spokenSmsText } from '../../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../../lib/smsSanitize.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
@@ -63,6 +64,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const [revealedVoice, setRevealedVoice] = useState<Record<string, boolean>>({})
   const [quote, setQuote] = useState<{ id: string; text: string } | null>(null)
   const [actionId, setActionId] = useState<string | null>(null)
+  const [thought, setThought] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [worldRows, setWorldRows] = useState<WorldEntry[]>([])
@@ -314,9 +316,11 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             onStar={() => void patchMessage({ ...message, starred: !message.starred }).then(() => setActionId(null))}
             onDelete={() => void hideMessage(message).then(() => setActionId(null))}
             onRemove={() => void removeMessage(message.id).then(() => setActionId(null))}
+            onThought={message.role === 'assistant' ? () => { setThought(thoughtText(message, messages)); setActionId(null) } : undefined}
           />
         ))}
       </div>
+      {thought !== null ? <ThoughtSheet text={thought} onClose={() => setThought(null)} /> : null}
       <div className="shrink-0">
         {selectMode ? (
           <div className="flex items-center justify-between gap-2 px-4 pb-14 pt-2">
@@ -611,6 +615,12 @@ function VoiceBubble(props: {
   )
 }
 
+function thoughtText(message: ChatMessage, messages: ChatMessage[]): string {
+  if (message.reasoning?.trim()) return message.reasoning.trim()
+  if (!message.roundId) return ''
+  return messages.find((item) => item.roundId === message.roundId && item.reasoning?.trim())?.reasoning?.trim() ?? ''
+}
+
 function Bubble(props: {
   message: ChatMessage
   people: Character[]
@@ -628,7 +638,10 @@ function Bubble(props: {
   onStar: () => void
   onDelete: () => void
   onRemove: () => void
+  onThought?: () => void
 }) {
+  const hold = useRef(0)
+  const skipClick = useRef(false)
   const message = props.message.role === 'assistant'
     ? { ...props.message, content: stripThinkingFromSms(props.message.content) }
     : props.message
@@ -711,14 +724,31 @@ function Bubble(props: {
       {!mine && !selectable ? <MiniFace name={person?.nickname || person?.name || '群'} avatar={person?.avatar ?? ''} /> : null}
       {!mine && selectable ? check : null}
       <div className={mine ? 'flex flex-col items-end' : ''}>
-        {!mine && person && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}{message.starred ? ' · 已收藏' : ''}</p> : null}
+        {!mine && message.starred && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>已收藏</p> : null}
         <button
           type="button"
           className="text-left"
-          onClick={selectable ? props.onToggleSelect : props.onMenu}
+          onPointerDown={() => {
+            if (selectable) return
+            window.clearTimeout(hold.current)
+            hold.current = window.setTimeout(() => {
+              skipClick.current = true
+              props.onMenu()
+            }, 480)
+          }}
+          onPointerUp={() => window.clearTimeout(hold.current)}
+          onPointerLeave={() => window.clearTimeout(hold.current)}
+          onClick={selectable ? props.onToggleSelect : () => {
+            if (skipClick.current) {
+              skipClick.current = false
+              return
+            }
+            props.onMenu()
+          }}
           onContextMenu={(event) => {
             if (selectable) return
             event.preventDefault()
+            skipClick.current = true
             props.onMenu()
           }}
         >
@@ -727,6 +757,7 @@ function Bubble(props: {
         {props.menuOpen ? (
           <div className="mt-1 flex flex-wrap gap-1">
             <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onQuote}>引用</button>
+            {props.onThought ? <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onThought}>思维链</button> : null}
             <button type="button" className="chip chip-mint px-2 py-0.5 text-[10px]" onClick={props.onStar}>{message.starred ? '取消收藏' : '收藏'}</button>
             <button type="button" className="chip chip-danger px-2 py-0.5 text-[10px]" onClick={props.onDelete}>删除</button>
             <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onRemove}>彻底移除</button>

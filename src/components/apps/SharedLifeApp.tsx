@@ -6,13 +6,11 @@ import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { Character } from '../../types/index.ts'
 import {
-  characterLife, changeSharedLife, cookWithGuest, emptySharedLife, ensureSharedCharacter, readSharedLife,
+  characterLife, changeSharedLife, emptySharedLife, ensureSharedCharacter, readSharedLife,
   rescheduleAppointment, saveAppointment, updateAppointment, type SharedLife,
 } from '../../lib/sharedLife.ts'
 import { advanceLifeEvent, askAboutLifeGift, createLifeEvent, endLifeVisit, generateLifeCircle, introduceLifeContact, inviteLifeGuest, talkWithLifeGuest } from '../../lib/sharedLifeAi.ts'
 import { saveManualKeepsake } from '../../lib/sharedLifeTick.ts'
-import { RECIPES } from '../../lib/homeLife.ts'
-import { uid } from '../../lib/id.ts'
 import { Screen } from '../ui/primitives.tsx'
 
 type LifeTab = 'calendar' | 'events' | 'visits' | 'circle' | 'gifts' | 'relationship' | 'memories'
@@ -133,7 +131,7 @@ export function SharedLifePanel({ namespace, initialCharId }: { namespace: strin
 
       {tab === 'visits' && <>
         {!activeVisit && <article className="life-card"><div className="life-section-title"><Armchair size={19}/><h3>家里给你留个位置</h3></div><p>TA 会按性格、关系和意愿决定是否来，留宿也可以拒绝。</p><div className="life-invitations">{['一起做饭', '一起看电影', '来坐坐聊天', '今晚留宿'].map(activity => <button key={activity} disabled={!canAct || state.visits.some(v => v.status === 'active')} onClick={() => void act(() => inviteLifeGuest(namespace, person, activity))}>{activity}</button>)}</div>{state.visits.some(v => v.status === 'active') && <p className="life-caption">家里已有正在进行的来访，请先结束那次相聚。</p>}</article>}
-        {activeVisit && <article className="life-card"><div className="life-card-top"><span className="life-tag">正在做客 · {activeVisit.activity}</span><button className="text-xs" disabled={!canAct} onClick={() => void act(() => endLifeVisit(namespace, activeVisit.id))}>结束这次相聚</button></div><h3>{activeVisit.house}</h3><div className="life-visit-lines" aria-live="polite">{activeVisit.lines.map((l, i) => <div key={i} className={`life-line is-${l.who}`}><small>{l.who === 'player' ? '你' : l.who === 'character' ? person.name : '共同经历'}</small><p>{l.text}</p></div>)}</div><form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); const text = draft.trim(); if (text) void act(async () => { await talkWithLifeGuest(namespace, person, activeVisit.id, text); setDraft('') }) }}><input aria-label="家中对白或行动" className="soft-input min-w-0" placeholder="对 TA 说话，或写一个动作…" value={draft} onChange={e => setDraft(e.target.value)}/><button className="chip shrink-0" disabled={!canAct || !draft.trim()}>说话</button></form><details className="mt-4"><summary className="text-xs">一起下厨 · 使用冰箱食材</summary><div className="mt-3 flex flex-wrap gap-2">{RECIPES.map(recipe => <button className="chip" key={recipe.id} disabled={!canAct} onClick={() => void act(async () => { await cookWithGuest(namespace, activeVisit.id, recipe.id, uid('shared_meal')); await talkWithLifeGuest(namespace, person, activeVisit.id, `刚才我们实际做了${recipe.name}，尝尝看吧。`) })}>{recipe.name}</button>)}</div></details></article>}
+        {activeVisit && <article className="life-card"><div className="life-card-top"><span className="life-tag">正在做客 · {activeVisit.activity}</span><button className="text-xs" disabled={!canAct} onClick={() => void act(() => endLifeVisit(namespace, activeVisit.id))}>结束这次相聚</button></div><h3>{activeVisit.house}</h3><div className="life-visit-lines" aria-live="polite">{activeVisit.lines.map((l, i) => <div key={i} className={`life-line is-${l.who}`}><small>{l.who === 'player' ? '你' : l.who === 'character' ? person.name : '共同经历'}</small><p>{l.text}</p></div>)}</div><form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); const text = draft.trim(); if (text) void act(async () => { await talkWithLifeGuest(namespace, person, activeVisit.id, text); setDraft('') }) }}><input aria-label="家中对白或行动" className="soft-input min-w-0" placeholder="对 TA 说话，或写一个动作…" value={draft} onChange={e => setDraft(e.target.value)}/><button className="chip shrink-0" disabled={!canAct || !draft.trim()}>说话</button></form></article>}
         {visits.filter(v => v.id !== activeVisit?.id).slice(0, 8).map(v => <article className="life-card" key={v.id}><div className="life-card-top"><span className="life-tag">{v.status === 'declined' ? '这次没来' : '相聚记录'}</span><time>{when(v.startedAt)}</time></div><h3>{v.activity} · {v.house}</h3><p>{v.lines.filter(l => l.who === 'character').at(-1)?.text}</p></article>)}
       </>}
 

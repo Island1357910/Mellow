@@ -4,6 +4,7 @@ import { blankEntry, importCharacterWorld, isGlobalWorldEntry, readWorld, writeW
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { Character } from '../../types/index.ts'
+import { DirectiveLibrary } from './DirectiveLibrary.tsx'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
 function clock(): number {
@@ -16,13 +17,13 @@ function usePhone() {
   return identities.find((item) => item.id === activeIdentityId) ?? null
 }
 
-export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: string; defaultScope?: 'world' | 'char' }) {
+export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: string; defaultScope?: 'world' | 'char' | 'order' }) {
   const phone = usePhone()
   const worldNamespace = props.namespaceOverride ?? phone?.namespace ?? ''
   const [rows, setRows] = useState<WorldEntry[] | null>(null)
   const [chars, setChars] = useState<Character[]>([])
   const [charId, setCharId] = useState('')
-  const [scope, setScope] = useState<'world' | 'char'>('world')
+  const [scope, setScope] = useState<'world' | 'char' | 'order'>('world')
   const [tab, setTab] = useState<'on' | 'all'>('on')
   const [draft, setDraft] = useState<WorldEntry | null>(null)
   const [note, setNote] = useState('')
@@ -85,9 +86,11 @@ export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: st
 
   const subtitle = draft
     ? '写完可以先留着，不一定要用'
-    : scope === 'world'
-      ? '全局世界观，不绑定角色，所有短信都会参考'
-      : '每条设定绑定一个角色，删角色会一起删'
+    : scope === 'order'
+      ? '写法、尺度、思维链和第四面墙，按需勾'
+      : scope === 'world'
+        ? '全局世界观，不绑定角色，所有短信都会参考'
+        : '每条设定绑定一个角色，删角色会一起删'
 
   return (
     <div className="sms-shell h-full min-h-0" style={candyStyle('#E7B7C9', '#F8D0DC', '#E6DDF8')}>
@@ -102,14 +105,16 @@ export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: st
           </div>
         ) : (
           <>
-            <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-white/70 p-1 text-xs">
+            <div className="mb-3 grid grid-cols-3 gap-1 rounded-full bg-white/70 p-1 text-xs">
               <button type="button" className="rounded-full py-1.5" style={{ background: scope === 'world' ? '#E7B7C9' : 'transparent' }} onClick={() => setScope('world')}>
-                世界观{globalRows.length ? ` (${globalRows.length})` : ''}
+                世界观{globalRows.length ? ` ${globalRows.length}` : ''}
               </button>
               <button type="button" className="rounded-full py-1.5" style={{ background: scope === 'char' ? '#E7B7C9' : 'transparent' }} onClick={() => setScope('char')}>角色设定</button>
+              <button type="button" className="rounded-full py-1.5" style={{ background: scope === 'order' ? '#E7B7C9' : 'transparent' }} onClick={() => setScope('order')}>指令库</button>
             </div>
+            {scope === 'order' ? <DirectiveLibrary namespace={worldNamespace} chars={chars} charId={charId} onChar={setCharId} /> : null}
 
-            {scope === 'char' ? (
+            {scope === 'order' ? null : scope === 'char' ? (
               <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
                 绑定角色
                 <select value={charId} onChange={(event) => setCharId(event.target.value)} className="soft-select mt-1 w-full text-sm">
@@ -122,6 +127,7 @@ export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: st
               <PillNote tone="mint" compact>世界搭建导入的总世界观在这里。不跟某个角色绑定，也不会出现在短信联系人里。</PillNote>
             )}
 
+            {scope !== 'order' ? <>
             {scope === 'char' && chars.length === 0 ? <PillNote tone="lilac">先去短信导入或创建一个角色。</PillNote> : null}
             {scope === 'char' && selected && cardSources.length > 0 ? (
               <div className="mt-3 space-y-2">
@@ -185,6 +191,7 @@ export function WorldBookApp(props: { onBack: () => void; namespaceOverride?: st
                 </article>
               ))}
             </div>
+            </> : null}
           </>
         )}
       </Screen>

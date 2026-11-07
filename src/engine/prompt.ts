@@ -58,6 +58,10 @@ export function buildSmsMessages(input: {
   proactive?: boolean
   triggerNote?: string
   stickers?: Sticker[]
+  /** 世界书指令库里勾上的写法。 */
+  directives?: string
+  /** 非空时这一轮要先写思维链。 */
+  cot?: string
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall } = input
   const history = smsSeenHistory(input.history)
@@ -93,8 +97,11 @@ export function buildSmsMessages(input: {
   }
   if (fourthWall) systems.push(FOURTH_WALL)
   if (input.note?.trim()) systems.push(input.note.trim())
+  if (input.directives?.trim()) systems.push(input.directives.trim())
   systems.push('短信里不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
-  systems.push('禁止输出思维链、推理过程、内心分析或 <thinking> 等标签；只写 {{char}} 真正要发出去的那几句。')
+  systems.push(input.cot?.trim()
+    ? input.cot.trim()
+    : '禁止输出思维链、推理过程、内心分析或 <thinking> 等标签；只写 {{char}} 真正要发出去的那几句。')
   systems.push(stickerCatalogForPrompt(input.stickers))
   systems.push(fill(CHANNEL, character, identity))
   systems.push('语音或文字的发送形式由应用决定。只输出正文，不要输出（语音消息）、[语音]等媒介前缀。')

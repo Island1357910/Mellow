@@ -181,6 +181,9 @@ export interface ChatMessage {
   hidden?: boolean
   /** API 原始诊断，仅供展开查看，不传入角色上下文。 */
   diagnostic?: string
+  /** 这一轮的思维链。同一次回复拆成的几条短信共用同一段。 */
+  reasoning?: string
+  roundId?: string
 }
 
 export interface Group {
@@ -515,6 +518,8 @@ export interface AIResponse {
   provider: AIProvider
   truncated?: boolean
   recovered?: boolean
+  /** 从正文标记或接口的思考字段里取出，不发回模型。 */
+  reasoning?: string
 }
 
 export interface Notice {

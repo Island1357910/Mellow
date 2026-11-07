@@ -4,7 +4,7 @@ import { uid } from '../lib/id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { AIMessage, Character, Identity, Lorebook, LorebookEntry, Preset } from '../types/index.ts'
 import { moduleAdapter } from '../lib/ask.ts'
-import { stripReasoning } from '../lib/reasoning.ts'
+import { mergeThought, stripReasoning, takeReasoning } from '../lib/reasoning.ts'
 
 export type StoryMode = 'offline' | 'side' | 'jiushi'
 
@@ -15,6 +15,8 @@ export interface StoryLine {
   createdAt: number
   /** 本段在场角色，供主线短信读取；旧存档按场景中的明确姓名推断。 */
   participantIds?: string[]
+  /** 这一段的思维链，只在线下和番外里给玩家看。 */
+  reasoning?: string
 }
 
 export interface StorySummary {
@@ -655,6 +657,10 @@ export function buildStoryPrompt(input: {
   smsBridge?: string
   /** 旧世穿书设定等额外系统块 */
   jiushiBlock?: string
+  directives?: string
+  cot?: string
+  /** 线下本幕已认定的在场角色。给出后不再用正文里的人名重判。 */
+  castIds?: string[]
 }): AIMessage[] {
   const { mode, save, config, chars, identity } = input
   const lead = sideLike(mode) ? chars.find((item) => item.id === save.charId) : undefined
@@ -698,11 +704,18 @@ export function buildStoryPrompt(input: {
     systems.push('参与角色各有独立视角、目的和表达，不必每轮全部发言；不共享未亲眼看见或未获知的信息。')
   }
   systems.push(userPersona.trim() ? `玩家扮演 ${userName}。关于 ${userName}：${clip(userPersona, 400)}` : `玩家扮演 ${userName}。`)
+  const focus = mode === 'offline'
+    ? (input.castIds
+      ? input.castIds.flatMap((id) => {
+          const person = chars.find((item) => item.id === id)
+          return person ? [person] : []
+        })
+      : focusChars(chars, save, input.nudge))
+    : []
   let books: Lorebook[] = []
   if (mode === 'offline') {
     const roster = chars.map((item) => `${item.name}${item.nickname ? `（昵称 ${item.nickname}）` : ''} · ID：${item.id}`)
     if (roster.length) systems.push(`可供玩家寻找的人物名录（不代表已经在场，不要自动加入现场）：\n${roster.join('\n')}`)
-    const focus = focusChars(chars, save, input.nudge)
     if (focus.length) systems.push(`此刻相关的人的完整人物描述与性格：\n\n${focus.map(person => card(person, config.includeCardExtras)).join('\n\n')}`)
     if (focus.length) systems.push(`【本幕人物对应】\n${focus.map(person => `${person.id} = ${person.name}${person.nickname ? ` = ${person.nickname}` : ''}`).join('\n')}\n上述设定各归本人，不把一个人的习惯、关系或秘密挪给另一个人。未明确入场的人不自动出现。`)
     if (config.includeCardExtras) for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fill(person.systemPrompt, person.name, userName)}`)
@@ -719,14 +732,20 @@ export function buildStoryPrompt(input: {
   if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
-  if (mode === 'offline' && config.includeCardExtras) for (const person of focusChars(chars, save, input.nudge)) {
+  if (mode === 'offline' && config.includeCardExtras) for (const person of focus) {
     if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
+  if (input.directives?.trim()) systems.push(input.directives.trim())
+  if (mode !== 'jiushi') {
+    systems.push(input.cot?.trim()
+      ? input.cot.trim()
+      : '不要输出思维链、思考过程或思考标签。只写玩家看得到的正文。')
+  }
   systems.push(SCENE_HOLD)
 
   const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
-  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focusChars(chars, save).flatMap(cardRegex)) : [])]
+  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focus.flatMap(cardRegex)) : [])]
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
     const content = item.role === 'assistant' ? stripReasoning(item.content) : item.content
@@ -820,14 +839,16 @@ export function mergeStoryContinuation(previous: string, next: string): string {
   return fresh ? `${previous.trimEnd()}\n${fresh}` : previous
 }
 
-export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline'): Promise<string> {
+export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline', sink?: { reasoning: string }): Promise<string> {
   const adapter = await moduleAdapter(mode)
   const response = await adapter.complete({
     messages: fitStoryMessages(messages),
     temperature: storyTemperature(preset),
     maxTokens: maxTokens ?? 1024,
   })
-  const content = ensureStoryBreaks(stripReasoning(response.content))
+  const split = takeReasoning(response.content)
+  const content = ensureStoryBreaks(split.content)
+  if (sink) sink.reasoning = mergeThought(response.reasoning, split.reasoning)
   if (!content) throw new Error('模型只返回了思考内容，没有剧情正文，请重试或增加输出长度')
   return content
 }
@@ -844,18 +865,21 @@ export async function generateStoryReply(input: {
   preset: Preset | null
   charsMin: number
   charsMax: number
-}): Promise<string> {
+}): Promise<{ content: string; reasoning: string }> {
   const range = storyCharRange(input.charsMin, input.charsMax)
   const budget = Math.min(16384, Math.max(2048, Math.ceil(range.max * 2) + 512))
-  let content = await generate(input.messages, input.preset, budget, input.mode)
+  const sink = { reasoning: '' }
+  let content = await generate(input.messages, input.preset, budget, input.mode, sink)
+  let reasoning = sink.reasoning
   let len = plainStoryLength(content)
-  if (len >= range.lo && len <= range.hi) return content
+  if (len >= range.lo && len <= range.hi) return { content, reasoning }
 
   const roundsCap = Math.min(8, Math.max(3, Math.ceil(range.min / 2500)))
   let rounds = 0
   while (len < range.lo && rounds < roundsCap) {
     rounds += 1
     const need = Math.max(120, range.min - len)
+    const more = { reasoning: '' }
     const tail = await generate(
       [
         ...input.messages,
@@ -868,14 +892,16 @@ export async function generateStoryReply(input: {
       input.preset,
       budget,
       input.mode,
+      more,
     )
+    if (!reasoning && more.reasoning) reasoning = more.reasoning
     const merged = mergeStoryContinuation(content, tail)
     if (merged === content) break
     content = merged
     len = plainStoryLength(content)
   }
 
-  return content
+  return { content, reasoning }
 }
 
 /** 剥离 AI 回复里常见的 Markdown HTML 代码围栏 */

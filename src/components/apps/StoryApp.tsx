@@ -33,6 +33,7 @@ import {
 } from '../../engine/story.ts'
 import { initialOf } from '../../lib/format.ts'
 import { stripReasoning } from '../../lib/reasoning.ts'
+import { ThoughtSheet } from './ThoughtSheet.tsx'
 import { isJiushiCharacter, loadJiushiConfig } from '../../lib/jiushi.ts'
 import { touchImmersive } from '../../lib/smsGuard.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -236,6 +237,9 @@ function StoryView(props: {
   const [note, setNote] = useState('')
   const [menu, setMenu] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
+  const [thought, setThought] = useState<string | null>(null)
+  const hold = useRef(0)
+  const skipClick = useRef(false)
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const boxRef = useRef<HTMLTextAreaElement | null>(null)
@@ -414,7 +418,27 @@ function StoryView(props: {
                   type="button"
                   className="block max-w-full text-left"
                   style={mine ? { maxWidth: reading.layout === 'novel' ? '86%' : '80%' } : reading.layout === 'novel' ? { width: '100%' } : { maxWidth: '88%' }}
-                  onClick={() => setPicked(isPicked ? null : item.id)}
+                  onPointerDown={() => {
+                    window.clearTimeout(hold.current)
+                    hold.current = window.setTimeout(() => {
+                      skipClick.current = true
+                      setPicked(item.id)
+                    }, 480)
+                  }}
+                  onPointerUp={() => window.clearTimeout(hold.current)}
+                  onPointerLeave={() => window.clearTimeout(hold.current)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    skipClick.current = true
+                    setPicked(item.id)
+                  }}
+                  onClick={() => {
+                    if (skipClick.current) {
+                      skipClick.current = false
+                      return
+                    }
+                    setPicked(isPicked ? null : item.id)
+                  }}
                 >
                   <LineBody mode={props.mode} line={item} rules={rules} config={config} mine={mine} theme={props.theme} userName={userName} />
                 </button>
@@ -424,6 +448,9 @@ function StoryView(props: {
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-1.5 flex flex-wrap gap-1.5">
                     <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setEditing({ id: item.id, text: item.content })}><Pencil size={11} />编辑</button>
                     <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void navigator.clipboard?.writeText(item.content)}><Copy size={11} />复制</button>
+                    {item.role === 'assistant' && props.mode !== 'jiushi' ? (
+                      <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setThought(item.reasoning ?? '')}>思维链</button>
+                    ) : null}
                     {item.role === 'assistant' ? (
                       <>
                         <button type="button" className="chip chip-mint" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void reroll(item.id)}><RotateCcw size={11} />重说</button>
@@ -446,6 +473,7 @@ function StoryView(props: {
         {error ? <PillNote tone="peach" inline>{error}</PillNote> : null}
       </div>
 
+      {thought !== null ? <ThoughtSheet text={thought} onClose={() => setThought(null)} /> : null}
       <form
         className={sc('composer', 'conversation-composer flex shrink-0 items-end gap-1.5 px-3 pb-14 pt-1')}
         onSubmit={(event) => {
