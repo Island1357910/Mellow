@@ -19,12 +19,12 @@ import { useMellow } from '../../store/useMellow.ts'
 import type { BubbleStyle, Character, Chat, ChatMessage, Identity, MessageKind } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
 import { VoiceSelect } from './SettingsPanels.tsx'
-import { ALL_SMS_STICKERS } from '../../data/stickers.ts'
 import { parseReplySegments } from '../../lib/stickerReply.ts'
 import { spokenSmsText } from '../../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../../lib/smsSanitize.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 import { ChatMemoryPanel } from './ChatMemoryPanel.tsx'
+import { StickerShelf } from './StickerShelf.tsx'
 import { apiErrorText } from '../../lib/apiErrorText.ts'
 
 type ToolId = 'life' | 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon' | 'music' | 'gift'
@@ -409,19 +409,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             >
               <div className="mx-3 mb-12 mt-1 rounded-[26px] bg-white/88 p-3 shadow-[0_-6px_20px_rgba(120,80,100,0.06)]">
                 {panel === 'stickers' ? (
-                  <>
-                    <div className="mb-2 flex items-center justify-between">
-                      <button type="button" className="chip px-2.5 py-1 text-[11px]" onClick={() => setPanel('tools')}>‹ 返回</button>
-                      <span className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>点一下就发出</span>
-                    </div>
-                    <div className="grid max-h-52 grid-cols-4 gap-2 overflow-y-auto">
-                      {ALL_SMS_STICKERS.map((item) => (
-                        <button key={item.url} type="button" title={item.label} className="overflow-hidden rounded-2xl bg-[#FFF8EC] transition-transform active:scale-95" onClick={() => void send(item.url, 'sticker')}>
-                          <img src={item.url} alt={item.label} className="aspect-square w-full object-contain p-1" loading="lazy" />
-                        </button>
-                      ))}
-                    </div>
-                  </>
+                  <StickerShelf onBack={() => setPanel('tools')} onSend={(url) => void send(url, 'sticker')} />
                 ) : (
                   <>
                     <div className="grid grid-cols-4 gap-x-2 gap-y-3">

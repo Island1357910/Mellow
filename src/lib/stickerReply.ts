@@ -1,4 +1,4 @@
-import { ALL_SMS_STICKERS } from '../data/stickers.ts'
+import { ALL_SMS_STICKERS, type Sticker } from '../data/stickers.ts'
 
 export interface ReplySegment {
   kind: 'text' | 'sticker'
@@ -9,15 +9,15 @@ const STICKER_INLINE = /[\[【](?:sticker|表情包?)\s*[:：]\s*([^\]】\n]+)[\
 const STICKER_BLOCK = /\[(?:sticker|表情包?)\]([\s\S]*?)\[\/(?:sticker|表情包?)\]/gi
 const STICKER_NARRATIVE = /[（(]\s*(?:(?:发送了?|发[来出了送]?)(?:一个|一张|个|张)?\s*)?(?:表情包?|sticker)\s*[:：]\s*([^（）()\n]{1,160})[）)]/gi
 
-export function resolveSticker(raw: string): string | null {
+export function resolveSticker(raw: string, stickers: Sticker[] = ALL_SMS_STICKERS): string | null {
   const query = raw.trim()
   if (!query) return null
   if (/^https?:\/\//i.test(query) || query.startsWith('/stickers/')) {
-    return ALL_SMS_STICKERS.find((item) => item.url === query)?.url ?? null
+    return stickers.find((item) => item.url === query)?.url ?? null
   }
-  const exact = ALL_SMS_STICKERS.find((item) => item.label === query)
+  const exact = stickers.find((item) => item.label === query)
   if (exact) return exact.url
-  const loose = ALL_SMS_STICKERS.find((item) => item.label.includes(query) || query.includes(item.label))
+  const loose = stickers.find((item) => item.label.includes(query) || query.includes(item.label))
   return loose?.url ?? null
 }
 
@@ -27,14 +27,14 @@ function pushText(segments: ReplySegment[], text: string) {
   segments.push({ kind: 'text', content })
 }
 
-function pushSticker(segments: ReplySegment[], raw: string) {
-  const url = resolveSticker(raw)
+function pushSticker(segments: ReplySegment[], raw: string, stickers?: Sticker[]) {
+  const url = resolveSticker(raw, stickers)
   if (url) segments.push({ kind: 'sticker', content: url })
   else pushText(segments, `（表情包：${raw}）`)
 }
 
 /** 把 AI 回复里的 [表情:标签] 拆成「文字一条、表情一条」。 */
-export function parseReplySegments(text: string): ReplySegment[] {
+export function parseReplySegments(text: string, stickers?: Sticker[]): ReplySegment[] {
   const segments: ReplySegment[] = []
   let cursor = 0
   const matches: Array<{ start: number; end: number; label: string }> = []
@@ -62,7 +62,7 @@ export function parseReplySegments(text: string): ReplySegment[] {
 
   for (const item of merged) {
     pushText(segments, text.slice(cursor, item.start))
-    pushSticker(segments, item.label)
+    pushSticker(segments, item.label, stickers)
     cursor = item.end
   }
   pushText(segments, text.slice(cursor))
@@ -71,8 +71,8 @@ export function parseReplySegments(text: string): ReplySegment[] {
   return segments
 }
 
-export function expandReplyParts(parts: string[]): ReplySegment[] {
-  return parts.flatMap((part) => parseReplySegments(part)).filter((item) => item.content.trim())
+export function expandReplyParts(parts: string[], stickers?: Sticker[]): ReplySegment[] {
+  return parts.flatMap((part) => parseReplySegments(part, stickers)).filter((item) => item.content.trim())
 }
 
 /** 合并相邻文字以控制条数，绝不截掉正文或跨越表情包重排消息。 */
@@ -94,8 +94,8 @@ export function capReplySegments(segments: ReplySegment[], textMax: number): Rep
   return out
 }
 
-export function stickerCatalogForPrompt(limit = 72): string {
-  const labels = ALL_SMS_STICKERS.map((item) => item.label)
+export function stickerCatalogForPrompt(stickers: Sticker[] = ALL_SMS_STICKERS, limit = 80): string {
+  const labels = stickers.map((item) => item.label)
   const shown = labels.slice(0, limit)
   const tail = labels.length > limit ? `……等共 ${labels.length} 个` : ''
   return [

@@ -1,3 +1,4 @@
+import type { Sticker } from '../data/stickers.ts'
 import { capReplySegments, expandReplyParts, parseReplySegments, type ReplySegment } from './stickerReply.ts'
 
 export const SMS_SPLIT = '<<<分>>>'
@@ -74,7 +75,7 @@ function joins(prev: string, next: string): boolean {
   return /^(而且|并且|但是|然后|所以|因为|如果|不过|还是|或者|就是|没有那么|并不是)/.test(next)
 }
 
-export function buildSmsReplySegments(content: string, range: { min: number; max: number }): ReplySegment[] {
+export function buildSmsReplySegments(content: string, range: { min: number; max: number }, stickers?: Sticker[]): ReplySegment[] {
   const min = Math.max(1, Math.min(10, Math.round(range.min) || 1))
   const max = Math.max(min, Math.min(10, Math.round(range.max) || 1))
   const normalized = content.includes('\\n') && !content.includes('\n') ? content.replace(/\\n/g, '\n') : content
@@ -88,7 +89,7 @@ export function buildSmsReplySegments(content: string, range: { min: number; max
     }
     return grouped
   }).map(stripVoicePrefix).filter(Boolean)
-  const segments = expandReplyParts(parts)
+  const segments = expandReplyParts(parts, stickers)
   const textCount = segments.filter(item => item.kind === 'text').length
   let available = Math.max(0, max - textCount)
   const expanded = segments.flatMap(segment => {

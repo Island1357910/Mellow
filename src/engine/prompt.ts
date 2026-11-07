@@ -1,5 +1,5 @@
 import { SCENE_HOLD } from '../data/officialPresets.ts'
-import { stickerLabel } from '../data/stickers.ts'
+import { stickerLabel, type Sticker } from '../data/stickers.ts'
 import { SMS_RELATION_LOCK } from '../lib/channelBridge.ts'
 import { stickerCatalogForPrompt } from '../lib/stickerReply.ts'
 import { loreEntries } from '../lib/sillytavern.ts'
@@ -57,6 +57,7 @@ export function buildSmsMessages(input: {
   /** 主动触发只作为模型请求任务，不伪造或保存玩家消息。 */
   proactive?: boolean
   triggerNote?: string
+  stickers?: Sticker[]
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall } = input
   const history = smsSeenHistory(input.history)
@@ -94,7 +95,7 @@ export function buildSmsMessages(input: {
   if (input.note?.trim()) systems.push(input.note.trim())
   systems.push('短信里不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   systems.push('禁止输出思维链、推理过程、内心分析或 <thinking> 等标签；只写 {{char}} 真正要发出去的那几句。')
-  systems.push(stickerCatalogForPrompt())
+  systems.push(stickerCatalogForPrompt(input.stickers))
   systems.push(fill(CHANNEL, character, identity))
   systems.push('语音或文字的发送形式由应用决定。只输出正文，不要输出（语音消息）、[语音]等媒介前缀。')
   if (input.groupMembers) systems.push(`当前群聊只扮演 ${character.name}（ID：${character.id}）。群成员：${input.groupMembers.map(member => `${member.name}（${member.id}）`).join('、')}。发送者标记仅用于区分身份，不要复述。只有自己的发言是你说过的话，其他人的经历、关系和秘密不属于你的记忆。只依据自己的经历和群内明确公开的信息回应；别人讲述的经历只是你听说的事情，不能当作亲历。未经公开且不属于你的事情应当不知道，不猜测、不替别人回忆，不把自己与玩家的关系套用到全群。群聊背景仅是公开背景，不表示每位成员都亲历。`)
@@ -105,7 +106,7 @@ export function buildSmsMessages(input: {
   let imageNo = 0
   for (const item of history) {
     const numbered = item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:') ? ++imageNo : 0
-    const body = numbered ? `（发来一张图片，编号图${numbered}）` : describeMessage(item)
+    const body = numbered ? `（发来一张图片，编号图${numbered}）` : describeMessage(item, input.stickers)
     messages.push({
       role: item.role === 'assistant' && (!input.groupMembers || item.charId === character.id) ? 'assistant' : 'user',
       content: input.groupMembers
@@ -208,7 +209,7 @@ export function smsSeenHistory(history: ChatMessage[]): ChatMessage[] {
   return history.filter((item) => item.kind !== 'system').slice(-30)
 }
 
-export function describeMessage(item: ChatMessage): string {
+export function describeMessage(item: ChatMessage, stickers?: Sticker[]): string {
   const [head = '', ...rest] = parseCard(item.content)
   switch (item.kind) {
     case 'voice':
@@ -216,7 +217,7 @@ export function describeMessage(item: ChatMessage): string {
     case 'image':
       return '（发来一张图片）'
     case 'sticker':
-      return `[表情:${stickerLabel(item.content)}]`
+      return `[表情:${stickerLabel(item.content, stickers)}]`
     case 'redpacket':
       return `（发了一个红包：¥${head}${rest[0] ? `，写着“${rest[0]}”` : ''}${rest[1] ? `，${rest[1]}` : ''}）`
     case 'transfer':

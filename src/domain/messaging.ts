@@ -23,6 +23,7 @@ import { storyBridgeForSms } from '../lib/channelBridge.ts'
 import { smsSeenHistory } from '../engine/prompt.ts'
 import { useMellow } from '../store/useMellow.ts'
 import { chatMemoryNote, scheduleChatMemory } from '../lib/chatMemory.ts'
+import { loadStickerLibrary, visibleStickers } from '../lib/stickerLibrary.ts'
 import { maybeWriteStage } from '../lib/stage.ts'
 
 const replyLocks = new Set<string>()
@@ -320,6 +321,7 @@ export async function replyInChat(input: {
     const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
+    const stickers = visibleStickers(await loadStickerLibrary())
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -330,6 +332,7 @@ export async function replyInChat(input: {
       priority: storyBridge,
       proactive: input.proactive,
       triggerNote: input.triggerNote,
+      stickers,
       note: [
         replyNote(input.chat),
         await chatMemoryNote(input.namespace, input.chat.id),
@@ -356,7 +359,7 @@ export async function replyInChat(input: {
       maxTokens: Math.min(1600, 220 * max),
     })
     const { text, change } = takeProfileChange(stripThinkingFromSms(response.content))
-    const parts = buildSmsReplySegments(text || '……', range)
+    const parts = buildSmsReplySegments(text || '……', range, stickers)
     const replies = await deliverReplyParts({
       namespace: input.namespace,
       identity: input.identity,
@@ -437,6 +440,7 @@ export async function deliverSms(input: {
       userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
+    const stickers = visibleStickers(await loadStickerLibrary())
     const built = buildSmsMessages({
       character: input.character,
       identity: input.identity,
@@ -445,6 +449,7 @@ export async function deliverSms(input: {
       groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
+      stickers,
       note: [replyNote(input.chat), await chatMemoryNote(input.namespace, input.chat.id), await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
     })
     const adapter = await moduleAdapter('messages')

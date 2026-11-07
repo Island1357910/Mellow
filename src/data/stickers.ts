@@ -43,6 +43,6 @@ export const SMS_STICKERS: Sticker[] = [
 
 export const ALL_SMS_STICKERS: Sticker[] = [...SMS_STICKERS, ...PACK_STICKERS]
 
-export function stickerLabel(content: string): string {
-  return ALL_SMS_STICKERS.find((item) => item.url === content)?.label ?? '表情'
+export function stickerLabel(content: string, stickers: Sticker[] = ALL_SMS_STICKERS): string {
+  return stickers.find((item) => item.url === content)?.label ?? ALL_SMS_STICKERS.find((item) => item.url === content)?.label ?? '表情'
 }
