@@ -37,6 +37,7 @@ $tmp = Join-Path $env:TEMP 'mellow-gh-pages'
 if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
 New-Item -ItemType Directory -Path $tmp | Out-Null
 Copy-Item -Recurse -Force (Join-Path $root 'dist/*') $tmp
+New-Item -ItemType File -Path (Join-Path $tmp '.nojekyll') -Force | Out-Null
 Set-Location $tmp
 git init -b gh-pages | Out-Null
 git add -A
