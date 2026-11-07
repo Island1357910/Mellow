@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
-import { buildSmsReplySegments, isSpeakableSms, spokenSmsText } from '../src/lib/smsReply.ts'
+import { buildSmsReplySegments, chatStatusLine, isSpeakableSms, spokenSmsText, visibleSmsParts } from '../src/lib/smsReply.ts'
 import { capReplySegments, parseReplySegments, resolveSticker } from '../src/lib/stickerReply.ts'
 import { shouldReplyAsVoice } from '../src/domain/voiceReply.ts'
 import { storage } from '../src/storage/StorageService.ts'
@@ -59,6 +59,14 @@ try {
 } finally { if (segmenter) Object.defineProperty(Intl, 'Segmenter', segmenter) }
 const words = '没有标点但全部内容都应该保留下来'.repeat(18)
 assert.equal(buildSmsReplySegments(words, range).map(item => item.content).join(''), words)
+const leaked = '===== Page 1 =====\n<<<分\n我没点接收，这分手就不作数。\n<<<分\n把门锁好，我进地下车库了。\n<<<分'
+const repaired = buildSmsReplySegments(leaked, { min: 1, max: 4 })
+assert.deepEqual(repaired.map(item => item.content), ['我没点接收，这分手就不作数。', '把门锁好，我进地下车库了。'])
+assert.ok(repaired.every(item => !item.content.includes('<<<') && !/page/i.test(item.content)))
+assert.deepEqual(visibleSmsParts(leaked), ['我没点接收，这分手就不作数。', '把门锁好，我进地下车库了。'])
+assert.deepEqual(visibleSmsParts('我现在上电梯了。\n<<<分\n既然你有胆量提分手。\n<<<分'), ['我现在上电梯了。', '既然你有胆量提分手。'])
+assert.equal(chatStatusLine('===== Page 1 =====', '今晚见。'), '今晚见')
+assert.equal(chatStatusLine('', '===== Page 1 =====\n地下车库见。'), '地下车库见')
 const explicit = buildSmsReplySegments('第一句话<<<分>>>第二句话<<<分>>>第三句话<<<分>>>第四句话', range)
 assert.equal(explicit.map(item => item.content).join('').replace(/\n/g, ''), '第一句话第二句话第三句话第四句话')
 const overflow = capReplySegments([{ kind: 'text', content: '一' }, { kind: 'sticker', content: 'image' }, { kind: 'text', content: '二' }, { kind: 'text', content: '三' }], 1)

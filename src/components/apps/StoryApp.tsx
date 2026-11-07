@@ -245,7 +245,8 @@ function StoryView(props: {
   const boxRef = useRef<HTMLTextAreaElement | null>(null)
   const reading = config.reading
   const rules = useMemo(() => displayRules(props.mode, config, props.chars, save), [props.mode, config, props.chars, save])
-  const present = props.mode === 'offline' ? focusChars(props.chars, save).slice(0, 4) : props.chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id))
+  const present = props.mode === 'offline' ? focusChars(props.chars, save) : props.chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id))
+  const faces = props.mode === 'offline' ? present.slice(0, 6) : present
   const userName = props.mode === 'side' || props.mode === 'jiushi' ? save.persona?.name || props.identity.name : props.identity.name
   const storyJobKey = jobKey(props.namespace, 'story', props.save.id)
   const aiBusy = isAiJobRunning(storyJobKey)
@@ -371,7 +372,7 @@ function StoryView(props: {
         </button>
         {present.length ? (
           <span className="flex -space-x-2">
-            {present.map((person) => <span key={person.id} className="rounded-full ring-2 ring-white"><Face person={person} size={30} /></span>)}
+            {faces.map((person) => <span key={person.id} className="rounded-full ring-2 ring-white"><Face person={person} size={30} /></span>)}
           </span>
         ) : (
           <span className="grid h-[30px] w-[30px] place-items-center rounded-full text-sm" style={{ background: props.theme.tint }}><BookOpen size={14} /></span>

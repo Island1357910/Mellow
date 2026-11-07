@@ -93,7 +93,13 @@ export async function runStoryGeneration(input: {
   const participantIds = focus.map(person => person.id)
   const lines = save.lines.map((item, index) => input.mode === 'offline' && index === save.lines.length - 1 && item.role === 'user'
     ? { ...item, participantIds } : item)
-  let next = await putSave(input.namespace, { ...save, lines: [...lines, { ...line('assistant', reply.content), ...(input.mode === 'offline' || input.mode === 'side' ? { reasoning: reply.reasoning } : {}), ...(input.mode === 'offline' ? { participantIds } : {}) }] })
+  const replyLine = { ...line('assistant', reply.content), ...(input.mode === 'offline' || input.mode === 'side' ? { reasoning: reply.reasoning } : {}) }
+  let settled = participantIds
+  if (input.mode === 'offline') {
+    const seen = await offlineFocus(chars, { ...save, lines: [...lines, replyLine] })
+    settled = seen.map((person) => person.id)
+  }
+  let next = await putSave(input.namespace, { ...save, lines: [...lines, { ...replyLine, ...(input.mode === 'offline' ? { participantIds: settled } : {}) }] })
   if (needsSummary(next, config)) {
     try {
       next = await putSave(input.namespace, { ...await writeSummary(next, 'small', config.keepRounds, input.mode), summaryError: '' })

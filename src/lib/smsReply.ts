@@ -3,6 +3,35 @@ import { capReplySegments, expandReplyParts, parseReplySegments, type ReplySegme
 
 export const SMS_SPLIT = '<<<分>>>'
 
+const PAGE_BANNER = /^=+\s*page\s+\d+\s*=+$/i
+
+export function isPageBanner(text: string): boolean {
+  return PAGE_BANNER.test(text.trim())
+}
+
+/** 模型常把闭合括号写成 <<<分，或在开头加上 ===== Page 1 =====。先收成真正的换条符。 */
+export function normalizeSmsSplitMarks(content: string): string {
+  return content
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => !isPageBanner(line))
+    .join('\n')
+    .replace(/<<<\s*分\s*(?:>>>|>>|>)?|<<\s*分\s*>>/g, '\n<<<分>>>\n')
+}
+
+export function visibleSmsParts(content: string): string[] {
+  const parts = normalizeSmsSplitMarks(content).split(/<<<\s*分\s*>>>/u).map((part) => part.trim()).filter(Boolean)
+  return parts.length ? parts : [content.trim()]
+}
+
+export function chatStatusLine(signature: string | undefined, personality: string | undefined): string {
+  const line = `${signature ?? ''}\n${personality ?? ''}`
+    .split(/[\n。]/)
+    .map((item) => item.trim())
+    .find((item) => item && !isPageBanner(item) && !/^<<<\s*分/.test(item))
+  return line || '在线'
+}
+
 export function stripVoicePrefix(text: string): string {
   return text.replace(/^(?:\s*(?:[（(]语音(?:消息)?[）)]|\[语音(?:消息)?\]|【语音(?:消息)?】)\s*[:：]?\s*)+/u, '').trim()
 }
@@ -78,7 +107,8 @@ function joins(prev: string, next: string): boolean {
 export function buildSmsReplySegments(content: string, range: { min: number; max: number }, stickers?: Sticker[]): ReplySegment[] {
   const min = Math.max(1, Math.min(10, Math.round(range.min) || 1))
   const max = Math.max(min, Math.min(10, Math.round(range.max) || 1))
-  const normalized = content.includes('\\n') && !content.includes('\n') ? content.replace(/\\n/g, '\n') : content
+  const raw = content.includes('\\n') && !content.includes('\n') ? content.replace(/\\n/g, '\n') : content
+  const normalized = normalizeSmsSplitMarks(raw)
   const parts = normalized.split(/<<<\s*分\s*>>>/u).flatMap((block) => {
     const lines = block.split(/\n+/u).map((line) => line.trim()).filter(Boolean)
     const grouped: string[] = []

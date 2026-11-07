@@ -4,6 +4,7 @@ import { storage } from '../src/storage/StorageService.ts'
 import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
 import { buildStoryPrompt, DEFAULT_CONFIG, ensureStoryBreaks, focusChars, generate, generateStoryReply, htmlBody, mergeStoryContinuation, newSave, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
 import { runStoryGeneration } from '../src/domain/storyRunner.ts'
+import { castIdsFromModel, castTranscript } from '../src/lib/offlineCast.ts'
 import { storyWorldText, writeWorld } from '../src/lib/worldbook.ts'
 import type { AIMessage, Character } from '../src/types/index.ts'
 
@@ -25,6 +26,28 @@ assert.deepEqual(focusChars(chars, { ...cast, lines: [{ ...cast.lines[0]!, parti
 const short = person('short', '张三'), long = person('long', '张三丰')
 assert.deepEqual(focusChars([short, long], newSave('同名', { lines: [{ id: 'n', role: 'user', content: '去找张三丰', createdAt: 1 }] })).map(p => p.id), ['long'])
 assert.deepEqual(focusChars([{ ...a, nickname: '小猫' }, { ...b, nickname: '小猫' }], newSave('歧义', { lines: [{ id: 'n', role: 'user', content: '找小猫', createdAt: 1 }] })), [], 'ambiguous aliases must not pick both people')
+const ver = person('ver', '阿墨2.0')
+assert.deepEqual(focusChars([ver], newSave('版本', { lines: [{ id: 'n', role: 'user', content: '去找阿墨', createdAt: 1 }] })).map(p => p.id), ['ver'], 'a version suffix is not part of the spoken name')
+assert.deepEqual(focusChars([b, ver], newSave('两个阿墨', { lines: [{ id: 'n', role: 'user', content: '去找阿墨', createdAt: 1 }] })).map(p => p.id), ['b'], 'an exact card name wins when the spoken name is shared')
+assert.deepEqual(focusChars([a, ver], newSave('叙述加人', { lines: [
+  { id: 'u', role: 'user', content: '我和阿青在门口', createdAt: 1, participantIds: ['a'] },
+  { id: 'n', role: 'assistant', content: '阿墨把伞靠在门边，没有说话。', createdAt: 2 },
+]})).map(p => p.id), ['a', 'ver'], 'someone acting in the narration joins the cast')
+assert.deepEqual(focusChars([a, ver], newSave('叙述提起', { lines: [
+  { id: 'u', role: 'user', content: '我和阿青在门口', createdAt: 1, participantIds: ['a'] },
+  { id: 'n', role: 'assistant', content: '阿青想起阿墨，没有把那句话说完。', createdAt: 2 },
+]})).map(p => p.id), ['a'], 'a recalled person does not enter from narration')
+assert.deepEqual(focusChars([a, ver], newSave('叙述离开', { lines: [
+  { id: 'u', role: 'user', content: '一起走', createdAt: 1, participantIds: ['a', 'ver'] },
+  { id: 'n', role: 'assistant', content: '阿墨离开了，阿青还站在门边。', createdAt: 2 },
+]})).map(p => p.id), ['a'], 'a versioned card leaves when the spoken name leaves')
+assert.deepEqual(castIdsFromModel('{"ids":["阿墨"]}', [ver]), ['ver'], 'model names resolve through the version suffix')
+assert.deepEqual(castIdsFromModel('{"ids":["ver"]}', [ver]), ['ver'])
+assert.equal(castIdsFromModel('不是json', [ver]), null)
+assert.deepEqual(castIdsFromModel('{"ids":["没有这个人"]}', [ver]), null, 'unresolved names fall back instead of clearing the cast')
+const longScene = newSave('长场面', { lines: [{ id: 'tail', role: 'assistant', content: '铺垫'.repeat(500) + '阿白推门进来了', createdAt: 1 }] })
+assert(castTranscript(longScene).includes('阿白推门进来了'), 'the end of a long scene is what gets recognized')
+assert(!castTranscript(longScene).includes('铺垫'.repeat(400)))
 const prompt = buildStoryPrompt({ mode: 'offline', save: { ...cast, summaries: [{ id: 'summary', kind: 'small', text: '旧事'.repeat(600) + '最新约定尚未完成', upTo: 1, createdAt: 1 }] }, chars, identity, preset: null, config: DEFAULT_CONFIG })
 for (const char of chars) {
   assert(prompt[0]!.content.includes(`${char.name}独有的身份结尾`))
@@ -81,6 +104,7 @@ try {
   assert(storyCall, 'the story request follows the cast recognition')
   assert(storyCall!.messages[0]!.content.includes('阿白专属世界书'))
   assert(!storyCall!.messages[0]!.content.includes('阿青专属世界书'))
+  await storage.putCharacter(ns, { ...b, name: '周既' })
   const versioned = person('ver', '阿墨2.0')
   await storage.putCharacter(ns, versioned)
   const versionSave = await putSave(ns, newSave('版本卡', { lines: [{ id: 'go', role: 'user', content: '去找阿墨', createdAt: 2 }] }))

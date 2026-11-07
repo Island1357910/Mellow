@@ -19,7 +19,7 @@ import { PillNote } from '../ui/primitives.tsx'
 import { VoiceSelect } from './SettingsPanels.tsx'
 import { parseReplySegments } from '../../lib/stickerReply.ts'
 import { ThoughtSheet } from './ThoughtSheet.tsx'
-import { spokenSmsText } from '../../lib/smsReply.ts'
+import { chatStatusLine, spokenSmsText, visibleSmsParts } from '../../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../../lib/smsSanitize.ts'
 import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 import { ChatMemoryPanel } from './ChatMemoryPanel.tsx'
@@ -76,7 +76,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const typing = pending === chat.id
   const title = chat.remark?.trim() || (chat.kind === 'dm' ? primary?.nickname : '') || chat.title
   const tools = chat.kind === 'group' ? GROUP_TOOLS : DM_TOOLS
-  const status = typing ? '正在输入中……' : chat.kind === 'group' ? `${people.length} 人` : primary?.signature || primary?.personality.split(/[。\n]/)[0] || '在线'
+  const status = typing ? '正在输入中……' : chat.kind === 'group' ? `${people.length} 人` : chatStatusLine(primary?.signature, primary?.personality)
   const scope = `chat-${chat.id.replace(/[^a-zA-Z0-9_-]/g, '')}`
 
   const reload = async () => {
@@ -705,10 +705,15 @@ function Bubble(props: {
       </div>
     )
   } else {
+    const pieces = message.role === 'assistant' ? visibleSmsParts(message.content) : [message.content]
     body = (
-      <div className={`${cls} readable max-w-[70vw] px-3 py-2 md:max-w-sm`}>
-        {quoteBlock}
-        <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+      <div className="flex flex-col gap-2">
+        {pieces.map((piece, index) => (
+          <div key={`${message.id}-${index}`} className={`${cls} readable max-w-[70vw] px-3 py-2 md:max-w-sm`}>
+            {index === 0 ? quoteBlock : null}
+            <p className="whitespace-pre-wrap text-sm leading-6">{piece}</p>
+          </div>
+        ))}
       </div>
     )
   }

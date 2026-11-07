@@ -558,20 +558,46 @@ function fill(text: string, charName: string, userName: string): string {
   return text.replaceAll('{{char}}', charName).replaceAll('{{user}}', userName)
 }
 
+const VERSION_TAIL = /(?:[\s_\-]*[（(]?\s*(?:v|ver|version)?\s*\d+(?:\.\d+)?\s*[)）]?)+$/i
+
+/** 卡名末尾的 2.0、v2 是版本，口头还是叫原来的名字。 */
+export function spokenName(name: string): string {
+  const clean = name.trim()
+  const stripped = clean.replace(VERSION_TAIL, '').trim()
+  return stripped || clean
+}
+
+/** 同名只保留一个。口头名字和某张卡的全名相同时，用全名那张，不把版本卡算进去。 */
+function uniqueAliases(chars: Character[]): Map<string, Character> {
+  const exact = new Map<string, Character[]>()
+  const spoken = new Map<string, Character[]>()
+  for (const person of chars) {
+    const raw = [person.name, person.nickname, person.remark].map((name) => name?.trim()).filter((name): name is string => Boolean(name))
+    for (const alias of raw) {
+      exact.set(alias, [...(exact.get(alias) ?? []), person])
+      const spokenForm = spokenName(alias)
+      if (spokenForm.length >= 2 && spokenForm !== alias) spoken.set(spokenForm, [...(spoken.get(spokenForm) ?? []), person])
+    }
+  }
+  const unique = new Map<string, Character>()
+  for (const [alias, people] of exact) if (people.length === 1) unique.set(alias, people[0]!)
+  for (const [alias, people] of spoken) {
+    if (exact.has(alias) || people.length !== 1) continue
+    unique.set(alias, people[0]!)
+  }
+  return unique
+}
+
 /** Resolve aliases without treating a shorter name or a shared nickname as another person. */
 function namedStoryChars(chars: Character[], text: string): Character[] {
-  const owners = new Map<string, Character[]>()
-  for (const person of chars) for (const alias of new Set([person.name, person.nickname, person.remark].map(name => name?.trim()).filter((name): name is string => Boolean(name)))) {
-    owners.set(alias, [...(owners.get(alias) ?? []), person])
-  }
+  const aliases = uniqueAliases(chars)
   const hits: Array<{ start: number; end: number; person: Character }> = []
-  for (const [alias, people] of owners) {
-    if (people.length !== 1) continue
+  for (const [alias, person] of aliases) {
     let start = text.indexOf(alias)
     while (start !== -1) {
       const before = text.slice(Math.max(0, start - 16), start)
       // Mentioning someone in a conversation or on the phone does not bring them into the room.
-      if (!/(?:提到|说起|想起|听说|聊起|关于|给|收到|知道|认识).{0,4}$/.test(before) || /(?:叫|邀请|找|见).{0,4}$/.test(before)) hits.push({ start, end: start + alias.length, person: people[0]! })
+      if (!/(?:提到|说起|想起|听说|聊起|关于|给|收到|知道|认识|留下|曾经|以前|上次|短信|电话|消息).{0,4}$/.test(before) || /(?:叫|邀请|找|见).{0,4}$/.test(before)) hits.push({ start, end: start + alias.length, person })
       start = text.indexOf(alias, start + alias.length)
     }
   }
@@ -579,26 +605,41 @@ function namedStoryChars(chars: Character[], text: string): Character[] {
   return [...new Map(longest.sort((a, b) => a.start - b.start).map(hit => [hit.person.id, hit.person])).values()]
 }
 
+function leftScene(person: Character, text: string, aliases: Map<string, Character>): boolean {
+  return [...aliases.entries()].some(([alias, owner]) => {
+    if (owner.id !== person.id) return false
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`${escaped}(?:已经|已|先|就)?(?:离开了|离开现场|走了(?!过来|进来)|回去了|不在场|没来)`).test(text)
+  })
+}
+
+function joinCast(cast: Character[], people: Character[]): Character[] {
+  return [...new Map([...cast, ...people].map((person) => [person.id, person])).values()]
+}
+
 /** Continue the recorded cast; references and dialogue examples are not scene changes. */
 export function focusChars(chars: Character[], save: StorySave, extra = ''): Character[] {
+  const aliases = uniqueAliases(chars)
   let cast: Character[] = []
   for (const item of [...save.lines, ...(extra ? [{ role: 'user' as const, content: extra }] : [])]) {
     if ('participantIds' in item && item.participantIds !== undefined) {
       cast = item.participantIds.map(id => chars.find(person => person.id === id)).filter((person): person is Character => Boolean(person))
       continue
     }
-    const plain = promptLine(item.content)
-    const text = item.role === 'assistant' ? plain.replace(/[“「"][^”」"\n]*[”」"]/g, '') : plain
+    const text = promptLine(item.content)
     const people = namedStoryChars(chars, text)
-    if (item.role === 'user' && people.length) {
-      const changedScene = /(?:去找|去见|来到|走进|只剩|单独|转场|场景切换|和.{0,30}(?:去|回))/.test(text)
+    if (people.length) {
+      const changedScene = item.role === 'user'
+        ? /(?:去找|去见|来到|走进|只剩|单独|转场|场景切换|和.{0,30}(?:去|回))/.test(text)
+        : /(?:只剩|转场|场景切换)/.test(text)
       const entering = /(?:来了|来啦|进来|进门|走来|到场|加入|邀请|叫.{0,20}来|一起坐)/.test(text)
-      cast = changedScene || !cast.length ? people : entering ? [...new Map([...cast, ...people].map(person => [person.id, person])).values()] : cast
-    } else if (!cast.length) cast = people
-    if (item.role === 'user') cast = cast.filter(person => {
-      const escaped = person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return !new RegExp(`${escaped}(?:已经|已|先|就)?(?:离开了|离开现场|走了|回去了|不在场|没来)`).test(text)
-    })
+      cast = changedScene || !cast.length
+        ? people
+        : item.role === 'assistant' || entering
+          ? joinCast(cast, people)
+          : cast
+    }
+    cast = cast.filter((person) => !leftScene(person, text, aliases))
   }
   return cast
 }

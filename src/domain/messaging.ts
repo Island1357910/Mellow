@@ -16,7 +16,7 @@ import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
 import { enabledWorldText } from '../lib/worldbook.ts'
-import { buildSmsReplySegments, SMS_SPLIT, stripVoicePrefix } from '../lib/smsReply.ts'
+import { buildSmsReplySegments, isPageBanner, SMS_SPLIT, stripVoicePrefix } from '../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
 import { storyBridgeForSms } from '../lib/channelBridge.ts'
@@ -202,7 +202,7 @@ function replyNote(chat: Chat): string {
   const { min, max } = replyRange(chat)
   bits.push(
     max > 1
-      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独一行写 ${SMS_SPLIT}，不要编号。每条只说一个意思，避免把所有话挤进一条长消息。`
+      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独占一行，这一行只能是 ${SMS_SPLIT}。不要少写后面的尖括号，不要把 <<<分 留在短信正文里，不要编号，也不要写 ===== Page 1 =====。每条只说一个意思。`
       : '这次只发一条消息。',
   )
   if (chat.backstory?.trim()) bits.push(`${chat.kind === 'group' ? '群内公开背景（不视为每位成员都亲历）' : '你和对方的过往与关系（对方补充的，当作你们共同的记忆）'}：\n${chat.backstory.trim()}`)
@@ -233,7 +233,8 @@ function takeProfileChange(content: string): { text: string; change: ProfileChan
     return ''
   })
   text = text.replace(/【改签名[:：]\s*([^】]*)】/g, (_, value: string) => {
-    change.signature = value.trim().slice(0, 60)
+    const next = value.trim().slice(0, 60)
+    if (!isPageBanner(next)) change.signature = next
     return ''
   })
   text = text.replace(/【改昵称[:：]\s*([^】]*)】/g, (_, value: string) => {
