@@ -1,4 +1,6 @@
 import { moduleAi, readJson } from './ask.ts'
+import { creationIdentityContext, type CreationIdentity } from './creationContext.ts'
+import type { Character } from '../types/index.ts'
 import type { WorldEntry } from './worldbook.ts'
 
 const { askLine } = moduleAi('create')
@@ -75,20 +77,34 @@ function localCard(wish: string, depth: string): MadeCard {
   }
 }
 
-export async function makeCard(input: { wish: string; depth: string; world: WorldEntry[] }): Promise<MadeCard> {
+export async function makeCard(input: { wish: string; depth: string; world: WorldEntry[]; identity?: CreationIdentity; source?: Character }): Promise<MadeCard> {
   const used = input.world.filter((item) => item.enabled && item.content.trim())
   const book = used.length
     ? `\n必须沿用这些已经启用的世界观，不要改掉其中的规则，也不要删减原文：\n${used.map((item) => `【${item.title || '设定'}】${item.content}`).join('\n')}`
     : ''
-  const user = `详略：${input.depth}\n原料：${input.wish.trim()}${book}`
-  try {
-    const raw = await askLine(SYSTEM, user, 8192, 180_000)
-    const card = readCard(readJson(raw))
-    if (!card) throw new Error('卡没有读出来')
-    return card
-  } catch (error) {
-    if (error instanceof SyntaxError) return localCard(input.wish, input.depth)
-    if (error instanceof Error && error.message === '卡没有读出来') return localCard(input.wish, input.depth)
-    throw error
+  const source = input.source
+  const original = source ? `【已有角色卡，按用户要求修订】\n${JSON.stringify({
+    name: source.name,
+    description: source.description,
+    personality: source.personality,
+    scenario: source.scenario,
+    firstMes: source.firstMes,
+    mesExample: source.mesExample,
+    systemPrompt: source.systemPrompt,
+    creatorNotes: source.creatorNotes,
+  })}\n\n` : ''
+  const user = `${creationIdentityContext(input.identity)}${original}详略：${input.depth}\n原料：${input.wish.trim()}${book}`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const repair = attempt ? '\n上次结果不是完整的角色卡 JSON。请重新输出整个对象，正确转义字符串里的换行和双引号，先保证角色核心设定写足、对象完整闭合，再补附带世界书。不要缩短用户要求的设定篇幅。' : ''
+    const raw = await askLine(SYSTEM, user + repair, 16384, 180_000, attempt ? 0.3 : 0.8)
+    let card: MadeCard | null = null
+    try {
+      card = readCard(readJson(raw))
+    } catch {
+      // Retry malformed or empty model output with the same source material.
+    }
+    if (card && (card.description || card.personality)) return card
   }
+  if (source) throw new Error('模型两次都没有返回完整角色卡。原角色设定仍在，可重试出卡。')
+  return localCard(input.wish, input.depth)
 }

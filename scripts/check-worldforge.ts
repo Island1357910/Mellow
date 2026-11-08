@@ -1,9 +1,11 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
+import { makeCard } from '../src/lib/cardMaker.ts'
 import { forgeWorldFromCard, forgeWorldFromProse } from '../src/lib/worldForge.ts'
 import { requestForgeOutput, validateForgeOutput } from '../src/lib/worldForgeFormat.ts'
 import { storage } from '../src/storage/StorageService.ts'
+import type { AIRequest, Character } from '../src/types/index.ts'
 
 const character = {
   name: '夜班医生', description: '在雨城医院值夜班，随身带着一本记录旧城病例的笔记。',
@@ -50,10 +52,34 @@ try {
   assert.equal(fallback.local, true)
   assert.equal(fallback.characters[0].draft.description, character.description)
   assert.equal(fallback.characters[0].note, '保留原文设定')
-  AIAdapter.fromStored = async () => ({ complete: async () => ({ content: JSON.stringify(valid) }) }) as unknown as AIAdapter
-  const result = await forgeWorldFromProse('雨城有一位夜班医生，请搭建完整世界。')
+  const identity = { name: '江澜', persona: '曾在雨城开过一家旧书店' }
+  AIAdapter.fromStored = async () => ({ complete: async (request: AIRequest) => {
+    assert.match(request.messages.at(-1)!.content, /江澜.*曾在雨城开过一家旧书店/)
+    return { content: JSON.stringify(valid) }
+  } }) as unknown as AIAdapter
+  const result = await forgeWorldFromProse('雨城有一位夜班医生，请搭建完整世界。', identity)
   assert.equal(result.characters[0].draft.name, character.name)
   assert.equal(result.characters[0].draft.firstMes, character.firstMes)
+
+  const requests: AIRequest[] = []
+  const longDescription = '席淮总把那本未寄出的信藏在抽屉里。'.repeat(300)
+  AIAdapter.fromStored = async () => ({ complete: async (request: AIRequest) => {
+    requests.push(request)
+    return { content: requests.length === 1 ? '{"name":"席淮","description":"未写完' : JSON.stringify({ name: '席淮', description: longDescription }) }
+  } }) as unknown as AIAdapter
+  const made = await makeCard({
+    wish: '精修席淮人设，不少于4000字', depth: '标准', world: [], identity,
+    source: { name: '席淮', description: '已有设定：替江澜保管旧书店钥匙' } as Character,
+  })
+  assert.equal(made.description, longDescription)
+  assert.equal(requests.length, 2)
+  for (const request of requests) {
+    const prompt = request.messages.at(-1)!.content
+    assert.match(prompt, /曾在雨城开过一家旧书店/)
+    assert.match(prompt, /替江澜保管旧书店钥匙/)
+    assert.match(prompt, /不少于4000字/)
+  }
+  assert.match(requests[1]!.messages.at(-1)!.content, /上次结果不是完整的角色卡 JSON/)
 } finally {
   AIAdapter.fromStored = original
 }

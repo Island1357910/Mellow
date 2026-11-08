@@ -2,6 +2,7 @@ import { ChevronRight, Hammer, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { cardImportAccept, resolveImportJson } from '../../lib/cardTextImport.ts'
+import { loadJiushiConfig } from '../../lib/jiushi.ts'
 import { applyForgeResult, forgeWorldFromCard, forgeWorldFromProse, type ForgeResult } from '../../lib/worldForge.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
@@ -25,6 +26,11 @@ export function WorldForgeApp(props: {
   if (!phone) return null
   const jobNs = props.jiushi ? `${phone.namespace}__jiushi-forge` : phone.namespace
   const busy = isAiJobRunning(jobKey(jobNs, 'worldforge'))
+  const creationIdentity = async () => {
+    if (!props.jiushi) return phone
+    const config = await loadJiushiConfig(phone.namespace)
+    return { name: config.roleName || phone.name, persona: config.roleStory || phone.persona }
+  }
 
   const pickFile = async (file: File | undefined) => {
     if (!file) return
@@ -35,7 +41,7 @@ export function WorldForgeApp(props: {
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
         const { card: raw } = await resolveImportJson(file, 'world', (msg) => setNote(msg))
-        const forged = await forgeWorldFromCard(raw)
+        const forged = await forgeWorldFromCard(raw, await creationIdentity())
         setResult(forged)
         setNote(
           forged.local
@@ -57,7 +63,7 @@ export function WorldForgeApp(props: {
     setNote('AI 正在根据你写的内容搭建世界…')
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
-        const forged = await forgeWorldFromProse(text)
+        const forged = await forgeWorldFromProse(text, await creationIdentity())
         setResult(forged)
         setNote(
           forged.local
@@ -100,6 +106,7 @@ export function WorldForgeApp(props: {
       >
         <div className="mb-4 rounded-[24px] p-4" style={{ background: props.jiushi ? 'linear-gradient(135deg,#F5F0E6,#EDE4D3)' : 'linear-gradient(135deg,#E8EEF4,#F5F0E6)' }}>
           <p className="text-sm leading-6">手写一段世界观，或导入文件（JSON / txt / doc / docx）。AI 会拆成世界书和角色。</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>{props.jiushi ? '参考当前旧世身份' : `参考当前身份：${phone.name}`}</p>
           <ul className="mt-2 space-y-1 text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>
             <li>· 直接打字也行，不必先做成 JSON</li>
             <li>· 全部世界书条目写入世界观总条目</li>

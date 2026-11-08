@@ -7,10 +7,20 @@ import { candyStyle } from '../../lib/candy.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { readWorld, worldEntriesFromCharacter, type WorldEntry } from '../../lib/worldbook.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import type { Character } from '../../types/index.ts'
 import { PillNote, Screen } from '../ui/primitives.tsx'
 
 function cardKeyOf(card: MadeCard): string {
   return `${card.name}\u0000${card.description}\u0000${card.firstMes}\u0000${card.world.map((item) => item.content).join('\u0000')}`
+}
+
+function findSource(people: Character[], wish: string, sourceId: string): Character | undefined {
+  if (sourceId) return people.find((person) => person.id === sourceId)
+  const matches = people.filter((person) => [person.name, person.remark, person.nickname].some((name) => {
+    const label = name?.trim()
+    return label && label.length >= 2 && wish.includes(label)
+  }))
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 const FIELDS: Array<{ key: keyof MadeCard; label: string }> = [
@@ -34,6 +44,8 @@ export function CreateApp(props: { onBack: () => void }) {
   const [wish, setWish] = useState('')
   const [useBook, setUseBook] = useState(true)
   const [book, setBook] = useState<WorldEntry[]>([])
+  const [people, setPeople] = useState<Character[]>([])
+  const [sourceId, setSourceId] = useState('')
   const [card, setCard] = useState<MadeCard | null>(null)
   const [note, setNote] = useState('')
   const [noteTone, setNoteTone] = useState<'pink' | 'mint' | 'peach'>('pink')
@@ -47,6 +59,9 @@ export function CreateApp(props: { onBack: () => void }) {
     let stop = false
     void readWorld(phone.namespace).then((rows) => {
       if (!stop) setBook(rows)
+    })
+    void storage.listModernCharacters(phone.namespace).then((rows) => {
+      if (!stop) setPeople(rows)
     })
     void storage.getBag<{ card?: MadeCard; note?: string; imported?: boolean }>(phone.namespace, 'create_draft').then((draft) => {
       if (stop) return
@@ -65,7 +80,8 @@ export function CreateApp(props: { onBack: () => void }) {
 
   if (!phone) return null
   const depth = preset?.data.prompts.find((item) => item.enabled)?.content ?? '标准封装。'
-  const enabled = book.filter((item) => item.enabled)
+  const source = findSource(people, wish, sourceId)
+  const enabled = book.filter((item) => item.enabled && (!item.charId || item.charId === source?.id))
 
   const busy = phone ? isAiJobRunning(jobKey(phone.namespace, 'create')) : false
 
@@ -77,8 +93,17 @@ export function CreateApp(props: { onBack: () => void }) {
     const currentWish = wish
     runAiJob(jobKey(phone.namespace, 'create'), async () => {
       try {
-        const made = await makeCard({ wish: currentWish, depth, world: useBook ? book : [] })
-        const message = made.local ? '接口没接上，这是一份本地草稿。接上之后可以再出一次。' : '卡已经封好。点下面一次，就会完整放进短信和世界书。'
+        const [currentPeople, world] = await Promise.all([
+          storage.listModernCharacters(phone.namespace),
+          useBook ? readWorld(phone.namespace) : [],
+        ])
+        const currentSource = findSource(currentPeople, currentWish, sourceId)
+        if (sourceId && !currentSource) throw new Error('所选角色已不存在，请重新选择。')
+        const made = await makeCard({
+          wish: currentWish, depth, identity: phone, source: currentSource,
+          world: world.filter((item) => !item.charId || item.charId === currentSource?.id),
+        })
+        const message = made.local ? '模型未返回完整角色卡。下面是一份本地草稿，可重新出卡。' : '卡已经封好。点下面一次，就会完整放进短信和世界书。'
         await storage.setBag(phone.namespace, 'create_draft', { card: made, note: message })
       } catch (reason) {
         await storage.setBag(phone.namespace, 'create_draft', {
@@ -155,6 +180,16 @@ export function CreateApp(props: { onBack: () => void }) {
       <Screen title="创作" subtitle={preset?.name ?? '一键出卡'} onBack={props.onBack}>
         <div className="space-y-3">
           <textarea value={wish} rows={5} onChange={(event) => setWish(event.target.value)} placeholder="想要什么样的人。一句话也行。" className="soft-input resize-none leading-6" />
+          <p className="preset-desc">参考当前身份：{phone.name}</p>
+          {people.length ? (
+            <label className="block text-sm">
+              参考已有角色
+              <select className="soft-select mt-1 w-full" value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
+                <option value="">{source && !sourceId ? `自动匹配：${source.name}` : '按需求中的角色名自动匹配'}</option>
+                {people.map((person) => <option key={person.id} value={person.id}>{person.remark || person.name}</option>)}
+              </select>
+            </label>
+          ) : null}
           <button type="button" className="chip" style={useBook ? { background: '#E6DDF8' } : undefined} onClick={() => setUseBook((value) => !value)}>
             {useBook ? `沿用世界书 · ${enabled.length} 条在用` : '不沿用世界书'}
           </button>

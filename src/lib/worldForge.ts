@@ -1,6 +1,7 @@
 import { characterFromDraft } from '../domain/importing.ts'
 import { importCharacterRegex } from '../engine/story.ts'
 import { moduleAi } from './ask.ts'
+import { creationIdentityContext, type CreationIdentity } from './creationContext.ts'
 import { FORGE_JSON_RULES, requestForgeOutput } from './worldForgeFormat.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
 import { writeWorld, readWorld, type WorldEntry } from './worldbook.ts'
@@ -250,7 +251,7 @@ function mergeNpcDraft(local: CardDraft, ai: CardDraft | undefined, worldTitle: 
   }
 }
 
-async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
+async function aiEnrichCharacters(parsed: ForgeResult, identity?: CreationIdentity): Promise<ForgeResult> {
   if (parsed.characters.length === 0) return { ...parsed, local: false }
 
   const enriched: ForgedCharacter[] = []
@@ -278,7 +279,7 @@ async function aiEnrichCharacters(parsed: ForgeResult): Promise<ForgeResult> {
 ${FORGE_JSON_RULES}
 只返回 JSON：
 {"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""]}]}`,
-        `世界名：${parsed.worldTitle}\n\n${JSON.stringify(payload)}${correction}`,
+        `${creationIdentityContext(identity)}世界名：${parsed.worldTitle}\n\n${JSON.stringify(payload)}${correction}`,
         AI_FORGE_MAX_TOKENS,
         AI_FORGE_TIMEOUT_MS,
       ), batch.map(item => item.draft.name))
@@ -337,7 +338,7 @@ function localForge(raw: unknown): ForgeResult {
   }
 }
 
-async function aiForge(raw: unknown): Promise<ForgeResult> {
+async function aiForge(raw: unknown, identity?: CreationIdentity): Promise<ForgeResult> {
   const source = cardToPrompt(raw)
   const clip =
     source.length > AI_FORGE_SOURCE_LIMIT
@@ -352,7 +353,7 @@ async function aiForge(raw: unknown): Promise<ForgeResult> {
 ${FORGE_JSON_RULES}
 只返回以下结构，角色使用 camelCase 字段名，不要套 spec/data：
 {"worldTitle":"","worldSummary":"","worldEntries":[{"title":"","keys":"","content":""}],"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""],"note":""}]}`,
-    clip + correction,
+    creationIdentityContext(identity) + clip + correction,
     AI_FORGE_MAX_TOKENS,
     AI_FORGE_TIMEOUT_MS,
   ))
@@ -377,25 +378,25 @@ function dropWorldHostCharacter(result: ForgeResult): ForgeResult {
 }
 
 /** 手写正文或粘贴的 JSON，整理成世界书 + 角色。 */
-export async function forgeWorldFromProse(text: string): Promise<ForgeResult> {
+export async function forgeWorldFromProse(text: string, identity?: CreationIdentity): Promise<ForgeResult> {
   const trimmed = text.trim()
   if (trimmed.length < 8) throw new Error('再多写一点，AI 才好搭建')
   const head = trimmed[0]
   if (head === '{' || head === '[') {
     try {
-      return forgeWorldFromCard(JSON.parse(trimmed) as unknown)
+      return forgeWorldFromCard(JSON.parse(trimmed) as unknown, identity)
     } catch {
       // 不是合法 JSON，按正文搭建
     }
   }
-  return forgeWorldFromCard(trimmed)
+  return forgeWorldFromCard(trimmed, identity)
 }
 
-export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
+export async function forgeWorldFromCard(raw: unknown, identity?: CreationIdentity): Promise<ForgeResult> {
   const local = localParseWorldCard(raw)
   if (local) {
     try {
-      return dropWorldHostCharacter(await aiEnrichCharacters(local))
+      return dropWorldHostCharacter(await aiEnrichCharacters(local, identity))
     } catch {
       return dropWorldHostCharacter(local)
     }
@@ -404,7 +405,7 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
     const fallback = localForge(raw)
     if (fallback.characters.length > 0) {
       try {
-        return dropWorldHostCharacter(await aiEnrichCharacters(fallback))
+        return dropWorldHostCharacter(await aiEnrichCharacters(fallback, identity))
       } catch {
         return dropWorldHostCharacter(fallback)
       }
@@ -413,7 +414,7 @@ export async function forgeWorldFromCard(raw: unknown): Promise<ForgeResult> {
     // 不是可直接解析的卡结构，继续走 AI 拆分
   }
   // 可本地解析的卡已在上面处理；正文生成失败时保留真实错误。
-  return dropWorldHostCharacter(await aiForge(raw))
+  return dropWorldHostCharacter(await aiForge(raw, identity))
 }
 
 export interface ForgeApplyOptions {
