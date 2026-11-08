@@ -1,0 +1,1 @@
+(function(){System.register([`./renderApp-legacy-Be2KfnE4.js`],function(e,t){var n,r,i;return{setters:[function(e){n=e.n,r=e.r,i=e.t}],execute:function(){e(`phoneIdentity`,i),e(`themeOf`,n),e(`useMellow`,r)}}})})();
