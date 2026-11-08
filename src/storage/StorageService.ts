@@ -610,6 +610,24 @@ class StorageService {
     }))
   }
 
+  async changeCharacterWithBag<T>(
+    namespace: string,
+    characterId: string,
+    bagId: string,
+    change: (character: Character, value: T | null) => { character: Character; value: T },
+  ): Promise<{ character: Character; value: T }> {
+    const db = this.ns(namespace)
+    return db.transaction('rw', db.chars, db.appData, () =>
+      db.chars.get(characterId).then((character) => {
+        if (!character) throw new Error('这个角色已经不存在了')
+        return db.appData.get(bagId).then((bag) => {
+          const next = change(character, (bag?.value as T | undefined) ?? null)
+          return db.chars.put(next.character).then(() => db.appData.put({ id: bagId, value: next.value })).then(() => next)
+        })
+      }),
+    )
+  }
+
   async commitPaidChatMessage(namespace: string, chatId: string, message: ChatMessage, cost: number, bagId: string, change: (saved: unknown) => unknown): Promise<void> {
     if (!Number.isFinite(cost) || cost < 0) throw Error('礼物金额无效')
     const db = this.ns(namespace)

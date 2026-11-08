@@ -68,6 +68,7 @@ export function MemoWidget(props: { namespace: string; className?: string }) {
       {editing ? (
         <textarea
           autoFocus
+          data-home-widget-input
           value={memo}
           maxLength={80}
           onChange={(event) => setMemo(event.target.value)}
@@ -153,9 +154,10 @@ export function TodoWidget(props: { namespace: string; className?: string }) {
   const left = items.filter((item) => !item.done).length
   const add = () => {
     const text = draft.trim()
-    if (!text || items.length >= 3) return
+    if (!text || items.length >= 3) return false
     setItems([...items, { id: uid(), text, done: false }])
     setDraft('')
+    return true
   }
   return (
     <div className={`${shell} todo-widget flex flex-col bg-white/85 px-3.5 py-3 ${props.className ?? ''}`}>
@@ -191,13 +193,21 @@ export function TodoWidget(props: { namespace: string; className?: string }) {
               className="flex h-6 items-center gap-2"
               onSubmit={(event) => {
                 event.preventDefault()
-                add()
+                if (add()) event.currentTarget.querySelector('input')?.blur()
               }}
             >
-              <button type="submit" aria-label="加一条" className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#F8D0DC]">
+              <button
+                type="submit"
+                aria-label="加一条"
+                data-no-swipe
+                className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#F8D0DC]"
+                onPointerDown={(event) => {
+                  if (event.currentTarget.form?.querySelector('input') === document.activeElement) event.preventDefault()
+                }}
+              >
                 <Plus size={10} strokeWidth={3} />
               </button>
-              <input value={draft} maxLength={24} onChange={(event) => setDraft(event.target.value)} placeholder="加一件小事" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-black/30" style={{ fontSize: 12 }} />
+              <input data-home-widget-input value={draft} maxLength={24} onChange={(event) => setDraft(event.target.value)} placeholder="加一件小事" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-black/30" />
             </form>
           </li>
         ) : null}

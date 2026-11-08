@@ -159,6 +159,14 @@ button {
   touch-action: manipulation;
 }
 
+@media (pointer: coarse) {
+  .home-pager [data-home-widget-input] { font-size: 16px; }
+  .home-pager[data-widget-typing] .home-toolbar,
+  .home-pager[data-widget-typing] ~ .phone-home-bar { visibility: hidden; }
+  .home-pager[data-widget-typing] .home-page { overflow-y: auto; }
+  .home-pager[data-widget-typing] .launcher-apps .page2-stage { min-height: 8rem; }
+}
+
 .home-track {
   display: flex;
   height: 100%;

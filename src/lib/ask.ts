@@ -1,9 +1,13 @@
 import { AIAdapter } from '../engine/AIAdapter.ts'
 import { storage } from '../storage/StorageService.ts'
+import type { ApiProfile } from '../types/index.ts'
 import type { ApiModuleId } from './apiModules.ts'
 
-export async function moduleAdapter(moduleId?: ApiModuleId): Promise<AIAdapter> {
+export async function moduleAdapter(moduleId?: ApiModuleId, expected?: Pick<ApiProfile, 'id' | 'model' | 'endpoint'>): Promise<AIAdapter> {
   const profile = moduleId ? await storage.readModuleApi(moduleId) : await storage.readApi()
+  if (expected && (profile?.id !== expected.id || profile.model !== expected.model || profile.endpoint !== expected.endpoint)) {
+    throw new Error('接口或模型设置已更改，请重新打开应用。')
+  }
   const settings = await storage.getSettings()
   const adapter = await AIAdapter.fromStored(profile, profile ? await storage.readApiKey(profile.id) : '', settings.generation)
   const complete = adapter.complete.bind(adapter)

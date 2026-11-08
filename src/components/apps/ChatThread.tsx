@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
+import { CharacterWorldBookShortcut } from './WorldBookApp.tsx'
 import { isTrustedVoiceCache, minimaxSpeak, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { downloadJson } from '../../lib/download.ts'
@@ -287,6 +288,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             <button type="button" aria-label="语音通话" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setCalling(true)}>
               <Phone size={15} />
             </button>
+            <CharacterWorldBookShortcut people={people} onCharacterSaved={props.onPeople} />
             <button type="button" aria-label="会话设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
               <Ellipsis size={16} />
             </button>
@@ -1117,7 +1119,7 @@ function WorldBookSmsPanel(props: {
     return (
       <section className="menu-card">
         <p className="text-sm font-medium">短信里的世界书</p>
-        <p className="preset-desc mt-1">这个会话里的角色还没有世界书条目。可在世界书 App 里写，或导入带 character_book 的角色卡。</p>
+        <p className="preset-desc mt-1">这个会话里的角色还没有世界书条目。点会话顶部的书本图标可以添加。</p>
       </section>
     )
   }

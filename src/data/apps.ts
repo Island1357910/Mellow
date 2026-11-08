@@ -18,6 +18,7 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'messages', name: '短信', blurb: '消息', tint: '#F3A8BA', dock: true, fixed: true, home: true },
   { id: 'offline', name: '线下', blurb: '面对面', tint: '#9ED9C4', dock: true, fixed: true, home: true },
   { id: 'side', name: '番外', blurb: '另一条线', tint: '#C9B6E8', dock: false, fixed: true, home: true },
+  { id: 'romance', name: '人机恋', blurb: '和模型本体聊天', tint: '#E5B7DC', dock: false, fixed: true, home: true, late: true },
   { id: 'market', name: '市场', blurb: '装应用', tint: '#F0D48A', dock: false, fixed: true, home: true },
   { id: 'chengfeng', name: '乘风', blurb: '小游戏', tint: '#F2B48A', dock: false, fixed: true, home: true },
   { id: 'worldbook', name: '世界书', blurb: '这个身份的设定', tint: '#E7B7C9', dock: false, fixed: true, home: true },

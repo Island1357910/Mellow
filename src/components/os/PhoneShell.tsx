@@ -15,6 +15,7 @@ import { DiaryApp } from '../apps/LifeApps.tsx'
 import { HuizhenApp } from '../apps/HuizhenApp.tsx'
 import { MapApp } from '../apps/MapApp.tsx'
 import { MessagesApp } from '../apps/MessagesApp.tsx'
+import { ModelRomanceApp } from '../apps/ModelRomanceApp.tsx'
 import { BodyApp, DreamApp, MusicApp, PetApp, PlantApp, SparkApp, WriteApp } from '../apps/PocketApps.tsx'
 import { MarketApp, OfflineApp, SideApp } from '../apps/QuietApps.tsx'
 import { SettingsApp } from '../apps/SettingsApp.tsx'
@@ -283,6 +284,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <OfflineApp onBack={props.onBack} />
     case 'side':
       return <SideApp onBack={props.onBack} />
+    case 'romance':
+      return <ModelRomanceApp onBack={props.onBack} />
     case 'market':
       return <MarketApp onBack={props.onBack} />
     case 'chengfeng':
@@ -387,7 +390,7 @@ function HomeBar() {
   }
   const clearHold = () => window.clearTimeout(timer.current)
   return (
-    <div className="pointer-events-none absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3">
+    <div className="phone-home-bar pointer-events-none absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3">
       <div
         className="pointer-events-auto grid h-8 w-32 place-items-center"
         aria-label="主页横条。轻点返回，上滑打开控制中心，长按召唤或收起低头"

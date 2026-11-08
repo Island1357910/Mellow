@@ -103,6 +103,37 @@ export function HomeScreen() {
   const rearranging = useRef(false)
   const suppressClick = useRef(false)
   const secondaryPointers = useRef(new Set<number>())
+  const [widgetField, setWidgetField] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!widgetField || !window.matchMedia('(pointer: coarse)').matches) return
+    const page = widgetField.closest('.home-page')
+    if (!page) return
+    const viewport = window.visualViewport
+    const restingHeight = viewport?.height ?? window.innerHeight
+    let keyboardOpened = false
+    const reveal = () => {
+      const height = viewport?.height ?? window.innerHeight
+      if (restingHeight - height > 100) keyboardOpened = true
+      if (keyboardOpened && restingHeight - height < 40) {
+        widgetField.blur()
+        return
+      }
+      const bounds = page.getBoundingClientRect()
+      const field = widgetField.getBoundingClientRect()
+      const bottom = Math.min(bounds.bottom, (viewport?.offsetTop ?? 0) + height)
+      if (field.bottom + 12 > bottom) page.scrollTop += field.bottom + 12 - bottom
+    }
+    const frame = window.requestAnimationFrame(reveal)
+    window.addEventListener('resize', reveal)
+    viewport?.addEventListener('resize', reveal)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', reveal)
+      viewport?.removeEventListener('resize', reveal)
+      page.scrollTop = 0
+    }
+  }, [widgetField])
   const [index, setIndex] = useState(0)
   const [dragX, setDragX] = useState(0)
   const [settling, setSettling] = useState(true)
@@ -449,6 +480,13 @@ export function HomeScreen() {
     <div
       ref={pagerRef}
       className="home-pager"
+      data-widget-typing={widgetField ? '' : undefined}
+      onFocusCapture={(event) => {
+        if (event.target.hasAttribute('data-home-widget-input')) setWidgetField(event.target)
+      }}
+      onBlurCapture={(event) => {
+        if (event.target.hasAttribute('data-home-widget-input')) setWidgetField(null)
+      }}
       onPointerDownCapture={(event) => {
         if (!event.isPrimary) {
           secondaryPointers.current.add(event.pointerId)

@@ -18,6 +18,13 @@ export interface WorldEntry {
   worldForge?: string
 }
 
+export const CHARACTER_PROFILE_FIELDS = [
+  ['description', '简介'],
+  ['personality', '性格'],
+  ['scenario', '情境'],
+] as const
+export type CharacterProfile = Pick<Character, typeof CHARACTER_PROFILE_FIELDS[number][0]>
+
 export function isGlobalWorldEntry(item: WorldEntry): boolean {
   return !item.charId
 }
@@ -30,6 +37,28 @@ export async function writeWorld(namespace: string, rows: WorldEntry[]): Promise
   await storage.setBag(namespace, 'worldbook', rows)
 }
 
+export async function updateWorld(namespace: string, change: (rows: WorldEntry[]) => WorldEntry[]): Promise<WorldEntry[]> {
+  const next = await storage.changeAppBags(namespace, ['worldbook'], (bags) => ({
+    worldbook: change((bags.worldbook as WorldEntry[] | null) ?? []),
+  }))
+  return next.worldbook as WorldEntry[]
+}
+
+export function saveCharacterProfile(namespace: string, charId: string, profile: CharacterProfile) {
+  return storage.changeCharacterWithBag<WorldEntry[]>(namespace, charId, 'worldbook', (character, rows) => {
+    const updatedAt = Date.now()
+    const next = { ...character, ...profile, updatedAt }
+    const value = (rows ?? []).flatMap((row) => {
+      if (row.charId !== charId || !row.cardImport || row.keys !== character.name) return [row]
+      const field = CHARACTER_PROFILE_FIELDS.find(([key, title]) => row.title === title && row.content === character[key].trim())
+      if (!field || next[field[0]] === character[field[0]]) return [row]
+      const content = next[field[0]].trim()
+      return content ? [{ ...row, content, updatedAt }] : []
+    })
+    return { character: next, value }
+  })
+}
+
 export function filterWorldForSms(rows: WorldEntry[], charId: string, smsWorldOff: string[] = []): WorldEntry[] {
   const off = new Set(smsWorldOff)
   return rows.filter((item) => {
@@ -39,12 +68,13 @@ export function filterWorldForSms(rows: WorldEntry[], charId: string, smsWorldOf
   })
 }
 
-export async function enabledWorldText(namespace: string, charId?: string, smsWorldOff: string[] = []): Promise<string> {
-  const rows = await readWorld(namespace)
-  const on = charId ? filterWorldForSms(rows, charId, smsWorldOff) : rows.filter((item) => {
+export async function enabledWorldText(namespace: string, charId?: string | string[], smsWorldOff: string[] = []): Promise<string> {
+  const ids = new Set(typeof charId === 'string' ? [charId] : charId)
+  const off = new Set(smsWorldOff)
+  const on = (await readWorld(namespace)).filter((item) => {
     if (!item.enabled || !item.content.trim()) return false
-    if (smsWorldOff.includes(item.id)) return false
-    return !item.charId
+    if (off.has(item.id)) return false
+    return !item.charId || ids.has(item.charId)
   })
   if (!on.length) return ''
   const body = on.map((item) => `【${item.title.trim() || '未命名'}】${item.content.trim()}`).join('\n')
@@ -106,9 +136,9 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
     const title = entryTitle(entry)
     rows.push(stamp(title, entry.content, keysToString(entry.keys), entryEnabled(entry)))
   }
-  if (character.description.trim()) rows.push(stamp('简介', character.description, character.name))
-  if (character.personality.trim()) rows.push(stamp('性格', character.personality, character.name))
-  if (character.scenario.trim()) rows.push(stamp('情境', character.scenario, character.name))
+  for (const [key, title] of CHARACTER_PROFILE_FIELDS) {
+    if (character[key].trim()) rows.push(stamp(title, character[key], character.name))
+  }
   if (character.firstMes.trim()) rows.push(stamp('开场白', character.firstMes, character.name))
   if (character.mesExample.trim()) rows.push(stamp('对话样例', character.mesExample, character.name))
   const greetings = character.alternateGreetings.map((item) => item.trim()).filter(Boolean)
@@ -129,8 +159,6 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
 export async function importCharacterWorld(namespace: string, character: Character): Promise<number> {
   const incoming = worldEntriesFromCharacter(character)
   if (incoming.length === 0) return 0
-  const rows = await readWorld(namespace)
-  const kept = rows.filter((item) => !(item.charId === character.id && item.cardImport))
-  await writeWorld(namespace, [...incoming, ...kept])
+  await updateWorld(namespace, (rows) => [...incoming, ...rows.filter((item) => !(item.charId === character.id && item.cardImport))])
   return incoming.length
 }

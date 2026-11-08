@@ -47,9 +47,10 @@ export async function runStoryGeneration(input: {
   )
   const worldNs = input.mode === 'jiushi' ? jiushiWorldNs(phoneNs) : phoneNs
   const focus = input.mode === 'offline' ? await offlineFocus(chars, save, input.nudge) : []
+  const sideIds = save.charIds?.length ? save.charIds : [save.charId ?? chars[0]?.id].filter((id): id is string => Boolean(id))
   const world = input.mode === 'offline'
     ? await storyWorldText(worldNs, focus, `${save.lines.slice(-6).map(item => item.content).join('\n')}\n${input.nudge ?? ''}`)
-    : await enabledWorldText(worldNs, save.charId ?? chars[0]?.id)
+    : await enabledWorldText(worldNs, input.mode === 'side' ? sideIds : save.charId ?? chars[0]?.id)
   const jiushiFocus = input.mode === 'jiushi'
     ? chars.filter(isJiushiCharacter).slice(0, 6)
     : []

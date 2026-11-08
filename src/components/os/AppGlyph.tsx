@@ -1,4 +1,4 @@
-import { BookHeart, Clapperboard, Globe, Bike, BookMarked, BookOpen, Coffee, Dices, Feather, Hammer, HeartPulse, IdCard, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
+import { BookHeart, Clapperboard, Globe, Bike, BookMarked, BookOpen, Bot, Coffee, Dices, Feather, Hammer, HeartPulse, IdCard, Library, Lightbulb, Map, MessageCircle, Moon, Music, NotebookPen, PawPrint, PenLine, ScanLine, Scroll, Settings, ShoppingBag, Sparkles, Sprout, Store, Wind } from 'lucide-react'
 import { useMellow } from '../../store/useMellow.ts'
 
 const ICONS = {
@@ -8,6 +8,7 @@ const ICONS = {
   messages: MessageCircle,
   offline: Coffee,
   side: BookOpen,
+  romance: Bot,
   market: Store,
   chengfeng: Wind,
   create: PenLine,

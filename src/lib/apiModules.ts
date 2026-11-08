@@ -5,6 +5,7 @@ export const API_MODULES = [
   { id: 'messages', name: '短信（含通话与主动消息）' },
   { id: 'offline', name: '线下' },
   { id: 'side', name: '番外' },
+  { id: 'romance', name: '人机恋' },
   { id: 'jiushi', name: '旧世（入幕与传书）' },
   { id: 'life', name: '共度' },
   { id: 'moments', name: '朋友圈' },
