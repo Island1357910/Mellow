@@ -41,7 +41,7 @@ import { useMellow } from '../../store/useMellow.ts'
 import type { Character, Identity, Lorebook } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
 import { StoryMenu } from './StoryMenu.tsx'
-import { CharacterWorldBookShortcut } from './WorldBookApp.tsx'
+import { CharacterWorldBookScreen, CharacterWorldBookShortcut } from './WorldBookApp.tsx'
 
 const THEME: Record<StoryMode, { tint: string; deep: string; title: string; candy: [string, string, string] }> = {
   offline: { tint: '#D5F0E4', deep: '#5fae93', title: '线下', candy: ['#9ED9C4', '#F8D0DC', '#F8E6C0'] },
@@ -239,6 +239,7 @@ function StoryView(props: {
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [menu, setMenu] = useState(false)
+  const [worldBookOpen, setWorldBookOpen] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
   const [thought, setThought] = useState<string | null>(null)
   const hold = useRef(0)
@@ -384,7 +385,7 @@ function StoryView(props: {
           <p className="truncate text-[15px] font-semibold">{props.mode === 'side' || props.mode === 'jiushi' ? props.lead?.name || save.name : props.theme.title}</p>
           <p className="truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{subtitle}</p>
         </div>
-        {props.mode !== 'jiushi' ? <CharacterWorldBookShortcut people={present.length ? present : props.chars} onCharacterSaved={props.onCharacterSaved} /> : null}
+        {props.mode !== 'jiushi' && props.chars.length ? <CharacterWorldBookShortcut onOpen={() => setWorldBookOpen(true)} /> : null}
         <button type="button" aria-label="详情设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
           <Ellipsis size={16} />
         </button>
@@ -527,6 +528,7 @@ function StoryView(props: {
           onClear={() => void clearLines()}
         />
       ) : null}
+      {worldBookOpen ? <CharacterWorldBookScreen people={present.length ? present : props.chars} onCharacterSaved={props.onCharacterSaved} onBack={() => setWorldBookOpen(false)} /> : null}
     </div>
   )
 }

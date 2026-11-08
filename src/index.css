@@ -63,6 +63,15 @@ button {
 .conversation-shell { min-width: 0; overflow: hidden; }
 .conversation-shell > header { flex-shrink: 0; }
 .conversation-shell > header > button { flex-shrink: 0; }
+.character-world-screen {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background-color: var(--m-background, #fdfbf7);
+}
 .conversation-shell > .scroll { overflow-x: hidden; overflow-wrap: break-word; }
 .conversation-shell > header,
 .conversation-composer {

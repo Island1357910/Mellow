@@ -18,20 +18,23 @@ function usePhone() {
   return identities.find((item) => item.id === activeIdentityId) ?? null
 }
 
-export function CharacterWorldBookShortcut({ people, onCharacterSaved }: { people: Character[]; onCharacterSaved?: (character: Character) => void }) {
-  const [open, setOpen] = useState(false)
-  if (!people.length) return null
+export function CharacterWorldBookShortcut({ onOpen }: { onOpen: () => void }) {
   return (
-    <>
-      <button type="button" aria-label="编辑角色设定与世界书" title="编辑角色设定与世界书" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setOpen(true)}>
-        <BookOpen size={16} />
-      </button>
-      {open ? (
-        <div className="absolute inset-0 z-30">
-          <WorldBookApp characterIds={people.map((person) => person.id)} onCharacterSaved={onCharacterSaved} onBack={() => setOpen(false)} />
-        </div>
-      ) : null}
-    </>
+    <button type="button" aria-label="编辑角色设定与世界书" title="编辑角色设定与世界书" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={onOpen}>
+      <BookOpen size={16} />
+    </button>
+  )
+}
+
+export function CharacterWorldBookScreen(props: {
+  people: Character[]
+  onCharacterSaved?: (character: Character) => void
+  onBack: () => void
+}) {
+  return (
+    <div className="character-world-screen" role="dialog" aria-modal="true" aria-label="角色设定与世界书">
+      <WorldBookApp characterIds={props.people.map((person) => person.id)} onCharacterSaved={props.onCharacterSaved} onBack={props.onBack} />
+    </div>
   )
 }
 

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
-import { CharacterWorldBookShortcut } from './WorldBookApp.tsx'
+import { CharacterWorldBookScreen, CharacterWorldBookShortcut } from './WorldBookApp.tsx'
 import { isTrustedVoiceCache, minimaxSpeak, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { downloadJson } from '../../lib/download.ts'
@@ -56,6 +56,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const [draft, setDraft] = useState('')
   const [panel, setPanel] = useState<'tools' | 'stickers' | null>(null)
   const [menu, setMenu] = useState(false)
+  const [worldBookOpen, setWorldBookOpen] = useState(false)
   const [voice, setVoice] = useState(false)
   const [anon, setAnon] = useState(false)
   const [sheet, setSheet] = useState<'redpacket' | 'transfer' | 'gift' | null>(null)
@@ -288,7 +289,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             <button type="button" aria-label="语音通话" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setCalling(true)}>
               <Phone size={15} />
             </button>
-            <CharacterWorldBookShortcut people={people} onCharacterSaved={props.onPeople} />
+            {people.length ? <CharacterWorldBookShortcut onOpen={() => setWorldBookOpen(true)} /> : null}
             <button type="button" aria-label="会话设置" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={() => setMenu(true)}>
               <Ellipsis size={16} />
             </button>
@@ -493,6 +494,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
           }}
         />
       ) : null}
+      {worldBookOpen ? <CharacterWorldBookScreen people={people} onCharacterSaved={props.onPeople} onBack={() => setWorldBookOpen(false)} /> : null}
     </div>
   )
 
