@@ -102,6 +102,7 @@ export function HomeScreen() {
   const dragRef = useRef<{ x: number; y: number; id: number; active: boolean; t: number } | null>(null)
   const rearranging = useRef(false)
   const suppressClick = useRef(false)
+  const secondaryPointers = useRef(new Set<number>())
   const [index, setIndex] = useState(0)
   const [dragX, setDragX] = useState(0)
   const [settling, setSettling] = useState(true)
@@ -449,10 +450,16 @@ export function HomeScreen() {
       ref={pagerRef}
       className="home-pager"
       onPointerDownCapture={(event) => {
-        if (!event.isPrimary || rearranging.current) {
+        if (!event.isPrimary) {
+          secondaryPointers.current.add(event.pointerId)
           event.stopPropagation()
           return
         }
+        if (rearranging.current) {
+          event.stopPropagation()
+          return
+        }
+        secondaryPointers.current.clear()
         suppressClick.current = false
       }}
       onPointerDown={onPointerDown}
@@ -461,7 +468,9 @@ export function HomeScreen() {
       onPointerCancel={finishDrag}
       onClickCapture={(event) => {
         const pointer = event.nativeEvent
-        const secondary = pointer instanceof PointerEvent && pointer.pointerType !== '' && !pointer.isPrimary
+        // Some WebViews report isPrimary as false on click even after a primary tap.
+        const secondary = 'pointerId' in pointer && typeof pointer.pointerId === 'number'
+          && secondaryPointers.current.delete(pointer.pointerId)
         if (!secondary && !rearranging.current && !suppressClick.current) return
         event.preventDefault()
         event.stopPropagation()
