@@ -696,6 +696,7 @@ export function buildStoryPrompt(input: {
   world?: string
   /** 手机短信互通上下文 */
   smsBridge?: string
+  purchaseMemory?: string
   /** 旧世穿书设定等额外系统块 */
   jiushiBlock?: string
   directives?: string
@@ -777,7 +778,9 @@ export function buildStoryPrompt(input: {
     if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
+  if (mode === 'offline' && input.purchaseMemory) systems.push(input.purchaseMemory)
   if (input.directives?.trim()) systems.push(input.directives.trim())
+  if (mode !== 'jiushi') systems.push('纯文本正文按自然段书写，每两个段落之间固定空一行。')
   if (mode !== 'jiushi') {
     systems.push(input.cot?.trim()
       ? input.cot.trim()
@@ -900,6 +903,11 @@ export function ensureStoryBreaks(text: string): string {
   return text.replace(/([。！？][”」』]?)/g, '$1\n').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+export function normalizeStoryParagraphs(text: string): string {
+  if (hasHtml(text)) return text
+  return text.trim().replace(/\r\n?/g, '\n').replace(/\n(?:[ \t\u3000]*\n)*/g, '\n\n')
+}
+
 export async function generateStoryReply(input: {
   mode?: StoryMode
   messages: AIMessage[]
@@ -913,7 +921,6 @@ export async function generateStoryReply(input: {
   let content = await generate(input.messages, input.preset, budget, input.mode, sink)
   let reasoning = sink.reasoning
   let len = plainStoryLength(content)
-  if (len >= range.lo && len <= range.hi) return { content, reasoning }
 
   const roundsCap = Math.min(8, Math.max(3, Math.ceil(range.min / 2500)))
   let rounds = 0
@@ -942,7 +949,8 @@ export async function generateStoryReply(input: {
     len = plainStoryLength(content)
   }
 
-  return { content, reasoning }
+  const formatted = input.mode === 'offline' || input.mode === 'side' ? normalizeStoryParagraphs(content) : content
+  return { content: formatted, reasoning }
 }
 
 /** 剥离 AI 回复里常见的 Markdown HTML 代码围栏 */

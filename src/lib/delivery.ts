@@ -5,7 +5,10 @@ import { moduleAi } from './ask.ts'
 import { uid } from './id.ts'
 import { walletTask } from './wallet.ts'
 import { storage } from '../storage/StorageService.ts'
+import { readDeliveries } from './deliveryMemory.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
+
+export { readDeliveries } from './deliveryMemory.ts'
 
 export type ShopId = 'duotao' | 'flash'
 
@@ -131,10 +134,6 @@ export async function addLine(namespace: string, shop: ShopId, goodsId: string):
     await writeCart(namespace,shop,next)
     return next
   })
-}
-
-export async function readDeliveries(namespace: string): Promise<Delivery[]> {
-  return (await storage.getBag<Delivery[]>(namespace, 'deliveries')) ?? []
 }
 
 export function stageOf(order: Delivery, now: number): string {

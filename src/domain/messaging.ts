@@ -5,6 +5,7 @@ import { observeSharedLifeTurn } from '../lib/sharedLifeAi.ts'
 import { runAiJob, jobKey } from '../engine/aiJobs.ts'
 import { mapMemoryNote } from '../lib/mapMemory.ts'
 import { togetherNoteFor } from '../lib/together.ts'
+import { purchaseMemory } from '../lib/deliveryMemory.ts'
 import { AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
@@ -349,6 +350,7 @@ export async function replyInChat(input: {
       note: [
         replyNote(input.chat),
         await chatMemoryNote(input.namespace, input.chat.id),
+        input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
         sharedContent,
         await mapMemoryNote(input.namespace,input.character.id),
         await sharedLifeNote(input.namespace,input.character.id),
@@ -468,7 +470,15 @@ export async function deliverSms(input: {
       stickers,
       directives: writing.text,
       cot: writing.cot,
-      note: [replyNote(input.chat), await chatMemoryNote(input.namespace, input.chat.id), await sharedLifeNote(input.namespace,input.character.id),await mapMemoryNote(input.namespace,input.character.id), glance, explain, life, await togetherNoteFor(input.namespace, input.character.id)].filter(Boolean).join('\n'),
+      note: [
+        replyNote(input.chat),
+        await chatMemoryNote(input.namespace, input.chat.id),
+        input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
+        await sharedLifeNote(input.namespace, input.character.id),
+        await mapMemoryNote(input.namespace, input.character.id),
+        glance, explain, life,
+        await togetherNoteFor(input.namespace, input.character.id),
+      ].filter(Boolean).join('\n'),
     })
     const adapter = await moduleAdapter('messages')
     const response = await adapter.complete({

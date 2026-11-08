@@ -1,5 +1,7 @@
 import { listSaves, loadConfig, loadSave, type StorySave } from '../engine/story.ts'
-import { messagePreview } from './messagePreview.ts'
+import { describeMessage } from '../engine/prompt.ts'
+import { readChatMemory } from './chatMemory.ts'
+import { stripReasoning } from './reasoning.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character } from '../types/index.ts'
 
@@ -45,32 +47,52 @@ const OFFLINE_PRIORITY = `【优先级·高于上面全部线下记录】
 同一件事两边都写过时，以时间更晚的结果为准：短信更新的和好，不能被更早的线下怒气盖回去；线下末尾如果已经比短信更新，就接住线下末尾，不要退回短信里更早的吵架。
 只有玩家在线下刚刚做出、且短信里还没发生过的事，才按眼前这一幕推进。`
 
-export async function smsFacts(phoneNamespace: string, chars: Character[]): Promise<string> {
+async function readSmsContext(phoneNamespace: string, chars: Character[], includeMemory = false) {
   if (chars.length === 0) return ''
   const ids = new Set(chars.map((item) => item.id))
   const chats = (await storage.listChats(phoneNamespace)).filter(
     (chat) => chat.kind === 'dm' && chat.memberIds.some((id) => ids.has(id)),
   )
   const bits: Array<{ at: number; text: string }> = []
+  const memories: string[] = []
   for (const chat of chats) {
     const char = chars.find((item) => chat.memberIds.includes(item.id))
+    if (!char) continue
+    if (includeMemory) {
+      const memory = await readChatMemory(phoneNamespace, chat.id)
+      const background = chat.backstory?.trim()
+      const summary = memory.text.trim()
+      if (background || summary) {
+        const sections = [
+          background && `补充的共同过往：\n${background}`,
+          summary && `私聊长期记忆：\n${summary}`,
+        ].filter(Boolean)
+        memories.push(`【${char.name} 的私聊记忆，仅本人知情】\n${sections.join('\n')}`)
+      }
+    }
     const rows = (await storage.listMessages(phoneNamespace, chat.id)).filter(
-      (item) => !item.hidden && item.kind !== 'system',
+      (item) => !item.hidden && item.status !== 'failed' && item.kind !== 'system' && item.role !== 'system',
     )
     for (const row of rows.slice(-10)) {
-      const who = row.role === 'user' ? '对方（玩家）' : char?.nickname || char?.name || '角色'
-      bits.push({ at: row.createdAt, text: `[${stamp(row.createdAt)} · ${char?.name ?? '角色'} 的私聊，仅本人知情] ${who}：${messagePreview(row.content, row.kind).slice(0, 320)}` })
+      const who = row.role === 'user' ? '对方（玩家）' : char.nickname || char.name
+      const content = stripReasoning(describeMessage(row)).trim()
+      if (!content) continue
+      bits.push({ at: row.createdAt, text: `[${stamp(row.createdAt)} · ${char.name} 的私聊，仅本人知情] ${who}：${content.slice(0, 320)}` })
     }
   }
-  if (bits.length === 0) return ''
-  return bits.sort((a, b) => a.at - b.at).slice(-20).map((item) => item.text).join('\n')
+  const recent = bits.sort((a, b) => a.at - b.at).slice(-20).map((item) => item.text).join('\n')
+  return [...memories, recent && (memories.length ? `【近期私聊原文】\n${recent}` : recent)].filter(Boolean).join('\n\n')
+}
+
+export async function smsFacts(phoneNamespace: string, chars: Character[]): Promise<string> {
+  return readSmsContext(phoneNamespace, chars)
 }
 
 /** 线下读手机：短信里的关系结果高于线下旧记录。 */
 export async function smsBridgeForStory(phoneNamespace: string, chars: Character[]): Promise<string> {
-  const recent = await smsFacts(phoneNamespace, chars)
-  if (!recent) return ''
-  return `${OFFLINE_PRIORITY}\n【手机短信·必须接上】每段私聊只属于标注的角色，其他在场角色不自动知道。所有记录按真实发生时间排列，同一事件以较晚结果为准；线下当前的新动作和已经发生的后续仍有效。\n${recent}`
+  const context = await readSmsContext(phoneNamespace, chars, true)
+  if (!context) return ''
+  return `${OFFLINE_PRIORITY}\n【手机短信·必须接上】每段私聊只属于标注的角色，其他在场角色不自动知道。记忆是过往资料，近期私聊按发生时间排列；同一事件以较晚结果为准，线下当前的新动作和已经发生的后续仍有效。\n${context}`
 }
 
 function offlineExcerpt(save: StorySave, character: Character): string {

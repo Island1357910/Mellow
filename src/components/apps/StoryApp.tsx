@@ -21,6 +21,7 @@ import {
   loadSave,
   lorebookFromUnknown,
   newSave,
+  normalizeStoryParagraphs,
   putSave,
   saveConfig,
   storyCssClass,
@@ -546,7 +547,8 @@ function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<t
   const reading = props.config.reading
   const content = props.line.role === 'assistant' ? stripReasoning(props.line.content) : props.line.content
   const rendered = unwrapHtmlFence(applyRegex(content, props.rules, 'display', props.line.role))
-  const shown = props.line.role === 'assistant' ? stripReasoning(rendered) : rendered
+  const prose = props.line.role === 'assistant' ? stripReasoning(rendered) : rendered
+  const shown = props.line.role === 'assistant' && props.mode !== 'jiushi' ? normalizeStoryParagraphs(prose) : prose
   const text = { fontFamily: FONT_STACK[reading.font], fontSize: reading.fontSize, lineHeight: reading.lineHeight }
   const html = props.config.renderHtml && hasHtml(shown)
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)

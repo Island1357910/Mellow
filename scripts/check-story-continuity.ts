@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
 import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
-import { buildStoryPrompt, DEFAULT_CONFIG, ensureStoryBreaks, focusChars, generate, generateStoryReply, htmlBody, mergeStoryContinuation, newSave, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
+import { buildStoryPrompt, DEFAULT_CONFIG, ensureStoryBreaks, focusChars, generate, generateStoryReply, htmlBody, mergeStoryContinuation, newSave, normalizeStoryParagraphs, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
 import { runStoryGeneration } from '../src/domain/storyRunner.ts'
 import { castIdsFromModel, castTranscript } from '../src/lib/offlineCast.ts'
 import { storyWorldText, writeWorld } from '../src/lib/worldbook.ts'
@@ -87,8 +87,11 @@ try {
   for (const char of chars) assert(requests[0]!.messages[0]!.content.includes(`${char.name}独有的身份结尾`), 'full cards must survive the actual adapter boundary')
   assert(requests[0]!.messages.some(m => m.content.includes('阿白收好了雨伞')), 'completed actions at the end of a long paragraph must reach the API')
   requests = []
-  await generateStoryReply({ messages: prompt, preset: null, mode: 'offline', charsMin: 80, charsMax: 200 })
+  const reply = await generateStoryReply({ messages: prompt, preset: null, mode: 'offline', charsMin: 80, charsMax: 200 })
   assert.equal(requests.length, 1, 'a normal reply need not be split into forced tiny continuations')
+  assert.equal(reply.content, Array.from({ length: 5 }, () => '三人走到门外，阿墨撑开伞，阿白在旁等候。').join('\n\n'))
+  assert.equal(normalizeStoryParagraphs('第一段\r\n\r\n第二段\n第三段\n  \n\n第四段'), '第一段\n\n第二段\n\n第三段\n\n第四段')
+  assert.equal(normalizeStoryParagraphs('<p>第一段</p>\n<p>第二段</p>'), '<p>第一段</p>\n<p>第二段</p>')
   assert(requests[0]!.maxTokens! >= 2048)
   const previous = '已经走进餐厅并坐在靠窗的位置，服务员已经递上菜单。'
   assert.equal(mergeStoryContinuation(previous, previous), previous)
@@ -98,12 +101,19 @@ try {
   await saveConfig(ns, { ...DEFAULT_CONFIG, autoSummary: false, replyCharsMin: 80, replyCharsMax: 200 })
   await writeWorld(ns, [a, b, c].map(char => ({ id: char.id, charId: char.id, title: char.name, content: `${char.name}专属世界书`, keys: '', enabled: true, updatedAt: 1 })))
   const save = await putSave(ns, newSave('双人现场', { lines: [{ id: 'bc', role: 'user', content: '继续', createdAt: 1, participantIds: ['b', 'c'] }] }))
+  await storage.setBag(ns, 'deliveries', [
+    { id: 'tea', shop: 'flash', items: [{ name: '桂花乌龙', qty: 2, price: 8 }], recipient: 'b', recipientName: '阿墨', told: false, createdAt: 1, arrivesAt: 2, note: '少糖' },
+    { id: 'secret', shop: 'duotao', items: [{ name: '藏起来的围巾', qty: 1, price: 8 }], recipient: 'b', recipientName: '阿墨', told: false, createdAt: 1, arrivesAt: Date.now() + 60_000, note: '' },
+    { id: 'other', shop: 'duotao', items: [{ name: '阿青的杯子', qty: 1, price: 8 }], recipient: 'a', recipientName: '阿青', told: true, createdAt: 1, arrivesAt: 2, note: '' },
+  ])
   requests = []
   await runStoryGeneration({ namespace: ns, saveId: save.id, mode: 'offline', identity, presetId: '', presets: [] })
   const storyCall = requests.find((item) => item.messages[0]?.content.includes('阿墨专属世界书'))
   assert(storyCall, 'the story request follows the cast recognition')
   assert(storyCall!.messages[0]!.content.includes('阿白专属世界书'))
   assert(!storyCall!.messages[0]!.content.includes('阿青专属世界书'))
+  assert.match(storyCall!.messages[0]!.content, /桂花乌龙 ×2（已送达，送礼人尚未确认）.*少糖/)
+  assert.doesNotMatch(storyCall!.messages[0]!.content, /藏起来的围巾|阿青的杯子/)
   await storage.putCharacter(ns, { ...b, name: '周既' })
   const versioned = person('ver', '阿墨2.0')
   await storage.putCharacter(ns, versioned)

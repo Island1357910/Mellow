@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
 import { newSave, putSave, loadConfig, saveConfig, focusChars, buildStoryPrompt } from '../src/engine/story.ts'
 import { smsBridgeForStory, storyBridgeForSms } from '../src/lib/channelBridge.ts'
+import { patchChatMemory } from '../src/lib/chatMemory.ts'
 import { tickDeliveries, type Delivery } from '../src/lib/delivery.ts'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { useMellow } from '../src/store/useMellow.ts'
@@ -37,6 +38,18 @@ assert(sms.indexOf('乙的私聊0') < sms.indexOf('甲的私聊0'), 'merged chat
 assert.match(sms, /仅本人知情/)
 const prompt = buildStoryPrompt({ mode: 'offline', config, chars: [a, b], identity, save, smsBridge: sms })
 assert.match(prompt[0]!.content, /甲的私聊0/, 'bridge is not silently clipped to only the last character')
+
+await patchChatMemory(ns, 'dm-a', { text: '两人约好周六还书' })
+await patchChatMemory(ns, 'dm-b', { text: '乙的旧事只写在乙的私聊里' })
+const chatA = (await storage.getChat(ns, 'dm-a'))!
+await storage.putChat(ns, { ...chatA, backstory: '曾经一起开过书店' })
+await storage.putMessage(ns, { id: 'voice-a', chatId: 'dm-a', role: 'user', kind: 'voice', content: '还书地点改到车站', createdAt: 30, status: 'sent' } as ChatMessage)
+const privateBridge = await smsBridgeForStory(ns, [a])
+assert.match(privateBridge, /两人约好周六还书/)
+assert.match(privateBridge, /曾经一起开过书店/)
+assert.match(privateBridge, /还书地点改到车站/)
+assert.doesNotMatch(privateBridge, /乙的旧事|乙的私聊\d/)
+assert.equal(await smsBridgeForStory(ns, []), '')
 
 await storage.saveApiProfile({ name: 'test', endpoint: 'https://test.invalid/v1', model: 'test', key: 'test', ready: true })
 useMellow.setState({ identities: snap.identities, activeIdentityId: identity.id })

@@ -1,5 +1,6 @@
 import { pickPreset } from '../engine/prompt.ts'
 import { smsBridgeForStory } from '../lib/channelBridge.ts'
+import { purchaseMemory } from '../lib/deliveryMemory.ts'
 import { jiushiLetterBridgeForStory } from '../lib/jiushiBridge.ts'
 import { isJiushiCharacter, jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
 import { jiushiWorldNs } from '../lib/jiushiPhone.ts'
@@ -79,6 +80,7 @@ export async function runStoryGeneration(input: {
     nudge: input.nudge,
     world,
     smsBridge: [smsBridge, letterBridge].filter(Boolean).join('\n'),
+    purchaseMemory: input.mode === 'offline' ? await purchaseMemory(phoneNs, focus.map((person) => person.id), true) : undefined,
     jiushiBlock: jiushiConfig ? jiushiPromptBlock(jiushiConfig) : undefined,
     directives: writing.text,
     cot: writing.cot,
