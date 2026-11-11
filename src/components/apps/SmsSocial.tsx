@@ -1,9 +1,9 @@
-import { Camera, ChevronLeft, ChevronRight, Ellipsis, Plus, Settings2 } from 'lucide-react'
+import { Camera, ChevronLeft, ChevronRight, Ellipsis, Heart, MessageCircle, Plus, Settings2 } from 'lucide-react'
 import { deleteCharacterConfirmText } from '../../domain/characterCleanup.ts'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { listNearbySeen, markNearbySeen } from '../../lib/nearbyContact.ts'
-import { generateMomentsFeed, generateNearbyPeople } from '../../lib/socialAi.ts'
+import { changeMomentInteraction, generateMomentsFeed, generateNearbyPeople, momentAuthor, readMomentInteractions, replyToMomentComment, type MomentInteraction, type SocialMoment } from '../../lib/socialAi.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { nameLetter } from '../../lib/pinyin.ts'
 import { initialOf } from '../../lib/format.ts'
@@ -23,14 +23,7 @@ export interface Profile {
   cover?: string
 }
 
-export interface Moment {
-  id: string
-  author: string
-  text: string
-  at: number
-  mine?: boolean
-  image?: string
-}
+export type Moment = SocialMoment
 
 export interface NearPerson {
   name: string
@@ -111,6 +104,7 @@ export function MomentsPage(props: {
   const [text, setText] = useState('')
   const [image, setImage] = useState('')
   const [others, setOthers] = useState<Moment[]>([])
+  const [interactions, setInteractions] = useState<Record<string, MomentInteraction>>({})
   const [note, setNote] = useState('')
   const dataRevision = useMellow((state) => state.dataRevision)
   const names = props.chars.map((item) => item.remark || item.name).slice(0, 8).join('、') || '没有旧熟人'
@@ -124,10 +118,12 @@ export function MomentsPage(props: {
     void Promise.all([
       storage.getBag<{ at: number; posts: Moment[] }>(namespace, 'circle-feed'),
       storage.getBag<string>(namespace, 'circle-feed_error'),
-    ]).then(([cached, message]) => {
+      readMomentInteractions(namespace),
+    ]).then(([cached, message, activity]) => {
       if (!alive) return
       setOthers(cached?.posts ?? [])
       setNote(message || '')
+      setInteractions(activity)
       setMomentsBusy(isAiJobRunning(jobKey(namespace, 'moments')))
     })
     return () => { alive = false }
@@ -155,7 +151,8 @@ export function MomentsPage(props: {
     return () => { alive = false }
   }, [props.namespace, names, retry])
   const mineAvatar = props.profile.avatar || props.avatar
-  const feed = [...props.moments, ...others].sort((a, b) => b.at - a.at)
+  const feed = [...new Map([...Object.values(interactions).map((row) => row.post), ...props.moments, ...others].map((post) => [post.id, post])).values()]
+    .sort((a, b) => b.at - a.at)
   const publish = async () => {
     const body = text.trim()
     if (!body) return
@@ -196,6 +193,7 @@ export function MomentsPage(props: {
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{moment.text}</p>
                 {moment.image ? <img src={moment.image} alt="" className="mt-2 max-h-48 rounded-xl object-cover" /> : null}
                 <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{when(moment.at)}</p>
+                <MomentActions namespace={props.namespace} post={moment} activity={interactions[moment.id]} player={props.profile.nickname || '我'} character={momentAuthor(interactions[moment.id]?.post ?? moment, props.chars)} />
               </div>
             </article>
           ))}
@@ -214,6 +212,77 @@ export function MomentsPage(props: {
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function MomentActions({ namespace, post, activity, player, character }: {
+  namespace: string
+  post: Moment
+  activity?: MomentInteraction
+  player: string
+  character?: Character
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const save = async (change: (current: MomentInteraction) => MomentInteraction) => {
+    await changeMomentInteraction(namespace, character ? { ...post, charId: character.id } : post, change)
+    useMellow.getState().touchData()
+  }
+  const submit = async () => {
+    const text = draft.trim()
+    if (!text || saving) return
+    const comment = { id: uid('comment'), author: player, text }
+    setSaving(true)
+    setError('')
+    try {
+      await save((current) => ({ ...current, comments: [...current.comments, comment] }))
+      setDraft('')
+      if (character) runAiJob(jobKey(namespace, 'moment-comment', comment.id), async () => {
+        try {
+          const reply = await replyToMomentComment(post, character, comment)
+          if (reply) {
+            const repliedAt = Date.now()
+            await save((current) => ({ ...current, comments: current.comments.map((row) => row.id === comment.id ? { ...row, reply, repliedAt } : row) }))
+          }
+        } catch {
+          // Keep the posted comment when the author cannot reply.
+        }
+      })
+    } catch {
+      setError('评论没发出去，可以重试。')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="chip" aria-pressed={activity?.liked ?? false} onClick={() => {
+          setError('')
+          void save((current) => ({ ...current, liked: !current.liked })).catch(() => setError('点赞没保存，请重试。'))
+        }}><Heart size={14} fill={activity?.liked ? 'currentColor' : 'none'} />{activity?.liked ? '已赞' : '点赞'}</button>
+        <button type="button" className="chip" aria-expanded={open} onClick={() => setOpen(!open)}><MessageCircle size={14} />评论</button>
+      </div>
+      {activity?.comments.length ? (
+        <ul className="space-y-2 rounded-xl bg-black/5 px-3 py-2 text-sm">
+          {activity.comments.map((row) => (
+            <li key={row.id} className="break-words">
+              <p className="whitespace-pre-wrap"><strong>{row.author}</strong>　{row.text}</p>
+              {row.reply ? <p className="ml-3 mt-1 whitespace-pre-wrap"><strong>{post.author}</strong> 回复 {row.author}　{row.reply}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {open ? (
+        <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void submit() }}>
+          <textarea aria-label="朋友圈评论" placeholder="写评论" className="soft-input min-w-0 flex-1 resize-none" rows={2} maxLength={500} value={draft} disabled={saving} onChange={(event) => setDraft(event.target.value)} />
+          <button type="submit" className="chip chip-solid shrink-0" disabled={saving || !draft.trim()}>发送</button>
+        </form>
+      ) : null}
+      {error ? <p role="alert" className="text-xs">{error}</p> : null}
     </div>
   )
 }

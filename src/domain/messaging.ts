@@ -6,6 +6,7 @@ import { runAiJob, jobKey } from '../engine/aiJobs.ts'
 import { mapMemoryNote } from '../lib/mapMemory.ts'
 import { togetherNoteFor } from '../lib/together.ts'
 import { purchaseMemory } from '../lib/deliveryMemory.ts'
+import { momentMemory } from '../lib/socialAi.ts'
 import { AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { searchNoteFor } from './glance.ts'
@@ -350,6 +351,7 @@ export async function replyInChat(input: {
       note: [
         replyNote(input.chat),
         await chatMemoryNote(input.namespace, input.chat.id),
+        await momentMemory(input.namespace, [input.character]),
         input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
         sharedContent,
         await mapMemoryNote(input.namespace,input.character.id),
@@ -473,6 +475,7 @@ export async function deliverSms(input: {
       note: [
         replyNote(input.chat),
         await chatMemoryNote(input.namespace, input.chat.id),
+        await momentMemory(input.namespace, [input.character]),
         input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
         await sharedLifeNote(input.namespace, input.character.id),
         await mapMemoryNote(input.namespace, input.character.id),

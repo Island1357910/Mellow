@@ -222,7 +222,7 @@ async function processDeliveries(namespace: string, chars: Character[]): Promise
   const orders = await readDeliveries(namespace)
   const now = Date.now()
   let changed = false
-  const extra: Array<{ id: string; author: string; text: string; at: number }> = []
+  const extra: Array<{ id: string; charId: string; author: string; text: string; at: number }> = []
   for (const order of orders) {
     if (order.reacted || order.recipient === 'self' || now < order.arrivesAt || pending.has(order.id)) continue
     const person = chars.find((item) => item.id === order.recipient)
@@ -253,6 +253,7 @@ async function processDeliveries(namespace: string, chars: Character[]): Promise
       await say(namespace, person, text)
       extra.push({
         id: uid('moment'),
+        charId: person.id,
         author: person.name,
         text: order.told ? `有人给我买了${names}。` : `收到一份${names}，还不知道是谁送的。`,
         at: Date.now(),

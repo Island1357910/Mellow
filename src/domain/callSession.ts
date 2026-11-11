@@ -3,6 +3,7 @@ import { AIError } from '../engine/AIAdapter.ts'
 import { buildCallMessages, pickPreset } from '../engine/prompt.ts'
 import { chatMemoryNote } from '../lib/chatMemory.ts'
 import { purchaseMemory } from '../lib/deliveryMemory.ts'
+import { momentMemory } from '../lib/socialAi.ts'
 import { minimaxSpeak, normalizeMinimaxKey, resolveCharacterVoiceId } from '../engine/minimax.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { decryptSecret } from '../storage/crypto.ts'
@@ -59,6 +60,7 @@ export async function runCallTurn(input: {
     const built = buildCallMessages({
       note: [
         await chatMemoryNote(input.namespace, input.chat.id),
+        await momentMemory(input.namespace, [input.character]),
         input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
       ].filter(Boolean).join('\n'),
       character: input.character,

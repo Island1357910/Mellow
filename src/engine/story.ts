@@ -697,6 +697,7 @@ export function buildStoryPrompt(input: {
   /** 手机短信互通上下文 */
   smsBridge?: string
   purchaseMemory?: string
+  momentMemory?: string
   /** 旧世穿书设定等额外系统块 */
   jiushiBlock?: string
   directives?: string
@@ -779,6 +780,7 @@ export function buildStoryPrompt(input: {
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
   if (mode === 'offline' && input.purchaseMemory) systems.push(input.purchaseMemory)
+  if (mode === 'offline' && input.momentMemory) systems.push(input.momentMemory)
   if (input.directives?.trim()) systems.push(input.directives.trim())
   if (mode !== 'jiushi') systems.push('纯文本正文按自然段书写，每两个段落之间固定空一行。')
   if (mode !== 'jiushi') {

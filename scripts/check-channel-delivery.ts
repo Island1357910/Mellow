@@ -6,6 +6,7 @@ import { smsBridgeForStory, storyBridgeForSms } from '../src/lib/channelBridge.t
 import { patchChatMemory } from '../src/lib/chatMemory.ts'
 import { tickDeliveries, type Delivery } from '../src/lib/delivery.ts'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
+import { changeMomentInteraction, momentAuthor, momentMemory, readMomentInteractions, replyToMomentComment } from '../src/lib/socialAi.ts'
 import { useMellow } from '../src/store/useMellow.ts'
 import type { Character, ChatMessage } from '../src/types/index.ts'
 
@@ -77,4 +78,29 @@ try {
   await tickDeliveries(ns, [a])
   assert.equal(calls, 1, 'completed delivery does not react again')
 } finally { AIAdapter.prototype.complete = original }
+const post = { id: 'cached-post', charId: a.id, author: '旧昵称', text: '今天做了华夫饼。', at: 10 }
+const comment = { id: 'comment-1', author: identity.name, text: '留一块给我？' }
+assert.equal(momentAuthor(post, [a, b])?.id, a.id)
+assert.equal(momentAuthor({ ...post, charId: undefined }, [a, { ...b, nickname: post.author }, { ...a, remark: post.author }]), undefined)
+await Promise.all([
+  changeMomentInteraction(ns, post, row => ({ ...row, liked: true })),
+  changeMomentInteraction(ns, post, row => ({ ...row, comments: [...row.comments, comment] })),
+])
+const saved = (await readMomentInteractions(ns))[post.id]!
+assert.equal(saved.liked, true)
+assert.deepEqual(saved.post, post)
+assert.deepEqual(saved.comments, [comment])
+assert.equal(await momentMemory(ns, [a]), '')
+await changeMomentInteraction(ns, post, row => ({ ...row, comments: [{ ...comment, reply: '给你留了。' }] }))
+assert.match(await momentMemory(ns, [a]), /今天做了华夫饼.*留一块给我.*给你留了/)
+assert.equal(await momentMemory(ns, [b]), '')
+assert.equal(await momentMemory(ns + '_other', [a]), '')
+const fromStored = AIAdapter.fromStored
+let modelReply: string | null = null
+AIAdapter.fromStored = async () => ({ complete: async () => ({ content: JSON.stringify({ reply: modelReply }) }) }) as unknown as AIAdapter
+try {
+  assert.equal(await replyToMomentComment(post, a, comment), '')
+  modelReply = '给你留了。'
+  assert.equal(await replyToMomentComment(post, a, comment), modelReply)
+} finally { AIAdapter.fromStored = fromStored }
 console.log('Channel and delivery checks passed: first-save recovery, participant isolation, chronological prompts, arrival fallback, concurrency and purchase preservation')
