@@ -193,6 +193,7 @@ function readForgeResult(raw: unknown): ForgeResult | null {
   if (!raw || typeof raw !== 'object') return null
   const row = raw as Record<string, unknown>
   const worldTitle = textOf(row.worldTitle) || '未命名世界'
+  const worldSummary = textOf(row.worldSummary)
   const characters = Array.isArray(row.characters)
     ? row.characters.flatMap((item) => {
         if (!item || typeof item !== 'object') return []
@@ -210,10 +211,10 @@ function readForgeResult(raw: unknown): ForgeResult | null {
         return [{ title: textOf(e.title) || '设定', keys: textOf(e.keys), content }]
       })
     : []
-  if (characters.length === 0 && worldEntries.length === 0) return null
+  if (characters.length === 0 && worldEntries.length === 0 && !worldSummary) return null
   return {
     worldTitle,
-    worldSummary: textOf(row.worldSummary),
+    worldSummary,
     worldEntries,
     characters,
   }
@@ -349,6 +350,7 @@ async function aiForge(raw: unknown, identity?: CreationIdentity): Promise<Forge
 请拆成：
 1) 世界总设定条目（有多少写多少，含时代、地理、势力、规则等，保留原文细节）
 2) 可单独游玩的 NPC 角色卡（有多少写多少），每人必须有完整 name、description、personality、scenario、firstMes、systemPrompt
+如果原文只有世界设定、没有 NPC，characters 使用空数组，并保留世界设定。
 不要导入世界主卡本身为角色。不要 creatorNotes。不要解释、不要省略条目。
 ${FORGE_JSON_RULES}
 只返回以下结构，角色使用 camelCase 字段名，不要套 spec/data：
@@ -358,7 +360,7 @@ ${FORGE_JSON_RULES}
     AI_FORGE_TIMEOUT_MS,
   ))
   const parsed = readForgeResult(output)
-  if (!parsed || parsed.characters.length === 0) throw new Error('没拆出角色')
+  if (!parsed) throw new Error('没有生成任何世界设定或角色')
   return {
     ...parsed,
     characters: parsed.characters.map((item) => ({

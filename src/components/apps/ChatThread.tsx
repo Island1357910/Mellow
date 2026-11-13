@@ -1,7 +1,8 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { importWallpaper } from '../../lib/wallpaper.ts'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
@@ -251,10 +252,10 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
 
   const bubble = chat.bubble ?? 'soft'
   const radius = bubble === 'square' ? 10 : bubble === 'line' ? 18 : 22
-  const backdrop = chat.backgroundImage ? `center / cover no-repeat url(${chat.backgroundImage})` : chat.background || undefined
+  const backdrop = chat.backgroundImage ? `center / cover no-repeat url("${chat.backgroundImage}")` : chat.background || undefined
 
   return (
-    <div className={`sms-shell conversation-shell relative flex h-full min-h-0 flex-col ${scope}`} data-custom-backdrop={backdrop ? '' : undefined} style={{ background: backdrop }}>
+    <div className={`sms-shell conversation-shell relative flex h-full min-h-0 flex-col ${scope}`} data-custom-backdrop={backdrop ? '' : undefined} style={{ '--conversation-backdrop': backdrop } as CSSProperties}>
       <style>{bubbleSheet(scope, radius, bubble, chat.bubbleCss)}</style>
       <header className="flex items-center gap-2 px-3 pb-2 pt-12">
         {selectMode ? (
@@ -470,7 +471,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
           query={query}
           onQuery={setQuery}
           onClose={() => setMenu(false)}
-          onPatch={(patch) => void saveChat(patch)}
+          onPatch={saveChat}
           onPatchCharacter={(patch) => void saveCharacter(patch)}
           worldRows={worldRows}
           onSelectDelete={() => {
@@ -809,7 +810,7 @@ function ChatMenu(props: {
   query: string
   onQuery: (value: string) => void
   onClose: () => void
-  onPatch: (patch: Partial<Chat>) => void
+  onPatch: (patch: Partial<Chat>) => Promise<void>
   onPatchCharacter: (patch: Partial<Character>) => void
   worldRows: WorldEntry[]
   onSelectDelete: () => void
@@ -819,6 +820,19 @@ function ChatMenu(props: {
 }) {
   const [tab, setTab] = useState<MenuTab>('basic')
   const [voiceQuery, setVoiceQuery] = useState('')
+  const [backgroundNote, setBackgroundNote] = useState('')
+  const [readingBackground, setReadingBackground] = useState(false)
+  const saveBackground = async (patch: Partial<Chat>, file?: File) => {
+    setBackgroundNote('')
+    setReadingBackground(true)
+    try {
+      await props.onPatch(file ? { backgroundImage: await importWallpaper(file) } : patch)
+    } catch (error) {
+      setBackgroundNote(error instanceof Error ? error.message : '聊天背景保存失败')
+    } finally {
+      setReadingBackground(false)
+    }
+  }
   const charVoice = props.character?.voiceId?.trim() || ''
   const [target, setTarget] = useState<'mine' | 'theirs'>('mine')
   const found = props.query.trim() ? props.messages.filter((item) => item.content.includes(props.query.trim())) : []
@@ -946,7 +960,7 @@ function ChatMenu(props: {
             <section className={`menu-card ${scope}`}>
               <style>{bubbleSheet(scope, radius, props.chat.bubble ?? 'soft', css)}</style>
               <p className="text-xs" style={dim}>预览</p>
-              <div className="mt-2 space-y-2 rounded-2xl p-3" style={{ background: props.chat.backgroundImage ? `center / cover url(${props.chat.backgroundImage})` : props.chat.background || '#FBF7F4' }}>
+              <div data-custom-backdrop className="mt-2 space-y-2 rounded-2xl p-3" style={{ background: props.chat.backgroundImage ? `center / cover url("${props.chat.backgroundImage}")` : props.chat.background || '#FBF7F4' }}>
                 <div className="flex justify-start"><p className="b-theirs px-3 py-2 text-sm">今天的晚风好舒服</p></div>
                 <div className="flex justify-end"><p className="b-mine px-3 py-2 text-sm">那我们出去走走吧</p></div>
               </div>
@@ -998,7 +1012,8 @@ function ChatMenu(props: {
                     data-holiday-preserve
                     className="h-9 w-9 rounded-full shadow-[0_4px_10px_rgba(120,80,100,0.08)]"
                     style={{ background: color || 'white', outline: !props.chat.backgroundImage && (props.chat.background ?? '') === color ? '2px solid #F3A8BA' : '1px solid rgba(0,0,0,0.06)', outlineOffset: 2 }}
-                    onClick={() => props.onPatch({ background: color, backgroundImage: '' })}
+                    disabled={readingBackground}
+                    onClick={() => void saveBackground({ background: color, backgroundImage: '' })}
                   />
                 ))}
               </div>
@@ -1006,11 +1021,16 @@ function ChatMenu(props: {
                 <label className="chip chip-sky py-2">
                   <Image size={13} />
                   上传背景图
-                  <input type="file" accept="image/*" className="hidden" onChange={(event) => readImage(event.target.files?.[0], (backgroundImage) => props.onPatch({ backgroundImage }))} />
+                  <input type="file" accept="image/*" disabled={readingBackground} className="hidden" onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    event.currentTarget.value = ''
+                    if (file) void saveBackground({}, file)
+                  }} />
                 </label>
-                <button type="button" className="chip py-2" disabled={!props.chat.backgroundImage} onClick={() => props.onPatch({ backgroundImage: '' })}>移除背景图</button>
+                <button type="button" className="chip py-2" disabled={readingBackground || !props.chat.backgroundImage} onClick={() => void saveBackground({ backgroundImage: '' })}>移除背景图</button>
               </div>
               {props.chat.backgroundImage ? <img src={props.chat.backgroundImage} alt="" className="mt-3 h-24 w-full rounded-2xl object-cover" /> : null}
+              {readingBackground || backgroundNote ? <p role="status" className="mt-2 text-xs" style={dim}>{readingBackground ? '正在保存聊天背景…' : backgroundNote}</p> : null}
             </section>
           </>
         ) : null}

@@ -674,6 +674,23 @@ export function sideLike(mode: StoryMode): boolean {
   return mode === 'side' || mode === 'jiushi'
 }
 
+function cardStatusInstructions(character: Character, userName: string): string {
+  const instructions = loreEntries(character.characterBook)
+    .filter(entry => entry.enabled !== false && !entry.disable && /状态栏|状态追踪格式/.test(entry.comment || entry.name || ''))
+    .map(entry => entry.content.trim())
+    .filter(Boolean)
+  if (instructions.length) return fill(instructions.join('\n\n'), character.name, userName)
+
+  for (const rule of cardRegex(character)) {
+    if (!rule.enabled || rule.target === 'prompt' || rule.roles === 'user' || !/状态栏|状态|<status/i.test(rule.name + rule.find)) continue
+    for (const greeting of [character.firstMes, ...(character.alternateGreetings ?? [])]) {
+      const sample = greeting && compile(rule)?.exec(greeting)?.[0]?.trim()
+      if (sample) return `沿用下面示例的标签、字段和顺序。字段值按本轮场景更新，不照抄示例或将示例当成前情。\n${sample}`
+    }
+  }
+  return ''
+}
+
 export function plainStoryLength(text: string): number {
   return unwrapHtmlFence(text).replace(/<[^>]+>/g, '').replace(/\s+/g, '').length
 }
@@ -707,6 +724,8 @@ export function buildStoryPrompt(input: {
 }): AIMessage[] {
   const { mode, save, config, chars, identity } = input
   const lead = sideLike(mode) ? chars.find((item) => item.id === save.charId) : undefined
+  const castIds = save.charIds?.length ? save.charIds : [save.charId]
+  const cast = sideLike(mode) ? chars.filter(person => castIds.includes(person.id)) : []
   const userName = sideLike(mode) ? save.persona?.name || identity.name : identity.name
   const userPersona = sideLike(mode) ? save.persona?.persona ?? identity.persona : identity.persona
   const charName = lead?.name ?? '角色们'
@@ -739,7 +758,6 @@ export function buildStoryPrompt(input: {
   )
   systems.push('正文按自然段书写，段与段之间空一行，对白单独成段。不要把整篇挤在同一行。')
   if (sideLike(mode)) {
-    const cast = chars.filter(c => (save.charIds?.length ? save.charIds : [save.charId]).includes(c.id))
     for (const person of cast) {
       systems.push(card(person))
       if (person.systemPrompt.trim()) systems.push(fill(person.systemPrompt, person.name, userName))
@@ -771,9 +789,6 @@ export function buildStoryPrompt(input: {
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
   if (memory.text) systems.push(mode === 'offline' ? memory.text : clip(memory.text, 800))
-  if (sideLike(mode) && config.statusPrompt.trim()) systems.push(fill(config.statusPrompt.trim(), charName, userName))
-  if (mode === 'offline') systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
-  if (mode === 'jiushi') systems.push('可输出 HTML 状态栏（若卡内正则需要）；叙事正文仍用古风/半文白。')
   if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
   if (mode === 'offline' && config.includeCardExtras) for (const person of focus) {
     if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
@@ -789,9 +804,22 @@ export function buildStoryPrompt(input: {
       : '不要输出思维链、思考过程或思考标签。只写玩家看得到的正文。')
   }
   systems.push(SCENE_HOLD)
+  const cardStatus = config.useCardRegex
+    ? [...cast, ...focus].flatMap(person => {
+        const instructions = cardStatusInstructions(person, userName)
+        return instructions ? [`【${person.name}的状态栏格式】\n${instructions}`] : []
+      })
+    : []
+  if (sideLike(mode) && config.statusPrompt.trim()) {
+    systems.push(fill(config.statusPrompt.trim(), charName, userName))
+  } else if (cardStatus.length) {
+    systems.push(`写完叙事正文后，为本轮相关角色各输出一次下列状态栏。原样保留标签、字段顺序和换行，以便角色卡正则渲染。\n${cardStatus.join('\n\n')}`)
+  } else if (mode === 'offline') {
+    systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
+  }
 
-  const scoped = config.regex.filter(rule => !rule.charId || (save.charIds ?? [save.charId]).includes(rule.charId))
-  const rules = [...scoped, ...(config.useCardRegex ? (sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : focus.flatMap(cardRegex)) : [])]
+  const scoped = config.regex.filter(rule => !rule.charId || (sideLike(mode) ? castIds.includes(rule.charId) : focus.some(person => person.id === rule.charId)))
+  const rules = [...scoped, ...(config.useCardRegex ? [...cast, ...focus].flatMap(cardRegex) : [])]
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   for (const item of save.lines.slice(contextStart(save, config.keepRounds))) {
     const content = item.role === 'assistant' ? stripReasoning(item.content) : item.content
@@ -813,9 +841,11 @@ export function buildStoryPrompt(input: {
 }
 
 export function displayRules(mode: StoryMode, config: StoryConfig, chars: Character[], save: StorySave): RegexRule[] {
-  const scoped = config.regex.filter((rule) => !rule.charId || rule.charId === save.charId)
+  const castIds = save.charIds?.length ? save.charIds : [save.charId]
+  const relevant = sideLike(mode) ? chars.filter(person => castIds.includes(person.id)) : chars
+  const scoped = config.regex.filter(rule => !rule.charId || relevant.some(person => person.id === rule.charId))
   if (!config.useCardRegex) return scoped
-  const extra = sideLike(mode) ? chars.filter(c => (save.charIds ?? [save.charId]).includes(c.id)).flatMap(cardRegex) : chars.flatMap(cardRegex)
+  const extra = relevant.flatMap(cardRegex)
   return [...scoped, ...extra]
 }
 

@@ -1,5 +1,7 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { parseCharacterCard } from '../src/lib/sillytavern.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
 import { buildStoryPrompt, DEFAULT_CONFIG, ensureStoryBreaks, focusChars, generate, generateStoryReply, htmlBody, mergeStoryContinuation, newSave, normalizeStoryParagraphs, putSave, saveConfig, writeSummary } from '../src/engine/story.ts'
@@ -57,6 +59,18 @@ for (const char of chars) {
 }
 const expanded = buildStoryPrompt({ mode: 'offline', save: cast, chars, identity, preset: null, config: { ...DEFAULT_CONFIG, includeCardExtras: true } })
 for (const char of chars) assert(expanded[0]!.content.includes(`${char.name}本人指令`) && expanded[0]!.content.includes(`${char.name}后置设定`))
+for (const [slug, marker] of [['lanyuzhou', '<蓝与舟状态>'], ['luhuaiyuan', '[EndWorkMemo]']]) {
+  const draft = parseCharacterCard(JSON.parse(readFileSync(new URL(`../cardlib/cards/${slug}/card.json`, import.meta.url), 'utf8')))
+  const fixed = { ...a, ...draft }
+  const fixedSave = newSave('固定角色', { charId: fixed.id, bookCharIds: [], lines: [{ id: 'fixed', role: 'user', content: '继续', createdAt: 1, participantIds: [fixed.id] }] })
+  for (const mode of ['side', 'jiushi', 'offline'] as const) {
+    const input = { mode, save: fixedSave, chars: [fixed], identity, preset: null, config: DEFAULT_CONFIG }
+    const request = buildStoryPrompt(input)[0]!.content
+    assert(request.includes(marker), `${slug} status format reaches the model in ${mode}`)
+    assert(!request.includes('不要输出状态栏'))
+    assert(!buildStoryPrompt({ ...input, config: { ...DEFAULT_CONFIG, useCardRegex: false } })[0]!.content.includes(`【${fixed.name}的状态栏格式】`))
+  }
+}
 const oldHistory = newSave('旧记录', { lines: Array.from({ length: 40 }, (_, i) => ({ id: `history-${i}`, role: i % 2 ? 'assistant' as const : 'user' as const, content: i < 36 ? '不应超出窗口的旧原文' : `最新剧情${i}`, createdAt: i, participantIds: ['a'] })) })
 const bounded = buildStoryPrompt({ mode: 'offline', save: oldHistory, chars, identity, preset: null, config: { ...DEFAULT_CONFIG, keepRounds: 2 } })
 assert.equal(bounded.length, 5, 'keepRounds applies before summaries exist too')

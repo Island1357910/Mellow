@@ -15,7 +15,7 @@ function record(value: unknown): value is Record<string, unknown> {
 /** 不把缺字段、文字角色卡或漏掉的人物静默当成成功。 */
 export function validateForgeOutput(raw: unknown, expectedNames?: string[]): void {
   if (!record(raw)) throw new Error('顶层必须是 JSON 对象')
-  if (!Array.isArray(raw.characters) || raw.characters.length === 0) throw new Error('characters 必须是非空对象数组')
+  if (!Array.isArray(raw.characters)) throw new Error('characters 必须是对象数组')
   const names = new Set<string>()
   for (const item of raw.characters) {
     if (!record(item)) throw new Error('characters 每一项必须是角色对象，不能是文字或字符串')
@@ -41,6 +41,9 @@ export function validateForgeOutput(raw: unknown, expectedNames?: string[]): voi
       throw new Error('世界条目的 title、keys、content 必须是字符串')
     }
   }
+  if (!names.size && !raw.worldSummary.trim() && !raw.worldEntries.some(item => item.content.trim())) {
+    throw new Error('没有生成任何世界设定或角色')
+  }
 }
 
 /** 只在格式不合格时重试一次；网络/鉴权错误直接交给调用方。 */
@@ -52,13 +55,20 @@ export async function requestForgeOutput(
   for (let attempt = 0; attempt < 2; attempt++) {
     const text = await generate(correction)
     try {
-      const raw = readJson(text)
+      if (!text.trim()) throw new Error('模型没有返回正文')
+      let raw: unknown
+      try {
+        raw = readJson(text)
+        if (typeof raw === 'string') raw = readJson(raw)
+      } catch {
+        throw new Error('模型回复中没有可解析的 JSON')
+      }
       validateForgeOutput(raw, expectedNames)
       return raw
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'JSON 格式不正确'
       if (attempt === 1) throw new Error(`世界搭建输出格式不符合要求：${reason}。请重试，或减少一次搭建的人物数量。`)
-      correction = `\n上次输出未通过校验：${reason}。请重新整理原始资料，严格按指定 JSON 结构完整输出。`
+      correction = `\n上次输出未通过校验：${reason}。请重新整理原始资料，简洁填写各字段，保留关键设定与全部角色，优先确保 JSON 对象完整闭合。`
     }
   }
   throw new Error('世界搭建未返回有效结果')

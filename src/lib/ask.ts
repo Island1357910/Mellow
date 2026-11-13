@@ -74,23 +74,23 @@ function normalizeJsonQuotes(text: string): string {
 function tryParseJsonSlice(text: string): unknown | undefined {
   const trimmed = text.trim()
   if (!trimmed) return undefined
-  const candidates = new Set<string>([trimmed, normalizeJsonQuotes(trimmed)])
-  const arrayMatch = trimmed.match(/\[[\s\S]*\]/)
-  if (arrayMatch?.[0]) candidates.add(normalizeJsonQuotes(arrayMatch[0]))
-  const objectMatch = trimmed.match(/\{[\s\S]*\}/)
-  if (objectMatch?.[0]) candidates.add(normalizeJsonQuotes(objectMatch[0]))
-
+  const candidates = new Set<string>([trimmed])
   const objectAt = trimmed.indexOf('{')
   const listAt = trimmed.indexOf('[')
   const useList = listAt >= 0 && (objectAt < 0 || listAt < objectAt)
   const open = useList ? listAt : objectAt
   if (open >= 0) {
     const end = trimmed.lastIndexOf(useList ? ']' : '}')
-    if (end > open) candidates.add(normalizeJsonQuotes(trimmed.slice(open, end + 1)))
+    if (end > open) candidates.add(trimmed.slice(open, end + 1))
   }
+  const objectMatch = trimmed.match(/\{[\s\S]*\}/)
+  if (objectMatch?.[0]) candidates.add(objectMatch[0])
+  const arrayMatch = trimmed.match(/\[[\s\S]*\]/)
+  if (arrayMatch?.[0]) candidates.add(arrayMatch[0])
 
   for (const candidate of candidates) {
-    for (const attempt of [candidate, candidate.replace(/,\s*([}\]])/g, '$1')]) {
+    const normalized = normalizeJsonQuotes(candidate)
+    for (const attempt of [candidate, candidate.replace(/,\s*([}\]])/g, '$1'), normalized, normalized.replace(/,\s*([}\]])/g, '$1')]) {
       try {
         return JSON.parse(attempt) as unknown
       } catch {

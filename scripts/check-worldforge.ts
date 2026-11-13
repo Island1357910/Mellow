@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { makeCard } from '../src/lib/cardMaker.ts'
-import { forgeWorldFromCard, forgeWorldFromProse } from '../src/lib/worldForge.ts'
+import { applyForgeResult, forgeWorldFromCard, forgeWorldFromProse } from '../src/lib/worldForge.ts'
 import { requestForgeOutput, validateForgeOutput } from '../src/lib/worldForgeFormat.ts'
 import { storage } from '../src/storage/StorageService.ts'
-import type { AIRequest, Character } from '../src/types/index.ts'
+import type { AIRequest, Character, Identity } from '../src/types/index.ts'
 
 const character = {
   name: '夜班医生', description: '在雨城医院值夜班，随身带着一本记录旧城病例的笔记。',
@@ -13,7 +13,12 @@ const character = {
   mesExample: '', systemPrompt: '不要替玩家发言', tags: ['雨城'],
 }
 const valid = { worldTitle: '雨城', worldSummary: '三年不能说出自己的名字。', worldEntries: [], characters: [character] }
+const worldOnly = { ...valid, worldSummary: '旧城区的人把这里叫作“雨城”。', characters: [] }
 validateForgeOutput(valid)
+validateForgeOutput(worldOnly)
+assert.throws(() => validateForgeOutput({ ...worldOnly, worldSummary: '' }), /没有生成任何世界设定或角色/)
+assert.deepEqual(await requestForgeOutput(async () => `整理结果如下：\n${JSON.stringify(worldOnly)}`), worldOnly)
+assert.deepEqual(await requestForgeOutput(async () => JSON.stringify(JSON.stringify(valid))), valid)
 validateForgeOutput({ characters: [character] }, [character.name])
 for (const raw of [null, [], '角色卡正文', { ...valid, characters: ['姓名：医生'] },
   { ...valid, characters: [JSON.stringify(character)] },
@@ -33,8 +38,9 @@ const retried = await requestForgeOutput(async correction => {
 assert.deepEqual(retried, valid)
 assert.equal(attempts, 2)
 attempts = 0
-await assert.rejects(requestForgeOutput(async () => { attempts++; return '{"characters":[' }), /世界搭建输出格式不符合要求/)
+await assert.rejects(requestForgeOutput(async () => { attempts++; return '{"characters":[' }), /模型回复中没有可解析的 JSON/)
 assert.equal(attempts, 2)
+await assert.rejects(requestForgeOutput(async () => '  '), /模型没有返回正文/)
 attempts = 0
 await assert.rejects(requestForgeOutput(async () => { attempts++; throw new Error('网络断开') }), /网络断开/)
 assert.equal(attempts, 1)
@@ -60,6 +66,16 @@ try {
   const result = await forgeWorldFromProse('雨城有一位夜班医生，请搭建完整世界。', identity)
   assert.equal(result.characters[0].draft.name, character.name)
   assert.equal(result.characters[0].draft.firstMes, character.firstMes)
+
+  AIAdapter.fromStored = async () => ({ complete: async () => ({
+    content: `整理结果如下：\n${JSON.stringify(worldOnly)}`,
+  }) }) as unknown as AIAdapter
+  const setting = await forgeWorldFromProse('旧城区的人把这里叫作雨城，三年不能说出自己的名字。')
+  assert.equal(setting.worldSummary, worldOnly.worldSummary)
+  assert.deepEqual(setting.characters, [])
+  const imported = await applyForgeResult({ namespace: 'worldforge-check' } as Identity, setting)
+  assert.equal(imported.world[0]?.content, worldOnly.worldSummary)
+  assert.deepEqual(imported.characters, [])
 
   const requests: AIRequest[] = []
   const longDescription = '席淮总把那本未寄出的信藏在抽屉里。'.repeat(300)

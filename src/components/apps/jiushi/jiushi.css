@@ -367,11 +367,14 @@
 /* 旧世内嵌 sms-shell 去多巴胺化 */
 .jiushi-phone .sms-shell,
 .jiushi-phone .candy-shell {
+  color: var(--js-ink);
+}
+.jiushi-phone .sms-shell:not([data-custom-backdrop]),
+.jiushi-phone .candy-shell:not([data-custom-backdrop]) {
   background: var(--js-paper) !important;
   background-image:
     radial-gradient(ellipse 90% 60% at 50% -5%, rgba(184, 149, 106, 0.14), transparent 50%),
     repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(107, 83, 68, 0.04) 32px) !important;
-  color: var(--js-ink);
 }
 
 .jiushi-phone .menu-card {

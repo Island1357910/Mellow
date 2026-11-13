@@ -61,6 +61,7 @@ button {
 /* Physical dimensions also work in older Android WebViews. Keep chat controls
    outside flex shrink, and leave room for cutouts in landscape. */
 .conversation-shell { min-width: 0; overflow: hidden; }
+.conversation-shell[data-custom-backdrop] { background: var(--conversation-backdrop) !important; }
 .conversation-shell > header { flex-shrink: 0; }
 .conversation-shell > header > button { flex-shrink: 0; }
 .character-world-screen {
@@ -1799,7 +1800,7 @@ button {
 .device[data-palette="custom"] :is(.chip-solid,.chip-pink) { background: var(--m-primary); color: var(--m-background); }
 .device[data-font="custom"] :is(p,span,h1,h2,h3,button,input,textarea,select,article,.readable) { font-family: var(--m-font) !important; }
 @scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] { color-scheme: dark; } }
-@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .sms-shell { background: radial-gradient(ellipse at 85% 0%,#74518a55,transparent 50%),var(--m-background) !important; } }
+@scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .sms-shell:not([data-custom-backdrop]) { background: radial-gradient(ellipse at 85% 0%,#74518a55,transparent 50%),var(--m-background) !important; } }
 @scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] :is(.menu-card,.soft-card) { border: 1px solid #b995df35; box-shadow: 0 7px 28px #08061166, inset 0 1px #efad5630; } }
 @scope (:root) to (.jiushi-phone) { .device[data-season="halloween"] .app-launch { filter: saturate(.75) drop-shadow(0 0 9px #d9984e30); } }
 .device[data-effect="stars"] .home-pager { background-image: radial-gradient(circle at 15% 30%,#ffe8a5 1px,transparent 2px),radial-gradient(circle at 80% 65%,#fff 1px,transparent 2px); background-size: 75px 95px,110px 130px; }

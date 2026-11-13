@@ -355,7 +355,7 @@ function StoryView(props: {
     setPicked(null)
   }
 
-  const backdrop = reading.backgroundImage ? `center / cover no-repeat url(${reading.backgroundImage})` : reading.background || undefined
+  const backdrop = reading.backgroundImage ? `center / cover no-repeat url("${reading.backgroundImage}")` : reading.background || undefined
   const candy = props.mode === 'jiushi'
     ? ({} as CSSProperties)
     : ({ '--candy': props.theme.candy[0], '--candy-2': props.theme.candy[1], '--candy-3': props.theme.candy[2] } as CSSProperties)
@@ -369,7 +369,7 @@ function StoryView(props: {
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
 
   return (
-    <div className={sc('shell', 'sms-shell conversation-shell relative flex h-full min-h-0 flex-col')} data-custom-backdrop={backdrop ? '' : undefined} style={{ ...candy, background: backdrop }}>
+    <div className={sc('shell', 'sms-shell conversation-shell relative flex h-full min-h-0 flex-col')} data-custom-backdrop={backdrop ? '' : undefined} style={{ ...candy, '--conversation-backdrop': backdrop } as CSSProperties}>
       {reading.customCss.trim() ? <style>{reading.customCss}</style> : null}
       <header className={sc('header', 'flex items-center gap-2 px-3 pb-2 pt-12')}>
         <button type="button" aria-label="返回" className="grid h-9 w-9 place-items-center rounded-full bg-white/85 shadow-[0_4px_12px_rgba(120,80,100,0.08)]" onClick={props.onBack}>

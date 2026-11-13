@@ -1,5 +1,6 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { ColorField } from './AppearanceEditor.tsx'
+import { importWallpaper } from '../../lib/wallpaper.ts'
 import { ChevronDown, Download, Image, Plus, Trash2, Upload } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import {
@@ -150,12 +151,25 @@ const BACKDROPS = ['', '#FBF7F4', '#F3EEE6', '#E7F4EE', '#EEE8F8', '#2A2730']
 
 function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (reading: ReadingStyle) => void }) {
   const r = props.reading
+  const [readingBackground, setReadingBackground] = useState(false)
+  const [backgroundNote, setBackgroundNote] = useState('')
   const set = (patch: Partial<ReadingStyle>) => props.onChange({ ...r, ...patch })
+  const uploadBackground = async (file: File) => {
+    setReadingBackground(true)
+    setBackgroundNote('')
+    try {
+      set({ backgroundImage: await importWallpaper(file) })
+    } catch (error) {
+      setBackgroundNote(error instanceof Error ? error.message : '背景图读取失败')
+    } finally {
+      setReadingBackground(false)
+    }
+  }
   const template = STORY_CSS_TEMPLATES[props.mode]
   return (
     <>
       <Block title="预览">
-        <div className="rounded-2xl p-3" style={{ background: r.backgroundImage ? `center / cover url(${r.backgroundImage})` : r.background || '#FBF7F4' }}>
+        <div data-custom-backdrop className="rounded-2xl p-3" style={{ background: r.backgroundImage ? `center / cover url("${r.backgroundImage}")` : r.background || '#FBF7F4' }}>
           <p className="rounded-[18px] px-3.5 py-2.5" style={{ background: r.paper, fontFamily: FONT_STACK[r.font], fontSize: r.fontSize, lineHeight: r.lineHeight }}>
             雨停了，街角的灯一盏一盏亮起来。他把伞收好，回头看你：<span style={{ color: `var(--m-quote-ink, ${r.quoteColor})` }}>“走吧，我知道一家还开着的店。”</span>
           </p>
@@ -186,16 +200,15 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="chip chip-sky py-2">
             <Image size={13} />上传背景图
-            <input type="file" accept="image/*" className="hidden" onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              const reader = new FileReader()
-              reader.onload = () => set({ backgroundImage: String(reader.result ?? '') })
-              reader.readAsDataURL(file)
+            <input type="file" accept="image/*" disabled={readingBackground} className="hidden" onChange={(event) => {
+              const file = event.currentTarget.files?.[0]
+              event.currentTarget.value = ''
+              if (file) void uploadBackground(file)
             }} />
           </label>
-          <button type="button" className="chip py-2" disabled={!r.backgroundImage} onClick={() => set({ backgroundImage: '' })}>移除背景图</button>
+          <button type="button" className="chip py-2" disabled={readingBackground || !r.backgroundImage} onClick={() => set({ backgroundImage: '' })}>移除背景图</button>
         </div>
+        {readingBackground || backgroundNote ? <p role="status" className="mt-2 text-xs" style={dim}>{readingBackground ? '正在读取背景图…' : backgroundNote}</p> : null}
       </Block>
       <Block title={`CSS 美化 · ${props.mode === 'offline' ? '线下' : '番外'}`} right={<button type="button" className="chip chip-butter" style={small} onClick={() => set({ customCss: template.css })}>套用范本</button>}>
         <p className="text-[11px] leading-5" style={dim}>
