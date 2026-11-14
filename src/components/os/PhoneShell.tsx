@@ -7,6 +7,7 @@ import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
 import { ConnectionsApp } from '../apps/ConnectionsApp.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ChengfengApp } from '../apps/ChengfengApp.tsx'
 import { CreateApp } from '../apps/CreateApp.tsx'
 import { ForumApp } from '../apps/ForumApp.tsx'
@@ -25,6 +26,7 @@ import { JiushiApp } from '../apps/JiushiApp.tsx'
 import { TableApp } from '../apps/TableApp.tsx'
 import { BazaarApp } from '../apps/BazaarApp.tsx'
 import { StageApp } from '../apps/StageApp.tsx'
+import { LiveSimulatorApp } from '../apps/LiveSimulatorApp.tsx'
 import { WorldForgeApp } from '../apps/WorldForgeApp.tsx'
 import { APP_BY_ID } from '../../data/apps.ts'
 import { maybeAskAboutLock } from '../../domain/locks.ts'
@@ -41,6 +43,10 @@ import { effectiveTheme } from '../../theme/seasonal.ts'
 import { themePack, themeStyle } from '../../theme/applyTheme.ts'
 import { ControlCenter } from './ControlCenter.tsx'
 import { HomeScreen } from './HomeScreen.tsx'
+import { DesktopPet } from './DesktopPet.tsx'
+import { AppSidebar } from './AppSidebar.tsx'
+import { updateDeskPet } from '../../lib/deskPet.ts'
+import { PetAppWindow } from './PetAppWindow.tsx'
 import { LockScreen, Wallpaper } from './LockScreen.tsx'
 import { NotificationLayer } from './NotificationLayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
@@ -60,9 +66,21 @@ export function PhoneShell() {
   const [dragging, setDragging] = useState(false)
   const [backupAsk, setBackupAsk] = useState(false)
   const [bootAttempt, setBootAttempt] = useState(0)
+  const [petApp, setPetApp] = useState('')
+  const petVisibility = useRef<boolean | null>(null)
+  const petLayer = useRef<HTMLDivElement>(null)
+  const [petOverride, setPetOverride] = useState<boolean | null>(null)
   const patchSettings = useMellow((state) => state.patchSettings)
   const identities = useMellow((state) => state.identities)
   const activeIdentityId = useMellow((state) => state.activeIdentityId)
+  const petShown = petOverride ?? settings.home.pet?.shown ?? false
+  const setPetShown = (shown: boolean) => {
+    petVisibility.current = shown
+    if (petLayer.current) petLayer.current.hidden = !shown
+    flushSync(() => setPetOverride(shown))
+    void updateDeskPet(pet => ({ ...pet, shown })).catch(() => {})
+  }
+  useEffect(() => { setPetApp('') }, [activeIdentityId, locked])
   const touchData = useMellow((state) => state.touchData)
   const [today, setToday] = useState(() => new Date())
   useEffect(() => { const timer = window.setInterval(() => setToday(new Date()), 30_000); return () => window.clearInterval(timer) }, [])
@@ -220,6 +238,13 @@ export function PhoneShell() {
                   </motion.div>
                 ) : null}
               </AnimatePresence>
+              <div ref={petLayer} className="desk-pet-layer" hidden={!petShown}>
+                {petShown ? <DesktopPet key={activeIdentityId} onHide={() => setPetShown(false)} /> : null}
+              </div>
+              <AppSidebar key={activeIdentityId} namespace={identities.find(item => item.id === activeIdentityId)?.namespace ?? ''} onOpen={setPetApp} />
+              {petApp ? <PetAppWindow key={`${activeIdentityId}:${petApp}`} appId={petApp} title={APP_BY_ID[petApp]?.name ?? petApp} onClose={() => setPetApp('')}>
+                <AppHost id={petApp} onBack={() => setPetApp('')} />
+              </PetAppWindow> : null}
               <ControlCenter />
             </>
           ) : null}
@@ -230,7 +255,9 @@ export function PhoneShell() {
             style={{ background: '#2c2628', opacity: (1 - brightness) * 0.62 }}
           />
           <NotificationLayer />
-          {ready && !bootError ? <HomeBar /> : null}
+          {ready && !bootError ? <HomeBar onPetHold={() => {
+            if (!locked) setPetShown(!(petVisibility.current ?? petShown))
+          }} /> : null}
           {veil ? (
             <div className="absolute inset-0 z-[70] grid place-items-center bg-[var(--m-background)]">
               <p className="text-sm">换到「{veil}」</p>
@@ -316,6 +343,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <BazaarApp onBack={props.onBack} />
     case 'stage':
       return <StageApp onBack={props.onBack} />
+    case 'live':
+      return <LiveSimulatorApp onBack={props.onBack} />
     case 'pet':
       return <PetApp onBack={props.onBack} />
     case 'plant':
@@ -375,49 +404,81 @@ function StatusBar(props: { showClock: boolean }) {
   )
 }
 
-function HomeBar() {
+function HomeBar({ onPetHold }: { onPetHold: () => void }) {
   const activeApp = useMellow((state) => state.activeApp)
   const closeApp = useMellow((state) => state.closeApp)
   const controlOpen = useMellow((state) => state.controlOpen)
   const setControl = useMellow((state) => state.setControl)
-  const startY = useRef<number | null>(null)
-  const held = useRef(false)
-  const timer = useRef(0)
-  const togglePet = () => {
-    const home = useMellow.getState().settings.home
-    const pet = home.pet ?? { shown: false, x: 16, y: 240 }
-    void useMellow.getState().patchSettings({ home: { ...home, pet: { ...pet, shown: !pet.shown } } })
+  const press = useRef<{ id: number; x: number; y: number; at: number; moved: boolean; held: boolean; timer: number } | null>(null)
+  const holdAction = useRef(onPetHold)
+  holdAction.current = onPetHold
+  const cancel = () => {
+    window.clearTimeout(press.current?.timer)
+    press.current = null
   }
-  const clearHold = () => window.clearTimeout(timer.current)
+  useEffect(() => cancel, [])
+  const start = (id: number, x: number, y: number) => {
+    if (press.current) return
+    const gesture = { id, x, y, at: performance.now(), moved: false, held: false, timer: 0 }
+    press.current = gesture
+    gesture.timer = window.setTimeout(() => {
+      if (press.current !== gesture || gesture.moved) return
+      gesture.held = true
+      holdAction.current()
+    }, 520)
+  }
+  const move = (id: number, x: number, y: number) => {
+    const gesture = press.current
+    if (!gesture || gesture.id !== id) return
+    if (Math.hypot(x - gesture.x, y - gesture.y) <= 18) return
+    gesture.moved = true
+    window.clearTimeout(gesture.timer)
+  }
+  const finish = (id: number, x: number, y: number) => {
+    const gesture = press.current
+    if (!gesture || gesture.id !== id) return
+    move(id, x, y)
+    cancel()
+    if (gesture.held) return
+    if (!gesture.moved && performance.now() - gesture.at >= 520) {
+      holdAction.current()
+    } else if (y - gesture.y < -28) {
+      setControl(true)
+    } else if (!gesture.moved) {
+      if (controlOpen) setControl(false)
+      else if (activeApp) closeApp()
+    }
+  }
   return (
-    <div className="phone-home-bar pointer-events-none absolute bottom-1 left-0 right-0 z-40 flex justify-center py-3">
+    <div className="phone-home-bar pointer-events-none absolute bottom-1 left-0 right-0 z-[52] flex justify-center py-3">
       <div
         className="pointer-events-auto grid h-8 w-32 place-items-center"
+        style={{ touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+        onContextMenu={event => event.preventDefault()}
         aria-label="主页横条。轻点返回，上滑打开控制中心，长按召唤或收起低头"
-        onPointerDown={(event) => {
-          startY.current = event.clientY
-          held.current = false
-          clearHold()
-          timer.current = window.setTimeout(() => {
-            held.current = true
-            togglePet()
-          }, 520)
+        onTouchStart={event => {
+          const touch = event.changedTouches[0]
+          if (touch) start(-1, touch.clientX, touch.clientY)
         }}
-        onPointerMove={(event) => {
-          if (startY.current === null) return
-          if (Math.abs(event.clientY - startY.current) > 12) clearHold()
+        onTouchMove={event => {
+          const touch = event.changedTouches[0]
+          if (touch && event.touches.length === 1) move(-1, touch.clientX, touch.clientY)
+          else cancel()
         }}
-        onPointerUp={(event) => {
-          clearHold()
-          if (startY.current === null) return
-          const delta = event.clientY - startY.current
-          startY.current = null
-          if (held.current) return
-          if (delta < -28) setControl(true)
-          else if (Math.abs(delta) < 12 && controlOpen) setControl(false)
-          else if (Math.abs(delta) < 12 && activeApp) closeApp()
+        onTouchEnd={event => {
+          const touch = event.changedTouches[0]
+          if (touch && event.touches.length === 0) finish(-1, touch.clientX, touch.clientY)
         }}
-        onPointerCancel={() => { clearHold(); startY.current = null }}
+        onTouchCancel={cancel}
+        onPointerDown={event => {
+          if (event.pointerType === 'touch' || event.button !== 0 || press.current) return
+          start(event.pointerId, event.clientX, event.clientY)
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+        }}
+        onPointerMove={event => move(event.pointerId, event.clientX, event.clientY)}
+        onPointerUp={event => finish(event.pointerId, event.clientX, event.clientY)}
+        onLostPointerCapture={event => { if (press.current?.id === event.pointerId) cancel() }}
+        onPointerCancel={event => { if (press.current?.id === event.pointerId) cancel() }}
       >
         <div className="h-1.5 w-28 rounded-full bg-black/25" />
       </div>

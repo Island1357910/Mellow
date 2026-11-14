@@ -11,7 +11,6 @@ import { formatClock } from '../../lib/format.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { DecorCard } from '../../types/index.ts'
 import { AppGlyph } from './AppGlyph.tsx'
-import { DesktopPet } from './DesktopPet.tsx'
 import { MemoWidget, MoodWidget, PhotoFrame, StampWidget, TodoWidget } from './HomeWidgets.tsx'
 import { MusicPlayer, PlayerSheet } from './MusicPlayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
@@ -572,7 +571,6 @@ export function HomeScreen() {
         </section>
       ))}
       </div>
-      {!activeApp && home.pet?.shown ? <DesktopPet /> : null}
       <div className="home-toolbar pointer-events-none absolute inset-x-0 bottom-12 z-[26] flex flex-col items-center gap-2.5">
         <div className="home-search-wrap pointer-events-auto">
           <button type="button" data-no-swipe className="home-search-trigger" aria-label="搜索或输入网址" onClick={() => setSearchOpen(true)}><span>搜索或输入网址</span><Search size={18}/></button>

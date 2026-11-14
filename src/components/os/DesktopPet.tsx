@@ -3,6 +3,7 @@ import { askLine } from '../../lib/ask.ts'
 import { clampPet } from '../../lib/homeBoard.ts'
 import { openRedeemCodes } from '../../lib/redeem.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import { updateDeskPet } from '../../lib/deskPet.ts'
 const PET_SIZE = 112
 const FACES = [
   `${import.meta.env.BASE_URL}pet/ditou-ask.png`,
@@ -75,9 +76,8 @@ function guide(now: number): string {
   ].join('\n')
 }
 
-export function DesktopPet() {
+export function DesktopPet({ onHide }: { onHide: () => void }) {
   const settings = useMellow((state) => state.settings)
-  const patchSettings = useMellow((state) => state.patchSettings)
   const pet = settings.home.pet
   const root = useRef<HTMLDivElement>(null)
   const card = useRef<HTMLElement>(null)
@@ -97,7 +97,7 @@ export function DesktopPet() {
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [face, setFace] = useState(0)
   useEffect(() => {
-    if (!pet?.shown || asking) return
+    if (asking) return
     const timer = window.setInterval(() => {
       setFace((current) => {
         let next = current + step.current
@@ -112,7 +112,7 @@ export function DesktopPet() {
       })
     }, 2600)
     return () => window.clearInterval(timer)
-  }, [pet?.shown, asking])
+  }, [asking])
   useEffect(() => {
     const node = scroll.current
     if (node && tab === 'chat') node.scrollTop = node.scrollHeight
@@ -143,13 +143,11 @@ export function DesktopPet() {
   useEffect(() => {
     if (!open) setTyping(false)
   }, [open])
-  if (!pet?.shown) return null
   const codes = openRedeemCodes()
   const portrait = FACES[asking ? 0 : face] ?? FACES[0]
 
   const save = (next: { x: number; y: number }) => {
-    const current = useMellow.getState().settings.home
-    void patchSettings({ home: { ...current, pet: { shown: true, x: next.x, y: next.y } } })
+    void updateDeskPet(pet => pet.shown ? { ...pet, x: next.x, y: next.y } : pet)
   }
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -195,7 +193,9 @@ export function DesktopPet() {
     let shiftY = 8
     if (y + shiftY + cardHeight > height - 140) shiftY = height - 140 - y - cardHeight
     if (y + shiftY < 36) shiftY = 36 - y
-    setCardShift({ x: x + PET_SIZE + cardWidth > width - 8 ? -(cardWidth + 8) : 84, y: shiftY })
+    const preferredX = x + PET_SIZE + cardWidth <= width - 8 ? x + PET_SIZE : x - cardWidth - 8
+    const cardX = Math.max(8, Math.min(preferredX, width - cardWidth - 8))
+    setCardShift({ x: cardX - x, y: shiftY })
     setOpen((value) => !value)
   }
 
@@ -237,9 +237,9 @@ export function DesktopPet() {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={() => { drag.current = null }}
     >
-      <button type="button" className="desk-pet-face" aria-label={open ? '收起低头' : '和低头说话'} aria-expanded={open}>
+      <button type="button" className="desk-pet-face" aria-label={open ? '收起低头的聊天窗' : '和低头说话'} aria-expanded={open}>
         <img src={portrait} alt="" />
       </button>
     </div>
@@ -253,8 +253,8 @@ export function DesktopPet() {
           onPointerDown={(event) => event.stopPropagation()}
         >
           <header className="desk-pet-bar">
-            <span className="desk-pet-bar-mark" aria-hidden="true"><img src={portrait} alt="" /></span>
             <strong>低头</strong>
+            <button type="button" aria-label="隐藏桌宠" onClick={onHide}>−</button>
             <button type="button" aria-label="收起低头的窗口" onClick={() => setOpen(false)}>×</button>
           </header>
           <div className="desk-pet-tabs" role="tablist" aria-label="低头的分页">

@@ -120,6 +120,7 @@ export function JiushiPhoneShell(props: { phone: Identity; onExit: () => void })
     return (
       <JiushiShell fontStyle={config?.fontStyle} fontSize={config?.fontSize}>
         <WorldBookApp
+          ancient
           onBack={() => setActiveApp(null)}
           namespaceOverride={jiushiWorldNs(props.phone.namespace)}
           defaultScope="world"

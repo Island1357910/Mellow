@@ -16,7 +16,6 @@ import { CharacterSettingsSheet } from './CharacterSettings.tsx'
 import { ChatThread } from './ChatThread.tsx'
 import { Field, PillNote, Screen } from '../ui/primitives.tsx'
 import { FeedHub, MeTab, MomentsPage, NearbyPage, PeopleTab, type Moment, type NearPerson, type Profile } from './SmsSocial.tsx'
-import { GamesPage } from './SmsGames.tsx'
 
 const EMPTY_PROFILE: Profile = { nickname: '', signature: '', gender: '', region: '', birthday: '' }
 
@@ -197,6 +196,13 @@ export function MessagesApp(props: { onBack: () => void }) {
     setTab('messages')
     setOpenId(thread.id)
   }
+
+  if (social === 'games') return (
+    <div className="bakery-host relative h-full min-h-0">
+      <iframe title="千味面包房" className="block h-full w-full border-0" src={`${import.meta.env.BASE_URL}bakery/index.html`} allow="autoplay" />
+      <button type="button" className="bakery-back" aria-label="返回短信" onClick={() => setSocial(null)}>‹</button>
+    </div>
+  )
 
   return (
     <div className="sms-shell relative h-full min-h-0">
@@ -415,7 +421,6 @@ export function MessagesApp(props: { onBack: () => void }) {
           onChat={talkTo}
         />
       ) : null}
-      {social === 'games' ? <GamesPage namespace={identity.namespace} chars={chars} onBack={() => setSocial(null)} /> : null}
       {settingsCharId ? (() => {
         const person = chars.find((item) => item.id === settingsCharId)
         if (!person) return null

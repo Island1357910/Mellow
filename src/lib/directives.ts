@@ -1,9 +1,30 @@
 import { DIRECTIVES, type Directive } from '../data/directives.ts'
 import { storage } from '../storage/StorageService.ts'
+import { moduleAi, readJson } from './ask.ts'
+import { uid } from './id.ts'
 
 const KEY = 'directive_picks_v1'
 const ALL_KEY = 'directive_all_v1'
 const ACCOUNT = 'mellow_account_rewards'
+const CUSTOM_KEY = 'directive_custom_v1'
+
+export async function listDirectives(): Promise<Directive[]> {
+  return [...DIRECTIVES, ...(await storage.getBag<Directive[]>(ACCOUNT, CUSTOM_KEY) ?? [])]
+}
+
+export async function draftDirective(wish: string): Promise<Directive> {
+  const raw = readJson(await moduleAi('create').askJson(
+    '按玩家需求撰写可直接交给叙事模型执行的写作指令。只输出 JSON 对象 {"title":"","text":""}。标题简短，正文使用明确的行为约束。', wish, 1500,
+  )) as Partial<Directive> | null
+  if (typeof raw?.title !== 'string' || !raw.title.trim() || typeof raw.text !== 'string' || !raw.text.trim()) throw new Error('没有生成完整指令')
+  return { id: uid('directive'), category: '自定义', title: raw.title.trim(), text: raw.text.trim() }
+}
+
+export async function saveCustomDirective(draft: Directive): Promise<void> {
+  await storage.changeAppBags(ACCOUNT, [CUSTOM_KEY], bags => ({
+    [CUSTOM_KEY]: [draft, ...((bags[CUSTOM_KEY] as Directive[] | null) ?? []).filter(item => item.id !== draft.id)],
+  }))
+}
 const MAX_CHARS = 9600
 
 export interface DirectivePicks {
@@ -15,11 +36,10 @@ const EMPTY: DirectivePicks = { global: [], byChar: {} }
 
 function known(ids: unknown): string[] {
   if (!Array.isArray(ids)) return []
-  const allowed = new Set(DIRECTIVES.map((item) => item.id))
   const seen = new Set<string>()
   const out: string[] = []
   for (const id of ids) {
-    if (typeof id !== 'string' || !allowed.has(id) || seen.has(id)) continue
+    if (typeof id !== 'string' || seen.has(id)) continue
     seen.add(id)
     out.push(id)
   }
@@ -55,9 +75,9 @@ export async function saveAllIdentityDirectives(ids: string[]): Promise<void> {
   await storage.setBag(ACCOUNT, ALL_KEY, known(ids))
 }
 
-function lookup(ids: string[]): Directive[] {
+function lookup(ids: string[], library: Directive[]): Directive[] {
   const wanted = new Set(ids)
-  return DIRECTIVES.filter((item) => wanted.has(item.id))
+  return library.filter((item) => wanted.has(item.id))
 }
 
 function cotOf(rows: Directive[]): Directive | null {
@@ -66,11 +86,11 @@ function cotOf(rows: Directive[]): Directive | null {
   return on.length ? on[on.length - 1] : null
 }
 
-export function resolveDirectives(charIds: string[], picks: DirectivePicks, everyone: string[]): { text: string; cot: string } {
+export function resolveDirectives(charIds: string[], picks: DirectivePicks, everyone: string[], library = DIRECTIVES): { text: string; cot: string } {
   const seen = new Set<string>()
   const ordered: Directive[] = []
   const push = (ids: string[]) => {
-    for (const item of lookup(ids)) {
+    for (const item of lookup(ids, library)) {
       if (seen.has(item.id)) continue
       seen.add(item.id)
       ordered.push(item)
@@ -87,7 +107,7 @@ export function resolveDirectives(charIds: string[], picks: DirectivePicks, ever
     lines.push(line)
     used += line.length
   }
-  const scopes = [charIds.flatMap((id) => lookup(picks.byChar[id] ?? [])), lookup(picks.global), lookup(everyone)]
+  const scopes = [charIds.flatMap((id) => lookup(picks.byChar[id] ?? [], library)), lookup(picks.global, library), lookup(everyone, library)]
   let cot: Directive | null = null
   let decided = false
   for (const rows of scopes) {
@@ -106,6 +126,6 @@ export function resolveDirectives(charIds: string[], picks: DirectivePicks, ever
 }
 
 export async function directivePrompt(namespace: string, charIds: string[]): Promise<{ text: string; cot: string }> {
-  const [picks, everyone] = await Promise.all([loadDirectivePicks(namespace), loadAllIdentityDirectives()])
-  return resolveDirectives(charIds, picks, everyone)
+  const [picks, everyone, library] = await Promise.all([loadDirectivePicks(namespace), loadAllIdentityDirectives(), listDirectives()])
+  return resolveDirectives(charIds, picks, everyone, library)
 }

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { makeCard } from '../src/lib/cardMaker.ts'
-import { applyForgeResult, forgeWorldFromCard, forgeWorldFromProse } from '../src/lib/worldForge.ts'
+import { applyForgeResult, forgeWithReferences, forgeWorldFromCard, forgeWorldFromProse, reviseForgeResult } from '../src/lib/worldForge.ts'
 import { requestForgeOutput, validateForgeOutput } from '../src/lib/worldForgeFormat.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import type { AIRequest, Character, Identity } from '../src/types/index.ts'
@@ -76,6 +76,21 @@ try {
   const imported = await applyForgeResult({ namespace: 'worldforge-check' } as Identity, setting)
   assert.equal(imported.world[0]?.content, worldOnly.worldSummary)
   assert.deepEqual(imported.characters, [])
+  const entries = [{ title: '城门', keys: '城门', content: '落日闭门。' }, { title: '河道', keys: '渡口', content: '黎明开船。' }]
+  const multiple = await applyForgeResult({ namespace: 'worldforge-check' } as Identity, { ...setting, worldEntries: entries })
+  assert.deepEqual(multiple.world.map(({ title, keys, content }) => ({ title, keys, content })), [
+    { title: '雨城 · 世界观', keys: '雨城', content: worldOnly.worldSummary },
+    ...entries,
+  ])
+  assert.equal(new Set(multiple.world.map(item => item.id)).size, 3)
+  AIAdapter.fromStored = async () => ({ complete: async (request: AIRequest) => {
+    const prompt = request.messages.at(-1)!.content
+    assert.match(prompt, /周渡守着旧渡口/)
+    assert.match(prompt, /改为清晨开船|雨城的河道设定/)
+    return { content: JSON.stringify({ ...worldOnly, worldEntries: entries }) }
+  } }) as unknown as AIAdapter
+  assert.deepEqual((await forgeWithReferences('雨城的河道设定', '周渡守着旧渡口')).worldEntries, entries)
+  assert.deepEqual((await reviseForgeResult(setting, '改为清晨开船', undefined, '周渡守着旧渡口')).worldEntries, entries)
 
   const requests: AIRequest[] = []
   const longDescription = '席淮总把那本未寄出的信藏在抽屉里。'.repeat(300)

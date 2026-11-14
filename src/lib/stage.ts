@@ -1,4 +1,4 @@
-import { moduleAdapter } from './ask.ts'
+import { moduleAdapter, moduleAi, readJson } from './ask.ts'
 import { STAGE_KINDS, stageKind, type StageKind } from '../data/stageKinds.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -75,9 +75,9 @@ function asPlay(value: unknown): StagePlay | null {
     kindId: known?.id ?? (typeof item.kindId === 'string' ? item.kindId : 'sleeve-note'),
     kindName: typeof item.kindName === 'string' && item.kindName ? item.kindName : known?.name ?? '一场小剧场',
     category: typeof item.category === 'string' && item.category ? item.category : known?.category ?? '纸上',
-    title: item.title.slice(0, 16),
+    title: item.title.slice(0, item.kindId === 'custom' ? 80 : 16),
     blurb: typeof item.blurb === 'string' ? item.blurb.slice(0, 48) : '',
-    body: item.body.slice(0, 800),
+    body: item.body.slice(0, item.kindId === 'custom' ? 8000 : 800),
     withName: typeof item.withName === 'string' ? item.withName.slice(0, 24) : '',
     createdAt: typeof item.createdAt === 'number' ? item.createdAt : 0,
     seed: typeof item.seed === 'number' ? item.seed : 0,
@@ -88,6 +88,26 @@ export async function loadStagePlays(namespace: string): Promise<StagePlay[]> {
   const saved = await storage.getBag<unknown[]>(namespace, PLAYS_KEY)
   if (!Array.isArray(saved)) return []
   return saved.map(asPlay).filter((item): item is StagePlay => item !== null)
+}
+
+export async function draftStage(wish: string): Promise<StagePlay> {
+  const raw = readJson(await moduleAi('create').askJson(
+    '按玩家的情节、风格和篇幅要求写一场可独立阅读的小剧场。只输出 JSON 对象 {"title":"","blurb":"","body":""}，正文使用自然段。',
+    wish, 6000,
+  )) as Partial<StagePlay> | null
+  if (typeof raw?.title !== 'string' || !raw.title.trim() || typeof raw.body !== 'string' || !raw.body.trim()) throw new Error('没有生成完整剧场')
+  return {
+    id: uid('stage'), kindId: 'custom', kindName: '自定义', category: '自定义',
+    title: raw.title.trim(), blurb: typeof raw.blurb === 'string' ? raw.blurb.trim() : '',
+    body: raw.body.trim(), withName: '', createdAt: Date.now(), seed: Math.floor(Math.random() * 100),
+  }
+}
+
+export async function saveStagePlay(namespace: string, play: StagePlay): Promise<void> {
+  await storage.changeAppBags(namespace, [PLAYS_KEY], bags => ({
+    [PLAYS_KEY]: [play, ...((bags[PLAYS_KEY] as StagePlay[] | null) ?? []).filter(item => item.id !== play.id)].slice(0, MAX_PLAYS),
+  }))
+  window.dispatchEvent(new CustomEvent('mellow-stage'))
 }
 
 function pickKind(enabled: string[], previous?: string): StageKind | null {
@@ -175,9 +195,8 @@ async function writeStage(input: { namespace: string; character: Character; play
       createdAt: Date.now(),
       seed: Math.floor(Math.random() * 997),
     }
-    await storage.setBag(input.namespace, PLAYS_KEY, [play, ...plays].slice(0, MAX_PLAYS))
+    await saveStagePlay(input.namespace, play)
     await saveStagePrefs(input.namespace, { ...prefs, turns: 0, lastError: '' })
-    window.dispatchEvent(new CustomEvent('mellow-stage'))
     const identity = useMellow.getState().identities.find((item) => item.namespace === input.namespace)
     if (identity) {
       void useMellow.getState().pushNotice({

@@ -4,7 +4,7 @@ import { moduleAi } from './ask.ts'
 import { creationIdentityContext, type CreationIdentity } from './creationContext.ts'
 import { FORGE_JSON_RULES, requestForgeOutput } from './worldForgeFormat.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
-import { writeWorld, readWorld, type WorldEntry } from './worldbook.ts'
+import { updateWorld, type WorldEntry } from './worldbook.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity, LorebookEntry } from '../types/index.ts'
@@ -134,27 +134,21 @@ function localParseWorldCard(raw: unknown): ForgeResult | null {
   return { worldTitle, worldSummary, worldHostBlurb, worldEntries, characters, local: true }
 }
 
-function buildMasterWorldEntry(result: ForgeResult, stamped: number): WorldEntry {
-  const sections = result.worldEntries.map((entry) => `【${entry.title}】\n${entry.content.trim()}`).join('\n\n---\n\n')
-  const intro = [result.worldHostBlurb, result.worldSummary].map((part) => part?.trim()).filter(Boolean).join('\n\n---\n\n')
-  const body = [intro, sections].filter(Boolean).join('\n\n==========\n\n')
-  const keySet = new Set<string>([result.worldTitle, '世界', '世界观', '设定'])
-  for (const entry of result.worldEntries) {
-    for (const key of entry.keys.split(/[,，]/)) {
-      const trimmed = key.trim()
-      if (trimmed) keySet.add(trimmed)
-    }
-  }
-  return {
+function buildWorldEntries(result: ForgeResult, stamped: number): WorldEntry[] {
+  const intro = [...new Set([result.worldSummary, result.worldHostBlurb].map(part => part?.trim()).filter(Boolean))].join('\n\n')
+  const rows = intro
+    ? [{ title: `${result.worldTitle} · 世界观`, keys: result.worldTitle, content: intro }, ...result.worldEntries]
+    : result.worldEntries
+  return rows.filter(entry => entry.content.trim()).map(entry => ({
     id: uid('lore'),
-    title: `${result.worldTitle} · 世界观`,
-    keys: [...keySet].join('，'),
-    content: body || result.worldTitle,
+    title: entry.title,
+    keys: entry.keys,
+    content: entry.content.trim(),
     enabled: true,
     updatedAt: stamped,
     cardImport: true,
     worldForge: result.worldTitle,
-  }
+  }))
 }
 
 function parseAllCharacterCards(raw: unknown): CardDraft[] {
@@ -339,8 +333,11 @@ function localForge(raw: unknown): ForgeResult {
   }
 }
 
-async function aiForge(raw: unknown, identity?: CreationIdentity): Promise<ForgeResult> {
+async function aiForge(raw: unknown, identity?: CreationIdentity, revising = false): Promise<ForgeResult> {
   const source = cardToPrompt(raw)
+  if (revising && source.length > AI_FORGE_SOURCE_LIMIT) {
+    throw new Error('草稿与参考设定太长，无法一次完整修改。请减少参考角色或先拆成较小的草稿。')
+  }
   const clip =
     source.length > AI_FORGE_SOURCE_LIMIT
       ? `${source.slice(0, AI_FORGE_SOURCE_LIMIT)}\n…（后文已截）`
@@ -352,6 +349,7 @@ async function aiForge(raw: unknown, identity?: CreationIdentity): Promise<Forge
 2) 可单独游玩的 NPC 角色卡（有多少写多少），每人必须有完整 name、description、personality、scenario、firstMes、systemPrompt
 如果原文只有世界设定、没有 NPC，characters 使用空数组，并保留世界设定。
 不要导入世界主卡本身为角色。不要 creatorNotes。不要解释、不要省略条目。
+${revising ? '按 revision 修改已有草稿，完整返回修改后的整个世界，保留未要求改动的条目和角色。' : 'references 中的已有角色设定只用于参考，不把这些角色直接复制成新角色。'}
 ${FORGE_JSON_RULES}
 只返回以下结构，角色使用 camelCase 字段名，不要套 spec/data：
 {"worldTitle":"","worldSummary":"","worldEntries":[{"title":"","keys":"","content":""}],"characters":[{"name":"","description":"","personality":"","scenario":"","firstMes":"","mesExample":"","systemPrompt":"","tags":[""],"note":""}]}`,
@@ -392,6 +390,33 @@ export async function forgeWorldFromProse(text: string, identity?: CreationIdent
     }
   }
   return forgeWorldFromCard(trimmed, identity)
+}
+
+export async function reviseForgeResult(
+  result: ForgeResult,
+  instruction: string,
+  identity?: CreationIdentity,
+  references = '',
+): Promise<ForgeResult> {
+  return aiForge({
+    revision: instruction.trim(),
+    worldTitle: result.worldTitle,
+    worldSummary: result.worldSummary,
+    worldEntries: result.worldEntries,
+    characters: result.characters.map(({ draft, note }) => ({ ...draft, rawCard: undefined, avatar: undefined, note })),
+    references,
+  }, identity, true).then(revised => ({
+    ...revised,
+    worldHostBlurb: result.worldHostBlurb,
+    characters: revised.characters.map(item => {
+      const original = result.characters.find(previous => previous.draft.name === item.draft.name)
+      return original ? { ...item, draft: mergeNpcDraft(original.draft, item.draft, revised.worldTitle) } : item
+    }),
+  }))
+}
+
+export function forgeWithReferences(text: string, references: string, identity?: CreationIdentity): Promise<ForgeResult> {
+  return aiForge({ references, source: text }, identity)
 }
 
 export async function forgeWorldFromCard(raw: unknown, identity?: CreationIdentity): Promise<ForgeResult> {
@@ -436,15 +461,9 @@ export async function applyForgeResult(
   options: ForgeApplyOptions = {},
 ): Promise<{ world: WorldEntry[]; characters: Character[] }> {
   const worldNs = options.worldNamespace ?? identity.namespace
-  const prev = await readWorld(worldNs)
   const stamped = Date.now()
-  const kept = prev.filter((item) => item.worldForge !== result.worldTitle)
-  const worldRows: WorldEntry[] = [...kept]
-
-  if (result.worldEntries.length > 0 || result.worldSummary.trim() || result.worldHostBlurb?.trim()) {
-    worldRows.unshift(buildMasterWorldEntry(result, stamped))
-  }
-  await writeWorld(worldNs, worldRows)
+  const imported = buildWorldEntries(result, stamped)
+  const worldRows = await updateWorld(worldNs, prev => [...imported, ...prev.filter(item => item.worldForge !== result.worldTitle)])
 
   const skipChat = options.skipChat ?? options.jiushi ?? false
   const characters: Character[] = []

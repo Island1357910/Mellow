@@ -3,6 +3,33 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { parse } from 'acorn'
 import postcss from 'postcss'
+import ts from 'typescript'
+
+const renderSource = ts.transpileModule(fs.readFileSync('src/renderApp.tsx', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+}).outputText
+const mountFlags = new Set()
+const container = {
+  hasAttribute: name => mountFlags.has(name),
+  setAttribute: name => mountFlags.add(name),
+  removeAttribute: name => mountFlags.delete(name),
+}
+let mounts = 0
+const imports = {
+  'react/jsx-runtime': { jsx: () => ({}) },
+  'react-dom/client': { createRoot: () => ({ render: () => { mounts++ } }) },
+  './lib/upgrade.ts': { ensureFreshClient: async () => {}, watchForRemoteUpgrade: () => {} },
+  './lib/native.ts': { setupNativeApp: async () => {} },
+}
+for (let bundle = 0; bundle < 2; bundle++) {
+  const exports = {}
+  vm.runInNewContext(renderSource, {
+    exports, require: name => imports[name] ?? {},
+    document: { getElementById: () => container }, window: {},
+  })
+  exports.start()
+}
+assert.equal(mounts, 1, 'modern and legacy bundles must share a single app root')
 
 const boot = fs.readFileSync('public/boot.js', 'utf8')
 parse(boot, { ecmaVersion: 5 })

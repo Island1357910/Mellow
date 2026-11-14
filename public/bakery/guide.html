@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>玩法指南 · 千味面包房</title>
+  <style>
+    /* ── 字体与变量 ── */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+    :root {
+      --cream:    #fdf6ec;
+      --cream2:   #f5e8d0;
+      --tan:      #e8d0a8;
+      --brown1:   #c08040;
+      --brown2:   #8b5e2c;
+      --brown3:   #5c3a10;
+      --text:     #3a2410;
+      --text2:    #6b4820;
+      --hint:     #9a7040;
+      --border:   rgba(160,110,55,.25);
+      --shadow:   rgba(90,50,10,.12);
+      --r:        12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--cream);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 15px;
+    }
+
+    /* ── 背景纹理 ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: .06;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='30' cy='30' r='1.5' fill='%23a07030'/%3E%3C/svg%3E");
+      background-size: 60px 60px;
+    }
+
+    /* ── 最外层容器 ── */
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    /* ── 头部 HERO ── */
+    .hero {
+      text-align: center;
+      padding: 64px 20px 48px;
+      position: relative;
+    }
+
+    .hero-bread {
+      font-size: 4rem;
+      display: block;
+      margin-bottom: 16px;
+      animation: heroFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes heroFloat {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      50%      { transform: translateY(-8px) rotate(3deg); }
+    }
+
+    .hero h1 {
+      font-family: 'Noto Serif SC', serif;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 700;
+      color: var(--brown3);
+      letter-spacing: .08em;
+      line-height: 1.25;
+    }
+
+    .hero h1 span {
+      color: var(--brown1);
+    }
+
+    .hero-sub {
+      margin-top: 12px;
+      font-size: .95rem;
+      color: var(--hint);
+      letter-spacing: .04em;
+    }
+
+    .hero-divider {
+      margin: 32px auto 0;
+      width: 80px;
+      height: 3px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, transparent, var(--brown1), transparent);
+    }
+
+    /* ── 引言块 ── */
+    .intro-quote {
+      margin: 40px 0;
+      padding: 28px 32px;
+      background: linear-gradient(135deg, #fef9f0, #f9edd6);
+      border-left: 4px solid var(--brown1);
+      border-radius: 0 var(--r) var(--r) 0;
+      box-shadow: 0 2px 12px var(--shadow);
+    }
+
+    .intro-quote p {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 1.05rem;
+      color: var(--brown2);
+      line-height: 2;
+    }
+
+    .intro-quote .quote-sig {
+      margin-top: 12px;
+      font-size: .82rem;
+      color: var(--hint);
+      text-align: right;
+    }
+
+    /* ── 目录导航 ── */
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 20px 0;
+      margin-bottom: 8px;
+    }
+
+    .toc .toc-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: rgba(255,250,240,.8);
+      color: var(--brown2);
+      font-size: .82rem;
+      font-weight: 500;
+      transition: all .2s ease;
+    }
+
+    .toc .toc-item:hover {
+      background: var(--cream2);
+      border-color: var(--brown1);
+      color: var(--brown3);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px var(--shadow);
+    }
+
+    /* ── 章节标题 ── */
+    .section {
+      margin-top: 56px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--tan);
+    }
+
+    .section-icon {
+      font-size: 1.8rem;
+      flex-shrink: 0;
+    }
+
+    .section-header h2 {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--brown3);
+    }
+
+    .section-header .section-tag {
+      margin-left: auto;
+      font-size: .72rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--cream2);
+      border: 1px solid var(--border);
+      color: var(--hint);
+      white-space: nowrap;
+    }
+
+    /* ── 日程卡片（阶段循环） ── */
+    .day-cycle {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .phase-card {
+      padding: 20px 18px;
+      border-radius: var(--r);
+      border: 1.5px solid var(--border);
+      background: linear-gradient(160deg, #fefcf6, #fdf0d8);
+      box-shadow: 0 2px 10px var(--shadow);
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .phase-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px var(--shadow);
+    }
+
+    .phase-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+
+    .phase-morning::before { background: linear-gradient(90deg, #f9c74f, #f4a261); }
+    .phase-develop::before { background: linear-gradient(90deg, #c77dff, #9d4edd); }
+    .phase-business::before { background: linear-gradient(90deg, #4cc9f0, #4361ee); }
+    .phase-night::before   { background: linear-gradient(90deg, #3d405b, #6b4fbb); }
+
+    .phase-icon { font-size: 1.6rem; margin-bottom: 8px; display: block; }
+    .phase-name {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--brown3);
+      margin-bottom: 6px;
+    }
+    .phase-desc { font-size: .82rem; color: var(--text2); line-height: 1.6; }
+
+    /* ── 通用卡片网格 ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px 20px;
+      border-radius: var(--r);
+      border: 1.5px solid var(--border);
+      background: #fefcf4;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--brown2);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: .95rem;
+    }
+
+    .card p { font-size: .85rem; color: var(--text2); line-height: 1.65; }
+
+    /* ── 原料分类 ── */
+    .ingredient-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .ingredient-cat {
+      padding: 14px 16px;
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      background: #fefdf8;
+    }
+
+    .ingredient-cat-title {
+      font-weight: 700;
+      font-size: .88rem;
+      color: var(--brown2);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ingredient-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .ingredient-tag {
+      font-size: .72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--cream2);
+      border: 1px solid var(--border);
+      color: var(--brown2);
+    }
+
+    /* ── 稀有度展示 ── */
+    .rarity-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .rarity-badge {
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .rarity-common     { background: #f0ece4; color: #6b6058; border: 1px solid #d0c8b8; }
+    .rarity-uncommon   { background: #e8f4e0; color: #3a6b28; border: 1px solid #a8d890; }
+    .rarity-rare       { background: #e0eeff; color: #2855a8; border: 1px solid #90b8f0; }
+    .rarity-legendary  { background: #fef3dc; color: #8b5e00; border: 1px solid #f0c860; }
+
+    /* ── 满意度说明 ── */
+    .sat-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+      margin-top: 14px;
+    }
+
+    .sat-table th {
+      background: var(--cream2);
+      color: var(--brown2);
+      padding: 8px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--tan);
+    }
+
+    .sat-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text2);
+    }
+
+    .sat-table tr:last-child td { border-bottom: none; }
+    .sat-table tr:hover td { background: rgba(240,220,180,.2); }
+
+    /* ── 提示框 ── */
+    .tip-box {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      border-radius: var(--r);
+      margin-top: 20px;
+      align-items: flex-start;
+    }
+
+    .tip-box.tip-info    { background: #fff8e6; border: 1.5px solid #f0c060; }
+    .tip-box.tip-success { background: #f0fdf0; border: 1.5px solid #78d97b; }
+    .tip-box.tip-warn    { background: #fff4f0; border: 1.5px solid #f09060; }
+
+    .tip-icon { font-size: 1.3rem; flex-shrink: 0; line-height: 1.4; }
+
+    .tip-body { font-size: .85rem; color: var(--text2); line-height: 1.65; }
+    .tip-body strong { color: var(--brown2); }
+
+    /* ── 协同示例 ── */
+    .synergy-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .synergy-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #fefdf4;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: .84rem;
+    }
+
+    .synergy-name {
+      font-weight: 700;
+      color: var(--brown2);
+      min-width: 90px;
+    }
+
+    .synergy-combo {
+      color: var(--hint);
+      font-size: .78rem;
+      flex: 1;
+    }
+
+    .synergy-bonus {
+      font-size: .75rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #fef0e0;
+      color: #b07020;
+      border: 1px solid #f0c880;
+      white-space: nowrap;
+    }
+
+    /* ── AI 功能列表 ── */
+    .ai-feature-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .ai-feature {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #fdf8ff, #f8eeff);
+      border: 1.5px solid rgba(180, 120, 220, .25);
+      border-radius: var(--r);
+    }
+
+    .ai-feature-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
+
+    .ai-feature-body h4 {
+      font-size: .9rem;
+      font-weight: 700;
+      color: #6b35a8;
+      margin-bottom: 4px;
+    }
+
+    .ai-feature-body p { font-size: .82rem; color: var(--text2); line-height: 1.6; }
+
+    /* ── 小游戏说明 ── */
+    .light-game-demo {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 20px;
+      align-items: center;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #fdf8ee, #faf0da);
+      border: 1.5px solid var(--tan);
+      border-radius: var(--r);
+      margin-top: 16px;
+    }
+
+    .light-grid-mini {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+    }
+
+    .lg-dot {
+      width: 20px; height: 20px;
+      border-radius: 6px;
+      background: rgba(190,150,80,.18);
+      border: 1px solid rgba(160,110,55,.25);
+    }
+
+    .lg-dot.on {
+      background: radial-gradient(circle, #fffae8 0%, #fde89a 60%, #f0c050 100%);
+      box-shadow: 0 0 8px 2px rgba(220,160,30,.6);
+    }
+
+    .light-game-desc { font-size: .85rem; color: var(--text2); line-height: 1.65; }
+    .light-game-desc h4 { color: var(--brown2); font-size: .92rem; margin-bottom: 6px; }
+
+    .mult-table {
+      margin-top: 10px;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .78rem;
+    }
+
+    .mult-table td {
+      padding: 4px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mult-table tr:last-child td { border: none; }
+
+    /* ── 经济提示 ── */
+    .econ-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fefcf4;
+      font-size: .84rem;
+      margin-bottom: 8px;
+    }
+
+    .econ-icon { font-size: 1.1rem; width: 24px; text-align: center; flex-shrink: 0; }
+    .econ-body { color: var(--text2); }
+    .econ-body strong { color: var(--brown2); }
+
+    /* ── 故事章节 ── */
+    .chapter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chapter-card {
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fefcf6;
+      font-size: .8rem;
+    }
+
+    .chapter-num {
+      font-size: .68rem;
+      color: var(--hint);
+      margin-bottom: 3px;
+    }
+
+    .chapter-title {
+      font-weight: 700;
+      color: var(--brown2);
+      font-family: 'Noto Serif SC', serif;
+    }
+
+    /* ── 页脚 ── */
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--hint);
+      font-size: .8rem;
+      border-top: 1px solid var(--tan);
+      margin-top: 60px;
+    }
+
+    footer .footer-logo {
+      font-size: 1.8rem;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* ── 响应式 ── */
+    @media (max-width: 600px) {
+      .day-cycle { grid-template-columns: 1fr 1fr; }
+      .light-game-demo { grid-template-columns: 1fr; }
+      .intro-quote { padding: 20px; }
+    }
+
+    @media (max-width: 400px) {
+      .day-cycle { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- HERO -->
+  <header class="hero">
+    <span class="hero-bread">🍞</span>
+    <h1>千味面包房<br><span>玩法指南</span></h1>
+    <p class="hero-sub">AI 协助研发 · 逐日经营 · 故事驱动</p>
+    <div class="hero-divider"></div>
+  </header>
+
+  <!-- 引言 -->
+  <blockquote class="intro-quote">
+    <p>
+      给穗穗：妈妈的味道，你来续写。<br>
+      一炉面包，一千种遇见——<br>
+      在高筋面粉与酵母的比例之间，在顾客的眼神里，<br>
+      找到属于千味面包房的独特滋味。
+    </p>
+    <p class="quote-sig">—— 沈若棠的笔记本</p>
+  </blockquote>
+
+  <!-- 目录（仅展示章节主题，不跳转） -->
+  <div class="toc" role="region" aria-label="内容概览">
+    <span class="toc-item">☀️ 日程循环</span>
+    <span class="toc-item">🧑‍🍳 配方研发</span>
+    <span class="toc-item">🌾 原料系统</span>
+    <span class="toc-item">👥 顾客接待</span>
+    <span class="toc-item">💰 经济管理</span>
+    <span class="toc-item">✨ AI 功能</span>
+    <span class="toc-item">💡 点灯小游戏</span>
+    <span class="toc-item">📖 主线故事</span>
+    <span class="toc-item">🎯 新手技巧</span>
+  </div>
+
+  <!-- ① 日程循环 -->
+  <section class="section" id="day-cycle">
+    <div class="section-header">
+      <span class="section-icon">☀️</span>
+      <h2>日程循环</h2>
+      <span class="section-tag">每天 4 个阶段</span>
+    </div>
+
+    <div class="day-cycle">
+      <div class="phase-card phase-morning">
+        <span class="phase-icon">🌅</span>
+        <p class="phase-name">早晨</p>
+        <p class="phase-desc">查看昨日成绩、当日随机事件（蜂蜜节、雨天、美食评论…）；整理库存，规划今天要烤什么。</p>
+      </div>
+      <div class="phase-card phase-develop">
+        <span class="phase-icon">🔥</span>
+        <p class="phase-name">研发 &amp; 制作</p>
+        <p class="phase-desc">调配原料、选择手法与炉温、烤出面包；将成品加入当日菜单；至少上架 1 款才能开门。</p>
+      </div>
+      <div class="phase-card phase-business">
+        <span class="phase-icon">🏪</span>
+        <p class="phase-name">营业</p>
+        <p class="phase-desc">逐位接待 6–10 位顾客；推荐面包、现场定制或婉拒；每笔交易都影响金币与声望。</p>
+      </div>
+      <div class="phase-card phase-night">
+        <span class="phase-icon">🌙</span>
+        <p class="phase-name">夜晚结算</p>
+        <p class="phase-desc">查看今日收入、接待人数、平均满意度；过期面包自动清除；迎接新的一天。</p>
+      </div>
+    </div>
+
+    <div class="tip-box tip-info">
+      <span class="tip-icon">💡</span>
+      <p class="tip-body">面包保质期仅 <strong>3 天</strong>，卖不完会自动清理；每上架一款收取 <strong>8💰</strong> 手续费，合理规划库存避免浪费。</p>
+    </div>
+  </section>
+
+  <!-- ② 配方研发 -->
+  <section class="section" id="recipe">
+    <div class="section-header">
+      <span class="section-icon">🧑‍🍳</span>
+      <h2>配方研发系统</h2>
+      <span class="section-tag">四维属性 · 稀有度 · 协同</span>
+    </div>
+
+    <p style="color:var(--text2);font-size:.9rem;margin-bottom:18px;">
+      每款面包由六类原料、手法与模具共同决定四维属性，不同原料组合可以触发「协同效果」提升品质与稀有度。
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <p class="card-title">📊 四维属性</p>
+        <p>
+          <strong>甜度</strong>——影响顾客对甜味与配方的匹配度<br>
+          <strong>柔软度</strong>——影响口感与咀嚼体验的满意度<br>
+          <strong>香气</strong>——对整体评价与吸引力影响较大<br>
+          <strong>复杂度</strong>——体现工艺水准，影响稀有度评定
+        </p>
+      </div>
+      <div class="card">
+        <p class="card-title">🔧 手法 &amp; 模具</p>
+        <p>不同<strong>烘焙手法</strong>（直接法、汤种法、低温冷藏…）带来不同品质系数；<strong>模具</strong>（圆模、吐司盒、可颂模、法棍模…）影响面包外形与属性加成。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">⚠️ 品质规则</p>
+        <p>面粉比例约占 55–65%，液体约 30–40%，酵母约 1–2%；偏差过大会产出<strong>劣质品</strong>降价出售；搭配禁忌（如低筋粉+法棍模）会触发减分规则。</p>
+      </div>
+    </div>
+
+    <h3 style="margin:24px 0 4px;color:var(--brown2);font-size:1rem;">✨ 稀有度</h3>
+    <div class="rarity-row">
+      <span class="rarity-badge rarity-common">⬜ 普通 ×1.0 售价</span>
+      <span class="rarity-badge rarity-uncommon">🟢 优质 ×1.5 售价</span>
+      <span class="rarity-badge rarity-rare">🔵 稀有 ×2.5 售价</span>
+      <span class="rarity-badge rarity-legendary">🟡 传说 ×4.0 售价</span>
+    </div>
+
+    <h3 style="margin:24px 0 4px;color:var(--brown2);font-size:1rem;">🔮 原料协同（部分示例）</h3>
+    <div class="synergy-list">
+      <div class="synergy-row">
+        <span class="synergy-name">古法酸种</span>
+        <span class="synergy-combo">黑麦粉 + 天然酵种</span>
+        <span class="synergy-bonus">香气↑ 复杂度↑</span>
+      </div>
+      <div class="synergy-row">
+        <span class="synergy-name">北海道之云</span>
+        <span class="synergy-combo">淡奶油 + 日式上白粉</span>
+        <span class="synergy-bonus">柔软度↑↑ 甜度↑</span>
+      </div>
+      <div class="synergy-row">
+        <span class="synergy-name">海盐焦糖</span>
+        <span class="synergy-combo">焦糖酱 + 海盐</span>
+        <span class="synergy-bonus">甜度↑ 复杂度↑</span>
+      </div>
+      <div class="synergy-row">
+        <span class="synergy-name">巴黎风味</span>
+        <span class="synergy-combo">法式T65面粉 + 伯爵茶</span>
+        <span class="synergy-bonus">香气↑↑ 复杂度↑</span>
+      </div>
+      <div class="synergy-row">
+        <span class="synergy-name">双倍巧克力</span>
+        <span class="synergy-combo">可可粉 + 巧克力熔岩</span>
+        <span class="synergy-bonus">甜度↑ 香气↑↑</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 原料系统 -->
+  <section class="section" id="ingredients">
+    <div class="section-header">
+      <span class="section-icon">🌾</span>
+      <h2>原料系统</h2>
+      <span class="section-tag">6 大类 · 采购入库 · AI 生成</span>
+    </div>
+
+    <p style="color:var(--text2);font-size:.88rem;margin-bottom:16px;">
+      前往超市卖场按袋采购，原料以克为单位入库存；注意保质期，冷藏/冷冻设备可延长储存时间。
+    </p>
+
+    <div class="ingredient-grid">
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">🌾 面粉（10 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">高筋面粉</span><span class="ingredient-tag">低筋面粉</span>
+          <span class="ingredient-tag">全麦粉</span><span class="ingredient-tag">黑麦粉</span>
+          <span class="ingredient-tag">法式T65</span><span class="ingredient-tag">日式上白粉</span>
+          <span class="ingredient-tag">石磨面粉</span><span class="ingredient-tag">荞麦粉</span>
+          <span class="ingredient-tag">斯佩尔特</span><span class="ingredient-tag">米粉</span>
+        </div>
+      </div>
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">💧 液体（10 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">全脂牛奶</span><span class="ingredient-tag">纯净水</span>
+          <span class="ingredient-tag">淡奶油</span><span class="ingredient-tag">椰奶</span>
+          <span class="ingredient-tag">酸奶</span><span class="ingredient-tag">燕麦奶</span>
+          <span class="ingredient-tag">蜂蜜水</span><span class="ingredient-tag">豆浆</span>
+          <span class="ingredient-tag">柚子蜜</span><span class="ingredient-tag">生椰拿铁</span>
+        </div>
+      </div>
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">🧫 酵母（10 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">即发干酵母</span><span class="ingredient-tag">鲜酵母</span>
+          <span class="ingredient-tag">天然酵种</span><span class="ingredient-tag">鲁邦种</span>
+          <span class="ingredient-tag">汤种</span><span class="ingredient-tag">老面</span>
+          <span class="ingredient-tag">啤酒花酵母</span><span class="ingredient-tag">黑麦酵种</span>
+          <span class="ingredient-tag">葡萄干酵种</span><span class="ingredient-tag">酸奶酵种</span>
+        </div>
+      </div>
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">🧈 辅料（10 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">黄油</span><span class="ingredient-tag">鸡蛋</span>
+          <span class="ingredient-tag">细砂糖</span><span class="ingredient-tag">炼乳</span>
+          <span class="ingredient-tag">奶粉</span><span class="ingredient-tag">橄榄油</span>
+          <span class="ingredient-tag">玉米淀粉</span><span class="ingredient-tag">麦芽糖浆</span>
+          <span class="ingredient-tag">泡打粉</span><span class="ingredient-tag">小苏打</span>
+        </div>
+      </div>
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">🌸 风味（10 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">香草精</span><span class="ingredient-tag">肉桂粉</span>
+          <span class="ingredient-tag">可可粉</span><span class="ingredient-tag">抹茶粉</span>
+          <span class="ingredient-tag">薰衣草</span><span class="ingredient-tag">伯爵茶</span>
+          <span class="ingredient-tag">玫瑰露</span><span class="ingredient-tag">焦糖酱</span>
+          <span class="ingredient-tag">海盐</span><span class="ingredient-tag">桂花</span>
+        </div>
+      </div>
+      <div class="ingredient-cat">
+        <p class="ingredient-cat-title">🥐 馅料（11 种）</p>
+        <div class="ingredient-list">
+          <span class="ingredient-tag">红豆沙</span><span class="ingredient-tag">奶油芝士</span>
+          <span class="ingredient-tag">巧克力熔岩</span><span class="ingredient-tag">蓝莓酱</span>
+          <span class="ingredient-tag">坚果碎</span><span class="ingredient-tag">芒果慕斯</span>
+          <span class="ingredient-tag">松露酱</span><span class="ingredient-tag">培根芝士</span>
+          <span class="ingredient-tag">咖喱鸡肉</span><span class="ingredient-tag">芋泥肉松</span>
+          <span class="ingredient-tag">焦糖酱</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip-box tip-success" style="margin-top:16px;">
+      <span class="tip-icon">✨</span>
+      <p class="tip-body"><strong>馅料工坊</strong>：在工坊将 2–5 种风味/馅料原料组合，由 AI 生成独特的自制馅料（保质期 7 天），可用于配方制作。<br><strong>AI 采购</strong>：在超市「AI 生成」区用 1000💰 生成 3 款全新原料 SKU，包括独特馅料与风味原料。</p>
+    </div>
+  </section>
+
+  <!-- ④ 顾客接待 -->
+  <section class="section" id="customers">
+    <div class="section-header">
+      <span class="section-icon">👥</span>
+      <h2>顾客接待</h2>
+      <span class="section-tag">满意度 · 接待规则</span>
+    </div>
+
+    <table class="sat-table">
+      <thead>
+        <tr>
+          <th>满意度</th>
+          <th>顾客行为</th>
+          <th>价格系数</th>
+          <th>声望变化</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>≥ 90 分</td>
+          <td>🎉 非常满意，主动多买一份</td>
+          <td>× 1.2</td>
+          <td>+3 ⭐</td>
+        </tr>
+        <tr>
+          <td>80–89 分</td>
+          <td>😊 满意，直接购买</td>
+          <td>× 1.0</td>
+          <td>+3 ⭐</td>
+        </tr>
+        <tr>
+          <td>50–79 分</td>
+          <td>🤝 勉强接受，成交</td>
+          <td>× 1.0</td>
+          <td>+1 ⭐</td>
+        </tr>
+        <tr>
+          <td>&lt; 50 分</td>
+          <td>💬 提出定制请求</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>婉拒顾客</td>
+          <td>🚶 顾客离开</td>
+          <td>—</td>
+          <td>−3 ⭐</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip-box tip-warn" style="margin-top:16px;">
+      <span class="tip-icon">🧪</span>
+      <p class="tip-body">当顾客不满意时，可选择<strong>现场定制</strong>（消耗 1000💰），AI 根据顾客需求和你的库存设计专属配方；成功制作并交付后获得更高评价与收入。</p>
+    </div>
+  </section>
+
+  <!-- ⑤ 经济管理 -->
+  <section class="section" id="economy">
+    <div class="section-header">
+      <span class="section-icon">💰</span>
+      <h2>经济管理</h2>
+      <span class="section-tag">金币 · 声望 · 采购 · 升级</span>
+    </div>
+
+    <div class="econ-row">
+      <span class="econ-icon">💰</span>
+      <span class="econ-body"><strong>初始金币 500</strong>；主要来源：面包销售、竞技比赛、完成里程碑；主要支出：采购原料、上架手续费（8💰/款）、AI 功能（1000💰/次）、设备升级。</span>
+    </div>
+    <div class="econ-row">
+      <span class="econ-icon">⭐</span>
+      <span class="econ-body"><strong>声望</strong>决定每日顾客数量与质量；高声望可吸引更多高价值顾客。声望会随糟糕交易和婉拒顾客而降低。</span>
+    </div>
+    <div class="econ-row">
+      <span class="econ-icon">🧊</span>
+      <span class="econ-body"><strong>冷藏柜 280💰</strong>延长需冷藏原料保质期；<strong>冷冻柜 420💰</strong>（需先购冷藏）进一步延长。建议尽早升级以减少原料浪费。</span>
+    </div>
+    <div class="econ-row">
+      <span class="econ-icon">📉</span>
+      <span class="econ-body">面包随时间<strong>自然降价</strong>（每过一天约 ×0.85，最低 ×0.5）；新鲜出炉当天出售收益最高。</span>
+    </div>
+    <div class="econ-row">
+      <span class="econ-icon">🏆</span>
+      <span class="econ-body"><strong>竞技赛事</strong>每周举办，提交面包参赛可获得额外金币和声望奖励；每周每场限赛一次。</span>
+    </div>
+  </section>
+
+  <!-- ⑥ AI 功能 -->
+  <section class="section" id="ai-features">
+    <div class="section-header">
+      <span class="section-icon">✨</span>
+      <h2>AI 功能</h2>
+      <span class="section-tag">需配置 API Key</span>
+    </div>
+
+    <div class="ai-feature-list">
+      <div class="ai-feature">
+        <span class="ai-feature-icon">🍞</span>
+        <div class="ai-feature-body">
+          <h4>AI 配方设计</h4>
+          <p>在研发页输入面包描述（如「想要甜软奶香、适合早餐的吐司」），AI 根据你的库存原料生成完整配方，包括用量比例、手法建议与四维属性预测。</p>
+        </div>
+      </div>
+      <div class="ai-feature">
+        <span class="ai-feature-icon">👥</span>
+        <div class="ai-feature-body">
+          <h4>AI 顾客生成</h4>
+          <p>每日营业前自动生成当日顾客，拥有独特姓名、头像、身份、进店对白和数值化需求；无 API 时退回内置模板顾客。</p>
+        </div>
+      </div>
+      <div class="ai-feature">
+        <span class="ai-feature-icon">🛒</span>
+        <div class="ai-feature-body">
+          <h4>AI 采购原料</h4>
+          <p>在超市「AI 生成」区描述想要的原料类型，AI 一次生成 3 款全新 SKU（含定价、保质期、冷藏需求），加入采购目录后可正常购买入库。</p>
+        </div>
+      </div>
+      <div class="ai-feature">
+        <span class="ai-feature-icon">🥣</span>
+        <div class="ai-feature-body">
+          <h4>AI 馅料制备</h4>
+          <p>在馅料工坊选择 2–5 种风味/馅料原料，AI 根据组合生成馅料名称、风味描述和四维属性；制成的自制馅料可用于面包配方。</p>
+        </div>
+      </div>
+      <div class="ai-feature">
+        <span class="ai-feature-icon">🧪</span>
+        <div class="ai-feature-body">
+          <h4>AI 现场定制</h4>
+          <p>营业中当顾客提出特殊需求时，可触发 AI 现场设计——结合顾客偏好与店内库存，生成专属配方后回面包房制作，完成后交付给顾客。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip-box tip-info" style="margin-top:16px;">
+      <span class="tip-icon">⚙️</span>
+      <p class="tip-body">在游戏「设置」页面配置 <strong>OpenAI 兼容 API</strong>（支持 GPT-4o-mini 等模型）后即可解锁全部 AI 功能。每次 AI 操作消耗 <strong>1000💰</strong>，请量力而行。</p>
+    </div>
+  </section>
+
+  <!-- ⑦ 点灯小游戏 -->
+  <section class="section" id="light-game">
+    <div class="section-header">
+      <span class="section-icon">💡</span>
+      <h2>点灯小游戏</h2>
+      <span class="section-tag">每日营业前 · 决定收益倍率</span>
+    </div>
+
+    <p style="color:var(--text2);font-size:.88rem;margin-bottom:16px;">
+      每天首次进入营业阶段时，面包店将进入 <strong>30 秒倒计时</strong>，同时开始「点灯」小游戏。
+      游戏分数决定当日所有销售收入的倍率加成，今天发挥好就能多赚一倍！
+    </p>
+
+    <div class="light-game-demo">
+      <div>
+        <div class="light-grid-mini">
+          <div class="lg-dot"></div><div class="lg-dot on"></div><div class="lg-dot"></div><div class="lg-dot"></div>
+          <div class="lg-dot"></div><div class="lg-dot"></div><div class="lg-dot on"></div><div class="lg-dot"></div>
+          <div class="lg-dot on"></div><div class="lg-dot"></div><div class="lg-dot"></div><div class="lg-dot on"></div>
+          <div class="lg-dot"></div><div class="lg-dot on"></div><div class="lg-dot"></div><div class="lg-dot"></div>
+        </div>
+        <p style="font-size:.7rem;color:var(--hint);text-align:center;margin-top:8px;">4×4 面包灯格</p>
+      </div>
+      <div class="light-game-desc">
+        <h4>玩法规则</h4>
+        <p>
+          • 4×4 共 16 个格子，每 0.75 秒随机亮起一个面包图案<br>
+          • 亮起的面包会在 1.7 秒后自动熄灭<br>
+          • 点击亮起的格子得 1 分<br>
+          • 30 秒倒计时结束，根据命中率确定当日收益倍率
+        </p>
+        <table class="mult-table">
+          <tr><td>命中率 &lt; 30%</td><td style="color:#9a8068;font-weight:700;">1.0x（基础）</td></tr>
+          <tr><td>命中率 30–55%</td><td style="color:#b09050;font-weight:700;">1.1x</td></tr>
+          <tr><td>命中率 55–80%</td><td style="color:#c07830;font-weight:700;">1.2x</td></tr>
+          <tr><td>命中率 ≥ 80%</td><td style="color:#8b2500;font-weight:700;">1.3x 🏆</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="tip-box tip-success" style="margin-top:16px;">
+      <span class="tip-icon">🎯</span>
+      <p class="tip-body">倍率仅当天有效，次日重置为 1.0x。倒计时结束且顾客数据加载完成后，覆盖层自动消失进入营业。今日记录里可以查看当天的收益倍率。</p>
+    </div>
+  </section>
+
+  <!-- ⑧ 主线故事 -->
+  <section class="section" id="story">
+    <div class="section-header">
+      <span class="section-icon">📖</span>
+      <h2>主线故事</h2>
+      <span class="section-tag">10 章 + 隐藏尾声</span>
+    </div>
+
+    <p style="color:var(--text2);font-size:.88rem;margin-bottom:4px;">
+      林千穗，28 岁，曾任麦香世家研发主管，回到老城区继承母亲的面包房。
+      随着声望提升与日子的积累，故事一章章展开……
+    </p>
+
+    <div class="chapter-grid">
+      <div class="chapter-card">
+        <p class="chapter-num">第一章</p>
+        <p class="chapter-title">空白的配方</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第二章</p>
+        <p class="chapter-title">陌生的访客</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第三章</p>
+        <p class="chapter-title">花语与面包</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第四章</p>
+        <p class="chapter-title">发酵的秘密</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第五章</p>
+        <p class="chapter-title">评论家的到来</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第六章</p>
+        <p class="chapter-title">父亲的烤箱</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第七章</p>
+        <p class="chapter-title">外祖父的信</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第八章</p>
+        <p class="chapter-title">试炼的味道</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第九章</p>
+        <p class="chapter-title">一千种味道</p>
+      </div>
+      <div class="chapter-card">
+        <p class="chapter-num">第十章</p>
+        <p class="chapter-title">千穗的面包</p>
+      </div>
+      <div class="chapter-card" style="border-color:#d4af37;background:#fffce8;">
+        <p class="chapter-num" style="color:#9a7a00;">隐藏尾声</p>
+        <p class="chapter-title" style="color:#7a5c00;">纸条</p>
+      </div>
+    </div>
+
+    <div class="tip-box tip-info" style="margin-top:16px;">
+      <span class="tip-icon">📜</span>
+      <p class="tip-body">在「工作室 → 人物志」可阅读主要人物的背景故事；完成主线解锁后，可在「尾声」查看结局——共有「千味之心」「传承之光」「平凡幸福」等多个结局走向。</p>
+    </div>
+  </section>
+
+  <!-- ⑨ 新手技巧 -->
+  <section class="section" id="tips">
+    <div class="section-header">
+      <span class="section-icon">🎯</span>
+      <h2>新手技巧</h2>
+      <span class="section-tag">快速上手建议</span>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <p class="card-title">🥖 第 1 天建议</p>
+        <p>用高筋面粉 + 全脂牛奶 + 即发干酵母做最简单的白吐司，上架后开门，先了解顾客反馈再逐渐调整配方。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">💡 原料配比</p>
+        <p>面粉占总量 55–65%，液体 30–40%，酵母 1–2%；偏差过大会产出劣质品；尽量不要「全用同一种面粉」造成单调。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">🔮 寻找协同</p>
+        <p>特定原料组合会触发协同加成显著提升稀有度；尝试黑麦粉+天然酵种、淡奶油+日式上白粉等经典搭配。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">🧊 尽早买冷藏</p>
+        <p>淡奶油、奶油芝士等馅料需冷藏，买了冷藏柜后保质期延长，可以批量采购降低单价。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">📅 多样菜单</p>
+        <p>上架 2–3 款属性差异大的面包，让甜度需求和香气需求的顾客都能得到匹配，平均满意度更高。</p>
+      </div>
+      <div class="card">
+        <p class="card-title">🎮 点灯全命中</p>
+        <p>营业前点灯小游戏若能保持 80% 以上命中率，当天所有收入×1.3；专注点击，不要误触未亮的格子。</p>
+      </div>
+    </div>
+
+    <div class="tip-box tip-warn" style="margin-top:20px;">
+      <span class="tip-icon">⚠️</span>
+      <p class="tip-body">
+        <strong>三个常见错误：</strong><br>
+        ① 只买一种面粉——配方单调且触发不了协同<br>
+        ② 面包烤完堆着不上架——菜单空着无法开门<br>
+        ③ 所有金币都用来 AI 生成——先积累基础库存再用 AI 功能
+      </p>
+    </div>
+  </section>
+
+</div><!-- /page-wrap -->
+
+<footer>
+  <span class="footer-logo">🍞</span>
+  <p><strong>千味面包房</strong> · AI 面包房模拟器</p>
+  <p style="margin-top:6px;">一千种味道，和一千种与人相遇的方式。</p>
+</footer>
+
+</body>
+</html>

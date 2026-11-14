@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { STAGE_CATEGORIES, STAGE_KINDS, stageKind, type StageKind } from '../../data/stageKinds.ts'
-import { clampStageEvery, loadStagePlays, loadStagePrefs, saveStagePrefs, type StagePlay, type StagePrefs } from '../../lib/stage.ts'
+import { clampStageEvery, draftStage, loadStagePlays, loadStagePrefs, saveStagePlay, saveStagePrefs, type StagePlay, type StagePrefs } from '../../lib/stage.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { Screen } from '../ui/primitives.tsx'
 
@@ -109,6 +109,10 @@ export function StageApp(props: { onBack: () => void }) {
   const [category, setCategory] = useState('')
   const [open, setOpen] = useState<StagePlay | null>(null)
   const [settings, setSettings] = useState(false)
+  const [wish, setWish] = useState('')
+  const [draft, setDraft] = useState<StagePlay | null>(null)
+  const [working, setWorking] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const timer = window.setTimeout(() => setNeedle(query.trim()), 300)
@@ -165,6 +169,27 @@ export function StageApp(props: { onBack: () => void }) {
       right={prefs ? <button type="button" className="stage-settings" onClick={() => setSettings(true)}>设置</button> : null}
     >
       {!identity ? <p>先到「设置 → 身份」选一台小手机。</p> : null}
+      {identity ? <details className="menu-card mb-3">
+        <summary>AI 撰写小剧场</summary>
+        <textarea className="soft-input mt-2" rows={3} value={wish} onChange={event => setWish(event.target.value)} placeholder="描述人物、情节和想要的篇幅" />
+        <button type="button" className="chip mt-2" disabled={working || !wish.trim()} onClick={async () => {
+          setWorking(true); setError('')
+          try { setDraft(await draftStage(wish.trim())) }
+          catch (reason) { setError(reason instanceof Error ? reason.message : '撰写失败') }
+          finally { setWorking(false) }
+        }}>撰写</button>
+        {draft ? <>
+          <input className="soft-input mt-2" aria-label="小剧场标题" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
+          <textarea className="soft-input mt-2" rows={8} aria-label="小剧场正文" value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} />
+          <button type="button" className="chip chip-solid mt-2" disabled={working || !draft.title.trim() || !draft.body.trim()} onClick={async () => {
+            setWorking(true); setError('')
+            try { await saveStagePlay(identity.namespace, draft); setOpen(draft); setDraft(null) }
+            catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败') }
+            finally { setWorking(false) }
+          }}>保存小剧场</button>
+        </> : null}
+        {error ? <p role="alert" className="mt-2 text-sm">{error}</p> : null}
+      </details> : null}
       <input className="soft-input stage-search" aria-label="搜索已生成的小剧场" placeholder="搜已经写成的" value={query} onChange={(event) => setQuery(event.target.value)} />
       {categories.length > 1 ? (
         <div className="stage-cats" role="tablist" aria-label="已生成的小剧场分类">

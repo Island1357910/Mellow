@@ -365,6 +365,31 @@
 }
 
 /* 旧世内嵌 sms-shell 去多巴胺化 */
+.jiushi-worldbook {
+  font-family: "Songti SC", SimSun, serif;
+  --m-surface: #fcf5e6;
+  --m-text: #473727;
+  --m-text-secondary: #76634c;
+  --m-primary: #a74f43;
+  --m-secondary: #e2d2b4;
+}
+.jiushi-worldbook :is(.menu-card, .soft-input, .soft-select, .pill-note) {
+  border: 1px solid #c9b08a;
+  border-radius: 8px;
+  background: #fcf5e6;
+  color: #473727;
+}
+.jiushi-worldbook .chip {
+  border: 1px solid #c9b08a;
+  border-radius: 6px;
+  background: #ebdfc9;
+  color: #473727;
+}
+.jiushi-worldbook .chip-solid {
+  border-color: #8b4136;
+  background: #a74f43;
+  color: #fff8ec;
+}
 .jiushi-phone .sms-shell,
 .jiushi-phone .candy-shell {
   color: var(--js-ink);

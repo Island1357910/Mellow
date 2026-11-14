@@ -1,10 +1,11 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "1.1.39",
+  "version": "1.1.40",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
+    "build:live": "vite build integrations/live --outDir ../../public/live-simulator --emptyOutDir",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

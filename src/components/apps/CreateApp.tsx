@@ -42,6 +42,7 @@ export function CreateApp(props: { onBack: () => void }) {
   const phone = identities.find((item) => item.id === activeIdentityId)
   const preset = presets.find((item) => item.id === modePresetId(settings, 'create'))
   const [wish, setWish] = useState('')
+  const [revision, setRevision] = useState('')
   const [useBook, setUseBook] = useState(true)
   const [book, setBook] = useState<WorldEntry[]>([])
   const [people, setPeople] = useState<Character[]>([])
@@ -85,12 +86,12 @@ export function CreateApp(props: { onBack: () => void }) {
 
   const busy = phone ? isAiJobRunning(jobKey(phone.namespace, 'create')) : false
 
-  const run = () => {
-    if (!phone || !wish.trim() || busy) return
+  const run = (draft?: MadeCard) => {
+    const currentWish = (draft ? revision : wish).trim()
+    if (!phone || !currentWish || busy) return
     setNoteTone('pink')
-    setNote('正在写卡…')
-    setImportedKey('')
-    const currentWish = wish
+    setImportNote('')
+    setNote(draft ? '正在修改草稿…' : '正在写卡…')
     runAiJob(jobKey(phone.namespace, 'create'), async () => {
       try {
         const [currentPeople, world] = await Promise.all([
@@ -100,15 +101,17 @@ export function CreateApp(props: { onBack: () => void }) {
         const currentSource = findSource(currentPeople, currentWish, sourceId)
         if (sourceId && !currentSource) throw new Error('所选角色已不存在，请重新选择。')
         const made = await makeCard({
-          wish: currentWish, depth, identity: phone, source: currentSource,
+          wish: currentWish, depth, identity: phone, source: currentSource, draft,
           world: world.filter((item) => !item.charId || item.charId === currentSource?.id),
         })
         const message = made.local ? '模型未返回完整角色卡。下面是一份本地草稿，可重新出卡。' : '卡已经封好。点下面一次，就会完整放进短信和世界书。'
         await storage.setBag(phone.namespace, 'create_draft', { card: made, note: message })
+        setCard(made)
+        setImportedKey('')
+        setRevision('')
+        setNote(message)
       } catch (reason) {
-        await storage.setBag(phone.namespace, 'create_draft', {
-          note: reason instanceof Error ? reason.message : '没封上',
-        })
+        setNote(reason instanceof Error ? reason.message : '没封上')
       }
     })
   }
@@ -219,6 +222,10 @@ export function CreateApp(props: { onBack: () => void }) {
                   ))}
                 </article>
               ) : null}
+              <article className="menu-card">
+                <textarea className="soft-input" rows={3} value={revision} onChange={event => setRevision(event.target.value)} placeholder="在现有角色卡上改哪些内容" />
+                <button type="button" className="chip mt-2" disabled={busy || importing || !revision.trim()} onClick={() => run(card)}>让 AI 修改草稿</button>
+              </article>
               <button type="button" className="chip chip-solid" disabled={importing || importedKey === cardKey} onClick={() => void importAll()}>
                 {importing ? '正在导入…' : importedKey === cardKey ? '已导入' : '导入到短信和世界书'}
               </button>

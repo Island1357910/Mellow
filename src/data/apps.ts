@@ -44,6 +44,7 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'worldforge', name: '世界搭建', blurb: '拆大世界卡', tint: '#B8C9D4', dock: false, fixed: false, home: true, late: true },
   { id: 'bazaar', name: '角色市集', blurb: '先看简介再装角色', tint: '#F0C2B0', dock: false, fixed: false, home: true, late: true },
   { id: 'stage', name: '小剧场', blurb: '聊天里偶发的一场', tint: '#E7B7C9', dock: false, fixed: false, home: true, late: true },
+  { id: 'live', name: '直播间', blurb: '弹幕与主播互动', tint: '#E8AAC0', dock: false, fixed: false, home: true, late: true },
 ]
 
 /** 第二页四列三行，排满后再进入第三页。 */
