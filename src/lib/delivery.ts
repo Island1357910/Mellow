@@ -197,14 +197,11 @@ async function say(namespace: string, person: Character, text: string): Promise<
     status: 'sent',
   }
   await storage.putMessage(namespace, message)
-  const fresh = (await storage.getChat(namespace, chat.id)) ?? chat
-  await storage.putChat(namespace, {
-    ...fresh,
+  const fresh = (await storage.patchChat(namespace, chat.id, current => ({
     lastMessage: text,
     lastMessageAt: message.createdAt,
-    updatedAt: message.createdAt,
-    unread: fresh.unread + 1,
-  })
+    unread: current.unread + 1,
+  }))) ?? chat
   const state=useMellow.getState(),identity=state.identities.find(i=>i.namespace===namespace)
   if(identity&&!fresh.muted)await state.pushNotice({kind:'message',title:person.name,body:text,appId:'messages',identityId:identity.id,charId:person.id,chatId:chat.id,priority:4})
   await state.refreshInbox()

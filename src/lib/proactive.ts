@@ -52,8 +52,7 @@ export async function tickProactive(input: {
         voiceReady: input.settings.minimax.ready && isTrustedVoiceCache(input.settings.minimax.fetchedVoices),
         proactive: true,
       })
-      const fresh = (await storage.getChat(input.identity.namespace, chat.id)) ?? chat
-      await storage.putChat(input.identity.namespace, { ...fresh, proactiveLastAt: Date.now() })
+      await storage.patchChat(input.identity.namespace, chat.id, { proactiveLastAt: Date.now() })
       useMellow.getState().refreshInbox()
       useMellow.getState().touchData()
     })

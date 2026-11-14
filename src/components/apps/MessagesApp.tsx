@@ -37,6 +37,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   const [tab, setTab] = useState<Tab>('messages')
   const [chars, setChars] = useState<Character[]>([])
   const [chats, setChats] = useState<Chat[]>([])
+  const chatEdits = useRef(0)
   const [folders, setFolders] = useState<ContactFolder[]>([])
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE)
   const [moments, setMoments] = useState<Moment[]>([])
@@ -70,6 +71,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   }
 
   const load = async (who: Identity) => {
+    const editsAtStart = chatEdits.current
     const [nextChars, nextChats, nextFolders, nextProfile, nextMoments, online] = await Promise.all([
       storage.listModernCharacters(who.namespace),
       storage.listChats(who.namespace),
@@ -84,7 +86,16 @@ export function MessagesApp(props: { onBack: () => void }) {
     const keptChats = samples.length > 0 ? await storage.listChats(who.namespace) : nextChats
     setChars(kept)
     const modernIds = new Set(kept.map(c => c.id))
-    setChats(keptChats.filter(chat => chat.memberIds.every(id => modernIds.has(id))))
+    const visibleChats = keptChats.filter(chat => chat.memberIds.every(id => modernIds.has(id)))
+    const preserveNewerEdits = chatEdits.current !== editsAtStart
+    setChats(current => {
+      if (!preserveNewerEdits) return visibleChats
+      const currentById = new Map(current.map(chat => [chat.id, chat]))
+      return visibleChats.map(chat => {
+        const newer = currentById.get(chat.id)
+        return newer && newer.updatedAt > (chat.updatedAt || 0) ? newer : chat
+      })
+    })
     setFolders(nextFolders ?? [])
     setProfile({ ...EMPTY_PROFILE, nickname: who.name, ...(nextProfile ?? {}) })
     setMoments(nextMoments ?? [])
@@ -132,6 +143,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   if (chat) {
     return (
       <ChatThread
+        key={`${identity.namespace}:${chat.id}`}
         identity={identity}
         chat={chat}
         characters={chars}
@@ -139,7 +151,10 @@ export function MessagesApp(props: { onBack: () => void }) {
           setOpenId(null)
           void load(identity)
         }}
-        onChat={(next) => setChats((current) => current.map((item) => (item.id === next.id ? next : item)))}
+        onChat={(next) => {
+          chatEdits.current += 1
+          setChats(current => current.map(item => item.id === next.id && (item.updatedAt || 0) <= next.updatedAt ? next : item))
+        }}
         onPeople={() => void storage.listModernCharacters(identity.namespace).then(setChars)}
       />
     )

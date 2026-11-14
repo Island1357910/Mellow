@@ -1,6 +1,6 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { ColorField } from './AppearanceEditor.tsx'
-import { importWallpaper } from '../../lib/wallpaper.ts'
+import { importChatBackground } from '../../lib/wallpaper.ts'
 import { ChevronDown, Download, Image, Plus, Trash2, Upload } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import {
@@ -158,7 +158,7 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
     setReadingBackground(true)
     setBackgroundNote('')
     try {
-      set({ backgroundImage: await importWallpaper(file) })
+      set({ backgroundImage: await importChatBackground(file) })
     } catch (error) {
       setBackgroundNote(error instanceof Error ? error.message : '背景图读取失败')
     } finally {

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
-import { importWallpaper, wallpaperMime } from '../src/lib/wallpaper.ts'
+import { importChatBackground, importWallpaper, wallpaperMime } from '../src/lib/wallpaper.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { MetaDB } from '../src/storage/db.ts'
 import { BUNDLED_THEMES, themeFromUnknown } from '../src/theme/themes.ts'
@@ -13,6 +13,39 @@ assert.equal(wallpaperMime(new TextEncoder().encode('RIFF1234WEBP'), ''), 'image
 assert.equal(wallpaperMime(new TextEncoder().encode('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>'), ''), 'image/svg+xml')
 await assert.rejects(importWallpaper(new File([], 'empty.png')), /空文件/)
 await assert.rejects(importWallpaper(new File([new Uint8Array(12 * 1024 * 1024 + 1)], 'huge.png')), /12MB/)
+
+// Simulate browser decoding and encoding to check the sizes passed to the canvas.
+const encodedSizes: Array<[number, number]> = []
+const canvas = {
+  width: 0, height: 0,
+  getContext: () => ({ drawImage: () => {} }),
+  toBlob: (done: (blob: Blob) => void, type: string) => {
+    encodedSizes.push([canvas.width, canvas.height])
+    done(new Blob([new Uint8Array(canvas.width === 1600 ? 2 * 1024 * 1024 + 1 : 16)], { type }))
+  },
+}
+Object.assign(globalThis, {
+  document: { createElement: () => canvas },
+  Image: class {
+    naturalWidth = 6000
+    naturalHeight = 3000
+    onload?: () => void
+    set src(_value: string) { queueMicrotask(() => this.onload?.()) }
+  },
+  FileReader: class {
+    result = ''
+    onload?: () => void
+    readAsDataURL(blob: Blob) {
+      this.result = `data:${blob.type};base64,`
+      queueMicrotask(() => this.onload?.())
+    }
+  },
+})
+const largePhoto = new File([Uint8Array.of(255, 216, 255), new Uint8Array(13 * 1024 * 1024)], 'photo.jpg')
+assert.match(await importChatBackground(largePhoto), /^data:image\/jpeg;base64,/)
+assert.deepEqual(encodedSizes, [[1600, 800], [800, 400]])
+assert.equal(canvas.width, 0)
+for (const key of ['document', 'Image', 'FileReader']) Reflect.deleteProperty(globalThis, key)
 
 const wallpaper = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
 const boot = await storage.boot()

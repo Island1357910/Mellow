@@ -62,18 +62,14 @@ function replyThought(content: string, reasoning?: string): string {
 
 async function touchChat(namespace: string, stale: Chat, lastMessage: string, unreadDelta: number, lastKind: ChatMessage['kind'] = 'text'): Promise<Chat> {
   const preview = messagePreview(lastMessage, lastKind)
-  const chat = (await storage.getChat(namespace, stale.id)) ?? stale
   const viewing = useMellow.getState().viewingChatId === stale.id
-  const next: Chat = {
-    ...chat,
+  const next = await storage.patchChat(namespace, stale.id, chat => ({
     lastMessage: preview,
     lastMessageAt: Date.now(),
-    updatedAt: Date.now(),
     unread: viewing ? 0 : Math.max(0, chat.unread + unreadDelta),
-  }
-  await storage.putChat(namespace, next)
+  }))
   if (viewing && unreadDelta > 0) await storage.markChatRead(namespace, stale.id)
-  return next
+  return next ?? stale
 }
 
 export async function ensureDirectChat(
@@ -85,9 +81,7 @@ export async function ensureDirectChat(
   const existing = chats.find((chat) => chat.kind === 'dm' && chat.memberIds.length === 1 && chat.memberIds[0] === character.id)
   if (existing) {
     if (options?.allowProactive === false && existing.allowProactive !== false) {
-      const patched = { ...existing, allowProactive: false, updatedAt: Date.now() }
-      await storage.putChat(namespace, patched)
-      return patched
+      return (await storage.patchChat(namespace, existing.id, { allowProactive: false })) ?? existing
     }
     return existing
   }
@@ -142,7 +136,7 @@ export async function postUserText(input: {
   if(userMessage.kind==='gift'){const parts=userMessage.content.replace(/^\[[^\]]+\]\s*/,'').split('｜');const name=parts[1]?.trim();if(name){const people=await storage.listModernCharacters(input.namespace);for(const id of input.chat.memberIds){const person=people.find(p=>p.id===id);if(person&&(input.chat.kind==='dm'||parts[2]?.includes('所有')||parts[2]?.includes('全体')||parts[2]?.includes(person.name)))await rememberGift(input.namespace,{id:userMessage.id+':'+id,charId:id,name})}}}
   await touchChat(input.namespace, input.chat, userMessage.content, 0, userMessage.kind)
   const fresh = await storage.getChat(input.namespace, input.chat.id)
-  if (fresh?.proactiveLastAt) await storage.putChat(input.namespace, { ...fresh, proactiveLastAt: undefined })
+  if (fresh?.proactiveLastAt) await storage.patchChat(input.namespace, fresh.id, { proactiveLastAt: undefined })
   if (input.chat.memberIds[0]) await noteRemoteChat(input.namespace, input.chat.memberIds[0], true)
   eventBus.emit({
     type: 'send_message',
@@ -276,7 +270,7 @@ async function applyProfileChange(namespace: string, character: Character, chatI
     changed = true
     notes.push(`${shown} 把昵称改成了「${change.nickname}」`)
     for (const chat of await storage.listChats(namespace)) {
-      if (chat.kind === 'dm' && chat.memberIds[0] === character.id) await storage.putChat(namespace, { ...chat, title: change.nickname })
+      if (chat.kind === 'dm' && chat.memberIds[0] === character.id) await storage.patchChat(namespace, chat.id, { title: change.nickname })
     }
   }
   if (notes.length === 0) return notes

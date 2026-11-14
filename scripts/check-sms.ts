@@ -88,6 +88,18 @@ const identity = snapshot.identities[0]!
 await writeCharacter({ identity, name: '拆条回归', personality: '自然说话', description: '仅供测试', firstMes: '在呢。' })
 const character = (await storage.listModernCharacters(identity.namespace)).find(item => item.name === '拆条回归')!
 const chat = (await storage.listChats(identity.namespace)).find(item => item.memberIds.includes(character.id))!
+const oldBackground = 'data:image/png;base64,b2xk'
+const newBackground = 'data:image/png;base64,bmV3'
+await storage.patchChat(identity.namespace, chat.id, { backgroundImage: oldBackground, unread: 1 })
+await Promise.all([
+  storage.patchChat(identity.namespace, chat.id, { backgroundImage: newBackground }),
+  storage.markChatRead(identity.namespace, chat.id),
+  storage.refreshChatPreview(identity.namespace, chat.id),
+])
+const styledChat = await storage.getChat(identity.namespace, chat.id)
+assert.equal(styledChat?.backgroundImage, newBackground)
+assert.equal(styledChat?.unread, 0)
+assert.equal(await storage.patchChat(identity.namespace, 'missing-chat', { backgroundImage: newBackground }), undefined)
 const groupHistory: ChatMessage[] = [
   { id: 'a', chatId: 'group', role: 'assistant', kind: 'text', content: '我昨天去了海边。', charId: 'other', createdAt: 1, status: 'sent' },
   { id: 'b', chatId: 'group', role: 'assistant', kind: 'voice', content: '我在家。', charId: character.id, createdAt: 2, status: 'sent' },
@@ -110,6 +122,7 @@ Math.random = () => 0
 try {
   await replyInChat({ namespace: identity.namespace, identity, character, chat: { ...chat, voiceEnabled: true }, presets: snapshot.presets, activePresetId: snapshot.presets[0]!.id, fourthWall: false, voiceReady: true })
   const saved = (await storage.listMessages(identity.namespace, chat.id)).filter(item => !before.has(item.id))
+  assert.equal((await storage.getChat(identity.namespace, chat.id))?.backgroundImage, newBackground, 'delivering a reply with a stale chat must preserve the new background')
   assert.equal(saved.filter(item => item.kind === 'sticker').length, 2)
   assert.ok(saved.filter(item => item.kind === 'text' || item.kind === 'voice').length >= 3)
   assert.ok(saved.every(item => item.kind !== 'voice' || isSpeakableSms(item.content)))

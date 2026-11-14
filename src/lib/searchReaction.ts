@@ -67,8 +67,7 @@ export async function maybeReactToSearch(namespace: string, identityId: string, 
       const now = Date.now()
       await storage.setBag(namespace, COOLDOWN_BAG, { ...cooldowns, [bound]: now })
       await storage.setBag(namespace, LAST_QUERY_BAG, { ...lastQueries, [bound]: query.trim() })
-      const fresh = (await storage.getChat(namespace, chat.id)) ?? chat
-      await storage.putChat(namespace, { ...fresh, proactiveLastAt: now })
+      await storage.patchChat(namespace, chat.id, { proactiveLastAt: now })
       useMellow.getState().refreshInbox()
     } catch {
       // 接口未配置或忙时静默跳过

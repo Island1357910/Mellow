@@ -2,7 +2,7 @@ import { NumericInput } from '../ui/NumericInput.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { importWallpaper } from '../../lib/wallpaper.ts'
+import { importChatBackground } from '../../lib/wallpaper.ts'
 import { AIError } from '../../engine/AIAdapter.ts'
 import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
@@ -121,9 +121,8 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   }, [menu, props.identity.namespace])
 
   const saveChat = async (patch: Partial<Chat>) => {
-    const fresh = (await storage.getChat(props.identity.namespace, chat.id)) ?? chat
-    const next = { ...fresh, ...patch, updatedAt: Date.now() }
-    await storage.putChat(props.identity.namespace, next)
+    const next = await storage.patchChat(props.identity.namespace, chat.id, patch)
+    if (!next) throw new Error('会话已不存在')
     props.onChat(next)
   }
 
@@ -826,7 +825,7 @@ function ChatMenu(props: {
     setBackgroundNote('')
     setReadingBackground(true)
     try {
-      await props.onPatch(file ? { backgroundImage: await importWallpaper(file) } : patch)
+      await props.onPatch(file ? { backgroundImage: await importChatBackground(file) } : patch)
     } catch (error) {
       setBackgroundNote(error instanceof Error ? error.message : '聊天背景保存失败')
     } finally {

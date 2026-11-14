@@ -26,18 +26,14 @@ async function touchDelivered(
   message: ChatMessage,
   unreadDelta: number,
 ): Promise<Chat> {
-  const chat = (await storage.getChat(namespace, stale.id)) ?? stale
   const viewing = isViewingChat(stale.id)
-  const next: Chat = {
-    ...chat,
+  const next = await storage.patchChat(namespace, stale.id, chat => ({
     lastMessage: messagePreview(message.content, message.kind),
     lastMessageAt: message.createdAt,
-    updatedAt: Date.now(),
     unread: viewing ? 0 : Math.max(0, chat.unread + unreadDelta),
-  }
-  await storage.putChat(namespace, next)
+  }))
   if (viewing) await storage.markChatRead(namespace, stale.id)
-  return next
+  return next ?? stale
 }
 
 async function maybeNotify(input: {

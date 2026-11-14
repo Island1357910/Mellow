@@ -23,12 +23,10 @@ export async function maybeAskAboutLock(namespace: string, appName: string): Pro
     status: 'sent',
   }
   await storage.putMessage(namespace, message)
-  await storage.putChat(namespace, {
-    ...chat,
+  await storage.patchChat(namespace, chat.id, fresh => ({
     lastMessage: message.content,
     lastMessageAt: message.createdAt,
-    unread: chat.unread + 1,
-    updatedAt: message.createdAt,
-  })
+    unread: fresh.unread + 1,
+  }))
   await storage.setBag(namespace, 'lock-ask-day', day)
 }

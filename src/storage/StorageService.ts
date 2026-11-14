@@ -495,6 +495,16 @@ class StorageService {
     await this.ns(namespace).chats.put(chat)
   }
 
+  async patchChat(namespace: string, chatId: string, patch: Partial<Omit<Chat, 'id'>> | ((chat: Chat) => Partial<Omit<Chat, 'id'>>)): Promise<Chat | undefined> {
+    const db = this.ns(namespace)
+    return db.transaction('rw', db.chats, () => db.chats.get(chatId).then(chat => {
+      if (!chat) return undefined
+      const changes = typeof patch === 'function' ? patch(chat) : patch
+      const next = { ...chat, ...changes, updatedAt: Math.max(Date.now(), (chat.updatedAt || 0) + 1) }
+      return db.chats.put(next).then(() => next)
+    }))
+  }
+
   async listMessages(namespace: string, chatId: string): Promise<ChatMessage[]> {
     const messages = await this.ns(namespace).messages.where('chatId').equals(chatId).toArray()
     messages.sort((a, b) => a.createdAt - b.createdAt)
@@ -506,11 +516,10 @@ class StorageService {
   }
 
   async markChatRead(namespace: string, chatId: string): Promise<void> {
-    const db = this.ns(namespace)
-    const chat = await db.chats.get(chatId)
-    if (!chat) return
-    if (chat.unread === 0) return
-    await db.chats.put({ ...chat, unread: 0, updatedAt: Date.now() })
+    await this.ns(namespace).chats.where('id').equals(chatId).and(chat => chat.unread !== 0).modify(chat => {
+      chat.unread = 0
+      chat.updatedAt = Math.max(Date.now(), (chat.updatedAt || 0) + 1)
+    })
   }
 
   async updateMessage(namespace: string, message: ChatMessage): Promise<void> {
@@ -528,22 +537,15 @@ class StorageService {
   }
 
   async refreshChatPreview(namespace: string, chatId: string): Promise<void> {
-    const db = this.ns(namespace)
-    const chat = await db.chats.get(chatId)
-    if (!chat) return
     const messages = await this.listMessages(namespace, chatId)
     const visible = messages.filter((item) => !item.hidden && item.kind !== 'system')
     const last = visible[visible.length - 1]
-    if (last) {
-      await db.chats.put({
-        ...chat,
+    await this.patchChat(namespace, chatId, last
+      ? {
         lastMessage: messagePreview(last.content, last.kind),
         lastMessageAt: last.createdAt,
-        updatedAt: Date.now(),
-      })
-      return
-    }
-    await db.chats.put({ ...chat, lastMessage: '', updatedAt: Date.now() })
+      }
+      : { lastMessage: '' })
   }
 
   async getSpace(namespace: string): Promise<IdentitySpaceState> {
@@ -574,9 +576,7 @@ class StorageService {
   async clearChat(namespace: string, chatId: string): Promise<void> {
     const db = this.ns(namespace)
     await db.messages.where('chatId').equals(chatId).delete()
-    const chat = await db.chats.get(chatId)
-    if (!chat) return
-    await db.chats.put({ ...chat, lastMessage: '', unread: 0, updatedAt: Date.now() })
+    await this.patchChat(namespace, chatId, { lastMessage: '', unread: 0 })
   }
 
   async getBag<T>(namespace: string, id: string): Promise<T | null> {
@@ -642,7 +642,7 @@ class StorageService {
           const next = change(bagRow?.value ?? null)
           return db.appData.bulkPut([{ id: 'coins', value: coins - cost }, { id: bagId, value: next }])
             .then(() => db.messages.put(message))
-            .then(() => db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: message.createdAt }))
+            .then(() => db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: Math.max(Date.now(), (chat.updatedAt || 0) + 1) }))
         })
       })
     }))
