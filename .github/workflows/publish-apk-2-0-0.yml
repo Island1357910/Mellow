@@ -1,0 +1,40 @@
+name: Publish verified signed Mellow 2.0.0
+on:
+  push:
+    branches: [codex/publish-apk-2-0-0]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and publish signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .release-transfer
+          curl -fsSL --retry 3 https://github.com/Island1357910/Mellow/releases/download/android-v1.1.40/Mellow-1.1.40.apk -o base.apk
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const base = fs.readFileSync('base.apk');
+          const delta = fs.readFileSync('delta.bin');
+          const manifest = JSON.parse(fs.readFileSync('delta.json'));
+          const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+          if (digest(base) !== manifest.base) throw Error('Base APK digest mismatch');
+          const apk = Buffer.concat(manifest.ops.map(([source, start, length]) => [base, delta][source].subarray(start, start + length)));
+          if (digest(apk) !== manifest.target) throw Error('Signed APK digest mismatch');
+          fs.writeFileSync('Mellow-2.0.0.apk', apk);
+          NODE
+          expected="sha256:$(sha256sum Mellow-2.0.0.apk | cut -d' ' -f1)"
+          current=$(gh api repos/Island1357910/Mellow/releases/445385544/assets --jq '.[] | select(.name == "Mellow-2.0.0.apk" and .state == "uploaded") | .digest')
+          if [ -z "$current" ]; then
+            curl -fsS --retry 2 --max-time 180 -H "Authorization: Bearer $GH_TOKEN" -H 'Content-Type: application/vnd.android.package-archive' -H 'Expect:' --data-binary @Mellow-2.0.0.apk 'https://uploads.github.com/repos/Island1357910/Mellow/releases/445385544/assets?name=Mellow-2.0.0.apk' -o upload.json
+            current=$(jq -r .digest upload.json)
+          fi
+          test "$current" = "$expected"
+          gh api --method PATCH repos/Island1357910/Mellow/releases/445385544 -F draft=false -f make_latest=true --jq .html_url
