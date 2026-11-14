@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { DIRECTIVES, DIRECTIVE_CATEGORIES } from '../../data/directives.ts'
+import { DIRECTIVES, DIRECTIVE_CATEGORIES, type Directive } from '../../data/directives.ts'
 import {
   loadAllIdentityDirectives,
   loadDirectivePicks,
+  draftDirective,
+  listDirectives,
+  saveCustomDirective,
   saveAllIdentityDirectives,
   saveDirectivePicks,
   type DirectivePicks,
@@ -20,20 +23,25 @@ export function DirectiveLibrary(props: { namespace: string; chars: Character[];
   const [category, setCategory] = useState<string>('全部')
   const [query, setQuery] = useState('')
   const [note, setNote] = useState('')
+  const [library, setLibrary] = useState(DIRECTIVES)
+  const [wish, setWish] = useState('')
+  const [draft, setDraft] = useState<Directive | null>(null)
+  const [working, setWorking] = useState(false)
 
   useEffect(() => {
     let live = true
-    void Promise.all([loadDirectivePicks(props.namespace), loadAllIdentityDirectives()]).then(([saved, all]) => {
+    void Promise.all([loadDirectivePicks(props.namespace), loadAllIdentityDirectives(), listDirectives()]).then(([saved, all, items]) => {
       if (!live) return
       setPicks(saved)
       setEveryone(all)
+      setLibrary(items)
     })
     return () => { live = false }
   }, [props.namespace])
 
   if (!picks) return null
   const needle = query.trim()
-  const shown = DIRECTIVES.filter((item) => (category === '全部' || item.category === category) && (!needle || `${item.title}${item.text}${item.category}`.includes(needle)))
+  const shown = library.filter((item) => (category === '全部' || item.category === category) && (!needle || `${item.title}${item.text}${item.category}`.includes(needle)))
   const charIds = props.charId ? picks.byChar[props.charId] ?? [] : []
   const selected = new Set([...everyone, ...picks.global, ...Object.values(picks.byChar).flat()])
 
@@ -59,7 +67,27 @@ export function DirectiveLibrary(props: { namespace: string; chars: Character[];
 
   return (
     <div className="space-y-3">
-      <PillNote tone="mint" compact>指令库共 {DIRECTIVES.length} 条。勾上的原文会进入短信、线下和番外，用来约束句子、话轮和这一轮做到哪一步。可以只给一个角色，也可以给当前身份，或全部身份。一次带不完时，靠前的先生效。</PillNote>
+      <details className="menu-card">
+        <summary>AI 撰写指令</summary>
+        <textarea className="soft-input mt-2" value={wish} onChange={event => setWish(event.target.value)} placeholder="描述你想要的文风或互动规则" />
+        <button type="button" className="chip mt-2" disabled={working || !wish.trim()} onClick={async () => {
+          setWorking(true)
+          try { setDraft(await draftDirective(wish.trim())); setNote('请预览或编辑指令。') }
+          catch (error) { setNote(error instanceof Error ? error.message : '撰写失败') }
+          finally { setWorking(false) }
+        }}>撰写</button>
+        {draft ? <>
+          <input className="soft-input mt-2" aria-label="指令标题" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
+          <textarea className="soft-input mt-2" rows={6} aria-label="指令正文" value={draft.text} onChange={event => setDraft({ ...draft, text: event.target.value })} />
+          <button type="button" className="chip chip-solid mt-2" disabled={working || !draft.title.trim() || !draft.text.trim()} onClick={async () => {
+            setWorking(true)
+            try { await saveCustomDirective(draft); setLibrary(await listDirectives()); setDraft(null); setCategory('自定义'); setQuery(''); setNote('已保存，可以选用。') }
+            catch (error) { setNote(error instanceof Error ? error.message : '保存失败') }
+            finally { setWorking(false) }
+          }}>保存指令</button>
+        </> : null}
+      </details>
+      <PillNote tone="mint" compact>指令库共 {library.length} 条。勾上的指令会用于短信、线下和番外。</PillNote>
       <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>
         加给哪个角色
         <select value={props.charId} onChange={(event) => props.onChar(event.target.value)} className="soft-select mt-1 w-full text-sm">
@@ -70,7 +98,7 @@ export function DirectiveLibrary(props: { namespace: string; chars: Character[];
       </label>
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="找一条指令" className="soft-input" />
       <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {['全部', ...DIRECTIVE_CATEGORIES].map((item) => (
+        {['全部', ...DIRECTIVE_CATEGORIES, '自定义'].map((item) => (
           <button key={item} type="button" className={category === item ? 'chip chip-solid shrink-0' : 'chip shrink-0'} onClick={() => setCategory(item)}>{item}</button>
         ))}
       </div>

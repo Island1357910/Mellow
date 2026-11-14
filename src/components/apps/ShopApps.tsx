@@ -9,6 +9,8 @@ import {
   arriveLabel,
   checkout,
   draftGoods,
+  readMerchantHistory,
+  rememberMerchant,
   readCart,
   readCatalog,
   readDeliveries,
@@ -114,18 +116,22 @@ function ShopApp(props: {
     if (!text || finding) return
     setFinding(true)
     setError('')
-    const local = draftGoods(props.shop, text)
+    const normalized = text.toLowerCase().replace(/[\s\p{P}]/gu, '')
+    let local = draftGoods(props.shop, text)
     try {
+      const savedShops = [...await readMerchantHistory(phone.namespace, props.shop), ...catalog].filter(item => item.merchant && item.merchantQuery)
+      const exactShop = savedShops.find(item => item.merchantQuery?.toLowerCase().replace(/[\s\p{P}]/gu, '') === normalized)?.merchant
+      local = draftGoods(props.shop, text, exactShop)
       const raw = await moduleAi(props.shop).askLine(
-        `你是${props.title}的店员。只返回 JSON 数组，正好 3 件货。每项 {"name":"名字","price":数字,"level":"普通或精致或稀有","blurb":"一句","emoji":"一个表情","cat":"分类","trait":"一句属性"}。价格在 4 到 80。三件是同一需求的不同等级。`,
-        text,
-        400,
+        `你是${props.title}的店员。只返回 JSON 数组，正好 3 件货。每项 {"name":"名字","price":数字,"level":"普通或精致或稀有","blurb":"一句","emoji":"一个表情","cat":"分类","trait":"一句属性","merchant":"店铺名"}。价格在 4 到 80。三件是同一需求在同一家店的不同等级。已有店铺中有经营同类商品的，复用准确店名，否则根据需求拟一个贴合商品的虚构店名。`,
+        JSON.stringify({ wish: text, existing: savedShops.slice(0, 24).map(({ merchant, merchantQuery, cat, name }) => ({ merchant, merchantQuery, cat, name })) }),
+        750,
       )
       const parsed = readJson(raw)
       if (!Array.isArray(parsed)) throw new Error('empty')
       const made = parsed.flatMap((item) => {
         if (!item || typeof item !== 'object') return []
-        const row = item as { name?: unknown; price?: unknown; level?: unknown; blurb?: unknown; emoji?: unknown; cat?: unknown; trait?: unknown }
+        const row = item as { name?: unknown; price?: unknown; level?: unknown; blurb?: unknown; emoji?: unknown; cat?: unknown; trait?: unknown; merchant?: unknown }
         const name = typeof row.name === 'string' ? row.name.trim() : ''
         if (!name) return []
         const price = typeof row.price === 'number' ? Math.max(1, Math.round(row.price)) : 12
@@ -138,9 +144,14 @@ function ShopApp(props: {
           cat: typeof row.cat === 'string' && row.cat.trim() ? row.cat.trim().slice(0, 6) : '自定义',
           level: typeof row.level === 'string' ? row.level.slice(0, 4) : '普通',
           trait: typeof row.trait === 'string' ? row.trait.slice(0, 24) : '',
+          merchant: typeof row.merchant === 'string' ? row.merchant.trim().slice(0, 24) : '',
+          merchantQuery: text.slice(0, 100),
         }]
       })
-      setIdeas(made.length ? made : local)
+      const store = exactShop || made.find(item => item.merchant)?.merchant || local[0]?.merchant
+      const generated = made.length ? made.map(item => ({ ...item, merchant: store })) : local
+      if (generated[0]) await rememberMerchant(phone.namespace, props.shop, generated[0])
+      setIdeas(generated)
     } catch (reason) {
       setIdeas(local)
       if (reason instanceof Error && reason.message !== 'empty') setError(reason.message)

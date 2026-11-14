@@ -77,13 +77,15 @@ function localCard(wish: string, depth: string): MadeCard {
   }
 }
 
-export async function makeCard(input: { wish: string; depth: string; world: WorldEntry[]; identity?: CreationIdentity; source?: Character }): Promise<MadeCard> {
+export async function makeCard(input: { wish: string; depth: string; world: WorldEntry[]; identity?: CreationIdentity; source?: Character; draft?: MadeCard }): Promise<MadeCard> {
   const used = input.world.filter((item) => item.enabled && item.content.trim())
   const book = used.length
     ? `\n必须沿用这些已经启用的世界观，不要改掉其中的规则，也不要删减原文：\n${used.map((item) => `【${item.title || '设定'}】${item.content}`).join('\n')}`
     : ''
   const source = input.source
-  const original = source ? `【已有角色卡，按用户要求修订】\n${JSON.stringify({
+  const original = input.draft
+    ? `【现有草稿】只按需求修改指定内容。完整返回全卡，保留未要求修改的字段和附带设定。\n${JSON.stringify(input.draft)}\n\n`
+    : source ? `【已有角色卡，按用户要求修订】\n${JSON.stringify({
     name: source.name,
     description: source.description,
     personality: source.personality,
@@ -105,6 +107,6 @@ export async function makeCard(input: { wish: string; depth: string; world: Worl
     }
     if (card && (card.description || card.personality)) return card
   }
-  if (source) throw new Error('模型两次都没有返回完整角色卡。原角色设定仍在，可重试出卡。')
+  if (source || input.draft) throw new Error('模型两次都没有返回完整角色卡。原草稿仍在，可以重试。')
   return localCard(input.wish, input.depth)
 }

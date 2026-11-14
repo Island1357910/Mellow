@@ -20,6 +20,7 @@ export interface Goods {
   emoji: string
   cat: string
   merchant?: string
+  merchantQuery?: string
   level?: string
   trait?: string
 }
@@ -100,7 +101,18 @@ export async function writeCatalog(namespace: string, shop: ShopId, goods: Goods
   await storage.setBag(namespace, catalogKey(shop), goods.slice(0, 40))
 }
 
-export function draftGoods(shop: ShopId, wish: string): Goods[] {
+export async function readMerchantHistory(namespace: string, shop: ShopId): Promise<Goods[]> {
+  return (await storage.getBag<Goods[]>(namespace, `merchant_history_${shop}`)) ?? []
+}
+
+export async function rememberMerchant(namespace: string, shop: ShopId, item: Goods): Promise<void> {
+  const key = `merchant_history_${shop}`
+  await storage.changeAppBags(namespace, [key], bags => ({
+    [key]: [item, ...((bags[key] as Goods[] | null) ?? []).filter(row => row.merchantQuery !== item.merchantQuery)].slice(0, 40),
+  }))
+}
+
+export function draftGoods(shop: ShopId, wish: string, merchant?: string): Goods[] {
   const text = wish.trim().slice(0, 12) || (shop === 'flash' ? '夜宵' : '礼物')
   const rows = [
     { level: '普通', price: shop === 'flash' ? 9 : 12, trait: '日常能买到' },
@@ -114,6 +126,8 @@ export function draftGoods(shop: ShopId, wish: string): Goods[] {
     blurb: row.trait,
     emoji: shop === 'flash' ? '🍱' : '🎁',
     cat: '自定义',
+    merchant: merchant || `${text}${shop === 'flash' ? '食坊' : '小铺'}`,
+    merchantQuery: wish.trim().slice(0, 100),
     level: row.level,
     trait: row.trait,
   }))

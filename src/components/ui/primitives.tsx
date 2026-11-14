@@ -14,8 +14,8 @@ export function Screen(props: {
   children: ReactNode
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center gap-3 px-4 pb-4 pt-12">
+    <div className="app-screen flex h-full min-h-0 flex-col">
+      <header className="app-screen-header flex items-center gap-3 px-4 pb-4 pt-12">
         {props.onBack ? (
           <button
             type="button"
@@ -38,7 +38,7 @@ export function Screen(props: {
         </div>
         <div className="flex shrink-0 items-center">{props.right}</div>
       </header>
-      <div className="scroll min-h-0 flex-1 px-4 pb-16" style={props.allowHorizontalScroll ? { touchAction: 'pan-x pan-y' } : undefined}>{props.children}</div>
+      <div className="app-screen-body scroll min-h-0 flex-1 px-4 pb-16" style={props.allowHorizontalScroll ? { touchAction: 'pan-x pan-y' } : undefined}>{props.children}</div>
     </div>
   )
 }

@@ -41,6 +41,7 @@ export function CharacterWorldBookScreen(props: {
 export function WorldBookApp(props: {
   onBack: () => void
   namespaceOverride?: string
+  ancient?: boolean
   defaultScope?: 'world' | 'char' | 'order'
   characterIds?: string[]
   onCharacterSaved?: (character: Character) => void
@@ -146,7 +147,7 @@ export function WorldBookApp(props: {
         : scoped ? '此处修改会同步到这个角色的世界书' : '每条设定绑定一个角色，删角色会一起删'
 
   return (
-    <div className="sms-shell h-full min-h-0" style={candyStyle('#E7B7C9', '#F8D0DC', '#E6DDF8')}>
+    <div className={`sms-shell h-full min-h-0 ${props.ancient ? 'jiushi-worldbook' : ''}`} style={props.ancient ? undefined : candyStyle('#E7B7C9', '#F8D0DC', '#E6DDF8')}>
       <Screen title={profile ? '角色卡设定' : draft ? '这一条' : scoped ? '角色设定与世界书' : '世界书'} subtitle={subtitle} onBack={() => {
         if (saving) return
         if (profile) setProfile(null)
@@ -195,7 +196,7 @@ export function WorldBookApp(props: {
                 </select>
               </label>
             ) : (
-              <PillNote tone="mint" compact>世界搭建导入的总世界观在这里。不跟某个角色绑定，也不会出现在短信联系人里。</PillNote>
+              <PillNote tone="mint" compact>世界搭建导入的各条设定可以在这里单独查看和编辑。</PillNote>
             )}
 
             {scope !== 'order' ? <>

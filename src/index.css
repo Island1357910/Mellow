@@ -7,6 +7,8 @@
 @import "./theme/controls.css";
 @import "./theme/apple.css";
 @source not "../services";
+@source not "../integrations";
+@source not "../public";
 
 /* Baseline rules must remain outside @scope for older Android WebViews. */
 .apple-atmosphere, .apple-wallpaper-pattern, .apple-widget-motifs,
@@ -1350,6 +1352,10 @@ button {
   background: var(--m-text);
 }
 
+.desk-pet-layer { position: absolute; inset: 0; pointer-events: none; }
+.desk-pet-layer[hidden] { display: none !important; }
+.desk-pet-layer > * { pointer-events: auto; }
+
 .desk-pet {
   position: absolute;
   left: 0;
@@ -1358,6 +1364,99 @@ button {
   width: 112px;
   height: 112px;
   touch-action: none;
+}
+
+.pet-app-window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  overflow: visible;
+  border: 1px solid var(--m-border, #ddd1d5);
+  border-radius: 18px;
+  background: var(--m-background);
+  box-shadow: 0 14px 36px #38233155;
+}
+.pet-app-window[hidden] { display: none; }
+.pet-window-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  flex-shrink: 0;
+  border-radius: inherit;
+  background: var(--m-surface);
+  color: var(--m-text);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.pet-window-bar button, .pet-window-actions button { display: grid; width: 34px; height: 25px; place-items: center; }
+.pet-window-actions {
+  position: absolute; z-index: 65; top: 27px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 3px; padding: 4px; border-radius: 13px;
+  background: var(--m-surface); box-shadow: 0 5px 18px #38233140;
+}
+.pet-window-content { border-radius: 0 0 17px 17px; isolation: isolate; }
+.pet-window-content .app-screen-header { padding: 5px 10px 7px; gap: 8px; }
+.pet-window-content .app-screen-header h1 { font-size: 16px; line-height: 1.2; }
+.pet-window-content .app-screen-header button[aria-label="返回"] { width: 27px; height: 27px; }
+.pet-window-content .app-screen-body { padding: 0 10px 12px; }
+.pet-window-resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 23px;
+  height: 23px;
+  border-right: 2px solid var(--m-accent);
+  border-bottom: 2px solid var(--m-accent);
+  border-radius: 0 0 8px 0;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.pet-window-dock {
+  position: absolute;
+  right: 0;
+  top: 44%;
+  pointer-events: auto;
+  padding: 10px 8px;
+  border-radius: 12px 0 0 12px;
+  background: var(--m-surface);
+  color: var(--m-text);
+  opacity: 0.78;
+  box-shadow: 0 4px 16px #38233130;
+  font-size: 12px;
+}
+.app-sidebar-handle {
+  position: absolute; z-index: 53; right: 0; top: 17%; width: 18px; height: 58px;
+  display: grid; justify-items: end; align-items: center; background: transparent; touch-action: none;
+}
+.app-sidebar-handle svg {
+  box-sizing: content-box; width: 7px; height: 42px; padding: 0 1px;
+  border: 1px solid #ffffff77; border-right: 0; border-radius: 7px 0 0 7px;
+  background: #eaf3f66b; color: #506673; backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px #20394b22;
+}
+.app-sidebar-scrim { position: absolute; inset: 0; z-index: 54; background: #21374632; }
+.app-sidebar {
+  position: absolute; z-index: 55; right: 12px; top: 9%; bottom: 15%;
+  display: flex; flex-direction: column; width: min(44%, 210px);
+  border: 1px solid #ffffff9e; border-radius: 24px; overflow: hidden;
+  color: #24343a; background: #e6f0f3e8; backdrop-filter: blur(19px);
+  box-shadow: 0 12px 36px #24343a2a;
+}
+.app-sidebar header { display: flex; justify-content: flex-end; gap: 8px; padding: 9px 12px 5px; }
+.app-sidebar header button { display: grid; place-items: center; width: 31px; height: 31px; border-radius: 10px; background: #ffffff70; }
+.app-sidebar-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 6px; overflow-y: auto; padding: 9px 7px 20px; }
+.app-sidebar-grid button { display: grid; justify-items: center; align-content: start; gap: 5px; padding: 4px 0; font-size: 11px; border-radius: 11px; }
+.app-sidebar-grid button[aria-pressed="true"] { background: #ffffffa0; box-shadow: inset 0 0 0 1px #7195a4; }
+.app-sidebar-grid button[aria-pressed="false"] { opacity: .65; }
+.bakery-host { background: #fff7e8; }
+.bakery-back {
+  position: absolute; left: 10px; bottom: 34px; width: 32px; height: 32px;
+  border-radius: 50%; background: #fff4dded; color: #61402a; font-size: 24px;
+  box-shadow: 0 3px 12px #492f2430;
 }
 
 .desk-pet-face {
@@ -1403,17 +1502,6 @@ button {
   padding: 8px 8px 8px 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--m-primary) 78%, white), color-mix(in srgb, var(--m-primary) 42%, white));
 }
-
-.desk-pet-bar-mark {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  overflow: hidden;
-  background: transparent;
-}
-
-.desk-pet-bar-mark img { width: 26px; height: 26px; object-fit: contain; }
 
 .desk-pet-tabs {
   display: grid;

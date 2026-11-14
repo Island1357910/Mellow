@@ -73,7 +73,7 @@ export function FeedHub(props: { onOpen: (page: 'moments' | 'nearby' | 'games') 
   const rows: Array<{ id: 'moments' | 'nearby' | 'games'; title: string; hint: string; tint: string }> = [
     { id: 'moments', title: '朋友圈', hint: '看看别人，也发一条', tint: 'var(--m-primary)' },
     { id: 'nearby', title: '附近的人', hint: '滑过或聊过的，不会再出现', tint: 'var(--m-secondary)' },
-    { id: 'games', title: '游戏', hint: '自己经营，和好友比成绩', tint: '#C9B6E8' },
+    { id: 'games', title: '千味面包房', hint: '研发配方、烘焙和经营', tint: '#C9B6E8' },
   ]
   return (
     <div className="space-y-2.5">
