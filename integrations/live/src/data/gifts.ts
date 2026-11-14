@@ -1,0 +1,116 @@
+import type { Gift } from '../types';
+
+/** 40+ 虚拟礼物，同价位可有不同寓意 */
+export const GIFTS: Gift[] = [
+  // 1 币
+  { id: 'heart', name: '小心心', price: 1, icon: '💗', isBig: false, meaning: '随手一点也是爱' },
+  { id: 'clap', name: '鼓掌', price: 1, icon: '👏', isBig: false, meaning: '给你打call' },
+  { id: 'spark', name: '荧光棒', price: 1, icon: '✨', isBig: false, meaning: '气氛组上线' },
+  // 5-10
+  { id: 'lollipop', name: '棒棒糖', price: 5, icon: '🍭', isBig: false, meaning: '甜甜的小奖励' },
+  { id: 'beer', name: '啤酒', price: 5, icon: '🍺', isBig: false, meaning: '敬你一杯' },
+  { id: 'cookie', name: '小饼干', price: 10, icon: '🍪', isBig: false, meaning: '投喂一口' },
+  { id: 'candy', name: '糖果', price: 10, icon: '🍬', isBig: false, meaning: '今日份甜蜜' },
+  // 20-52
+  { id: 'rose', name: '玫瑰花', price: 20, icon: '🌹', isBig: false, meaning: '经典浪漫' },
+  { id: 'sunflower', name: '向日葵', price: 20, icon: '🌻', isBig: false, meaning: '你是我的小太阳' },
+  { id: 'balloon', name: '气球', price: 30, icon: '🎈', isBig: false, meaning: '把快乐飘给你' },
+  { id: 'icecream', name: '冰淇淋', price: 30, icon: '🍦', isBig: false, meaning: '夏日限定宠爱' },
+  { id: 'kiss', name: '飞吻', price: 52, icon: '💋', isBig: false, meaning: '隔空亲一口' },
+  { id: 'hug', name: '抱抱', price: 52, icon: '🤗', isBig: false, meaning: '想要一个拥抱' },
+  // 66-99
+  { id: 'star', name: '小星星', price: 66, icon: '⭐', isBig: false, meaning: '你在我眼里发光' },
+  { id: 'moon', name: '月亮', price: 66, icon: '🌙', isBig: false, meaning: '今晚只为你亮' },
+  { id: 'cake', name: '蛋糕', price: 88, icon: '🎂', isBig: false, meaning: '庆祝有你' },
+  { id: 'perfume', name: '香水', price: 99, icon: '🧴', isBig: false, meaning: '记住这个味道' },
+  { id: 'lipstick', name: '口红', price: 99, icon: '💄', isBig: false, meaning: '涂给你看' },
+  // 100-520
+  { id: 'bear', name: '泰迪熊', price: 100, icon: '🧸', isBig: false, meaning: '代替我陪你' },
+  { id: 'ring', name: '戒指', price: 199, icon: '💍', isBig: false, meaning: '专属标记' },
+  { id: 'necklace', name: '项链', price: 299, icon: '📿', isBig: false, meaning: '拴住你的心' },
+  { id: 'love520', name: '520', price: 520, icon: '💕', isBig: false, meaning: '我爱你' },
+  { id: 'firework', name: '烟花', price: 520, icon: '🎆', isBig: false, meaning: '为你绽放' },
+  // 1000+
+  { id: 'sportscar', name: '跑车', price: 1000, icon: '🏎️', isBig: true, meaning: '带你兜风' },
+  { id: 'yacht', name: '游艇', price: 1000, icon: '🛥️', isBig: true, meaning: '海上浪漫' },
+  { id: 'plane', name: '私人飞机', price: 5000, icon: '✈️', isBig: true, meaning: '说走就走' },
+  { id: 'rocket', name: '火箭', price: 5000, icon: '🚀', isBig: true, meaning: '直冲云霄' },
+  { id: 'castle', name: '城堡', price: 10000, icon: '🏰', isBig: true, meaning: '为你筑城' },
+  { id: 'island', name: '海岛', price: 10000, icon: '🏝️', isBig: true, meaning: '只属于我们' },
+  { id: 'galaxy', name: '银河', price: 20000, icon: '🌌', isBig: true, meaning: '送你整片星空' },
+  { id: 'crown', name: '皇冠', price: 50000, icon: '👑', isBig: true, meaning: '加冕我的女王' },
+  { id: 'throne', name: '王座', price: 50000, icon: '🪑', isBig: true, meaning: '请你上位' },
+  { id: 'empire', name: '帝王套餐', price: 100000, icon: '💎', isBig: true, meaning: '至尊排面' },
+  { id: 'universe', name: '宇宙', price: 100000, icon: '🪐', isBig: true, meaning: '万物皆你' },
+  // 补充到 40+
+  { id: 'tea', name: '热茶', price: 8, icon: '🍵', isBig: false, meaning: '注意保暖' },
+  { id: 'coffee', name: '咖啡', price: 15, icon: '☕', isBig: false, meaning: '续命一杯' },
+  { id: 'cat', name: '小猫', price: 25, icon: '🐱', isBig: false, meaning: '喵~求摸摸' },
+  { id: 'dog', name: '小狗', price: 25, icon: '🐶', isBig: false, meaning: '汪汪守护' },
+  { id: 'rainbow', name: '彩虹', price: 66, icon: '🌈', isBig: false, meaning: '雨后见彩虹' },
+  { id: 'giftbox', name: '礼盒', price: 128, icon: '🎁', isBig: false, meaning: '惊喜打包' },
+  { id: 'microphone', name: '麦克风', price: 666, icon: '🎤', isBig: false, meaning: '话筒给你' },
+  { id: 'guitar', name: '吉他', price: 888, icon: '🎸', isBig: false, meaning: '只弹给你听' },
+  { id: 'diamond', name: '钻石', price: 1314, icon: '💠', isBig: true, meaning: '一生一世' },
+  { id: 'dragon', name: '神龙', price: 8888, icon: '🐉', isBig: true, meaning: '祥瑞降临' },
+  { id: 'phoenix', name: '凤凰', price: 8888, icon: '🔥', isBig: true, meaning: '浴火为你' },
+  // 更多可打赏选项
+  { id: 'thumbs', name: '点赞', price: 1, icon: '👍', isBig: false, meaning: '认可你' },
+  { id: 'fire', name: '火苗', price: 2, icon: '🔥', isBig: false, meaning: '氛围拉满' },
+  { id: 'note', name: '音符', price: 3, icon: '🎵', isBig: false, meaning: '好听！' },
+  { id: 'bubble_tea', name: '奶茶应援', price: 6, icon: '🧋', isBig: false, meaning: '请你喝一杯' },
+  { id: 'donut', name: '甜甜圈', price: 8, icon: '🍩', isBig: false, meaning: '甜度超标' },
+  { id: 'peach', name: '水蜜桃', price: 9, icon: '🍑', isBig: false, meaning: '粉嫩心动' },
+  { id: 'cherry', name: '樱桃', price: 12, icon: '🍒', isBig: false, meaning: '小巧心意' },
+  { id: 'cactus', name: '仙人掌', price: 16, icon: '🌵', isBig: false, meaning: '我也想被你养' },
+  { id: 'tulip', name: '郁金香', price: 18, icon: '🌷', isBig: false, meaning: '优雅告白' },
+  { id: 'butterfly', name: '蝴蝶', price: 28, icon: '🦋', isBig: false, meaning: '翩翩靠近你' },
+  { id: 'crystal', name: '水晶球', price: 38, icon: '🔮', isBig: false, meaning: '预见我们' },
+  { id: 'love_letter', name: '情书', price: 48, icon: '💌', isBig: false, meaning: '写下想说的话' },
+  { id: 'key', name: '钥匙', price: 77, icon: '🔑', isBig: false, meaning: '打开我的心' },
+  { id: 'lock', name: '同心锁', price: 99, icon: '🔒', isBig: false, meaning: '锁住这一刻' },
+  { id: 'violin', name: '小提琴', price: 188, icon: '🎻', isBig: false, meaning: '为你独奏' },
+  { id: 'camera', name: '相机', price: 233, icon: '📸', isBig: false, meaning: '定格你的美' },
+  { id: 'crown_mini', name: '小皇冠', price: 334, icon: '👑', isBig: false, meaning: '今日榜首预备' },
+  { id: 'love1314', name: '1314', price: 1314, icon: '💞', isBig: true, meaning: '一生一世' },
+  { id: 'love9999', name: '长长久久', price: 9999, icon: '♾️', isBig: true, meaning: '永不分开' },
+  { id: 'meteor', name: '流星雨', price: 6666, icon: '☄️', isBig: true, meaning: '愿望成真' },
+  { id: 'palace', name: '水晶宫', price: 30000, icon: '🏯', isBig: true, meaning: '请你入座' },
+  { id: 'forever', name: '永恒钻戒', price: 88888, icon: '💎', isBig: true, meaning: '只此唯一' },
+  // 第三批：更多打赏礼物
+  { id: 'wave', name: '比心挥手', price: 1, icon: '👋', isBig: false, meaning: '打个招呼' },
+  { id: 'lol', name: '哈哈', price: 1, icon: '😂', isBig: false, meaning: '被你逗笑了' },
+  { id: 'shy', name: '害羞', price: 2, icon: '😳', isBig: false, meaning: '脸红了' },
+  { id: 'cheer', name: '加油鸭', price: 3, icon: '🦆', isBig: false, meaning: '顶你' },
+  { id: 'popcorn', name: '爆米花', price: 4, icon: '🍿', isBig: false, meaning: '围观吃瓜' },
+  { id: 'soda', name: '汽水', price: 5, icon: '🧃', isBig: false, meaning: '清爽一下' },
+  { id: 'marshmallow', name: '棉花糖', price: 7, icon: '☁️', isBig: false, meaning: '软软的喜欢' },
+  { id: 'honey', name: '小蜂蜜', price: 9, icon: '🍯', isBig: false, meaning: '叫你一声宝' },
+  { id: 'panda', name: '熊猫抱枕', price: 15, icon: '🐼', isBig: false, meaning: '国宝级可爱' },
+  { id: 'fox', name: '小狐狸', price: 18, icon: '🦊', isBig: false, meaning: '狡猾地心动' },
+  { id: 'rabbit', name: '兔子灯', price: 22, icon: '🐰', isBig: false, meaning: '蹦蹦跳跳来了' },
+  { id: 'owl', name: '猫头鹰', price: 26, icon: '🦉', isBig: false, meaning: '陪你熬夜' },
+  { id: 'lantern', name: '纸灯笼', price: 33, icon: '🏮', isBig: false, meaning: '照亮你' },
+  { id: 'fan', name: '折扇', price: 36, icon: '🪭', isBig: false, meaning: '风流倜傥' },
+  { id: 'umbrella', name: '油纸伞', price: 42, icon: '☂️', isBig: false, meaning: '为你遮雨' },
+  { id: 'compass', name: '指南针', price: 55, icon: '🧭', isBig: false, meaning: '心向你' },
+  { id: 'hourglass', name: '沙漏', price: 68, icon: '⌛', isBig: false, meaning: '时光为证' },
+  { id: 'mirror', name: '魔镜', price: 88, icon: '🪞', isBig: false, meaning: '你是最美的' },
+  { id: 'trophy', name: '小奖杯', price: 111, icon: '🏆', isBig: false, meaning: '今日最佳' },
+  { id: 'medal', name: '金牌', price: 222, icon: '🥇', isBig: false, meaning: '你是第一名' },
+  { id: 'bouquet', name: '花束', price: 365, icon: '🌸', isBig: false, meaning: '天天想你' },
+  { id: 'piano', name: '三角钢琴', price: 777, icon: '🎹', isBig: false, meaning: '为你弹奏' },
+  { id: 'helicopter', name: '直升机', price: 2000, icon: '🚁', isBig: true, meaning: '接你下班' },
+  { id: 'hotair', name: '热气球', price: 3000, icon: '🎈', isBig: true, meaning: '带你看世界' },
+  { id: 'ferrari', name: '超跑钥匙', price: 8888, icon: '🔑', isBig: true, meaning: '车归你开' },
+  { id: 'mansion', name: '湖景别墅', price: 50000, icon: '🏡', isBig: true, meaning: '家在这里' },
+  { id: 'private_island', name: '私人岛屿+', price: 200000, icon: '🗺️', isBig: true, meaning: '整座岛送你' },
+];
+
+export function getGiftById(id: string): Gift | undefined {
+  return GIFTS.find((g) => g.id === id);
+}
+
+export function getGiftsByPrice(price: number): Gift[] {
+  return GIFTS.filter((g) => g.price === price);
+}
