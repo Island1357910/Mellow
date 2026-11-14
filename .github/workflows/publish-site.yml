@@ -18,6 +18,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Include verified Android 2.0.0 download
+        run: |
+          curl -fsSL --retry 3 https://github.com/Island1357910/Mellow/releases/download/android-v2.0.0/Mellow-2.0.0.apk -o downloads/Mellow-2.0.0.apk
+          (cd downloads && sha256sum -c Mellow-2.0.0.sha256.txt)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
