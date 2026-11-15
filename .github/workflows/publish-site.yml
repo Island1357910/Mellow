@@ -1,0 +1,62 @@
+name: Publish Mellow website
+on:
+  push:
+    branches: [gh-pages]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+  pages: write
+  id-token: write
+concurrency:
+  group: mellow-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and stage the signed Android APK
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 https://github.com/Island1357910/Mellow/releases/download/android-v2.0.4/Mellow-2.0.4.apk -o downloads/Mellow-2.0.4.apk
+          (cd downloads && sha256sum -c Mellow-2.0.4.sha256.txt)
+      - name: Keep the Pages artifact within its size limit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          size=$(du -sb --exclude=.git . | cut -f1)
+          while IFS= read -r path; do
+            [ "$size" -lt 970000000 ] && break
+            file=${path##*/}
+            version=${file#Mellow-}
+            version=${version%.apk}
+            expected="sha256:$(sha256sum "$path" | cut -d' ' -f1)"
+            actual=$(gh release view "android-v$version" --json isDraft,assets --jq "if .isDraft then empty else .assets[] | select(.name == \"$file\" and .state == \"uploaded\") | .digest end" 2>/dev/null || true)
+            if [ "$expected" = "$actual" ]; then
+              size=$((size - $(stat -c %s "$path")))
+              rm -- "$path"
+              echo "$version is available in GitHub Releases"
+            fi
+          done < <(find downloads -maxdepth 1 -type f -name 'Mellow-1.1.*.apk' ! -name 'Mellow-1.1.38.apk' ! -name 'Mellow-1.1.39.apk' | sort -V)
+          test "$size" -lt 970000000
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Wait for the Pages artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..24}; do
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" --jq .total_count)
+            if [ "$count" = 1 ]; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - uses: actions/deploy-pages@v4
+        id: deployment
