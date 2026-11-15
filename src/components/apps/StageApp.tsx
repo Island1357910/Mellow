@@ -1,7 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { STAGE_CATEGORIES, STAGE_KINDS, stageKind, type StageKind } from '../../data/stageKinds.ts'
-import { clampStageEvery, draftStage, loadStagePlays, loadStagePrefs, saveStagePlay, saveStagePrefs, type StagePlay, type StagePrefs } from '../../lib/stage.ts'
+import { clampStageEvery, draftStageBrief, loadStagePlays, loadStagePrefs, saveStagePlay, saveStagePrefs, type StagePlay, type StagePrefs } from '../../lib/stage.ts'
+import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import type { Character } from '../../types/index.ts'
 import { Screen } from '../ui/primitives.tsx'
 
 function coverStyle(kind: StageKind, seed: number): CSSProperties {
@@ -30,6 +32,77 @@ function fallbackKind(play: StagePlay): StageKind {
     wash: ['#F6E7D4', '#E7C4A8'],
     ink: '#8A5A42',
   }
+}
+
+function StageBriefWriter(props: { namespace: string; onSaved: (play: StagePlay) => void }) {
+  const aus = STAGE_KINDS.filter((item) => item.category === '世界AU')
+  const [people, setPeople] = useState<Character[]>([])
+  const [cast, setCast] = useState<string[]>([])
+  const [castQuery, setCastQuery] = useState('')
+  const [auId, setAuId] = useState('')
+  const [wish, setWish] = useState('')
+  const [draft, setDraft] = useState<StagePlay | null>(null)
+  const [busy, setBusy] = useState<'' | 'draft' | 'save'>('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let live = true
+    setCast([])
+    void storage.listCharacters(props.namespace).then((rows) => {
+      if (!live) return
+      setPeople(rows.filter((person) => !person.blocked).sort((a, b) => a.name.localeCompare(b.name, 'zh')))
+    })
+    return () => { live = false }
+  }, [props.namespace])
+  const chosen = new Set(cast)
+  const visible = people.filter((person) => !castQuery.trim() || `${person.name}${person.nickname ?? ''}${person.remark ?? ''}`.includes(castQuery.trim()))
+  const ready = Boolean(wish.trim() || cast.length || auId)
+  const toggle = (id: string) => setCast((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  return (
+    <details className="menu-card mb-3">
+      <summary>写一段番外指令</summary>
+      <p className="stage-hint mt-2">这里生成的是给番外用的写作指令，不是正文。可以多选角色，性格和上下位按原设，不会改成相反的人。</p>
+      <input className="soft-input mt-2" aria-label="搜索角色" placeholder="搜角色" value={castQuery} onChange={(event) => setCastQuery(event.target.value)} />
+      <div className="stage-cast">
+        {visible.map((person) => (
+          <label key={person.id}>
+            <input type="checkbox" checked={chosen.has(person.id)} onChange={() => toggle(person.id)} />
+            <span>{person.remark || person.nickname || person.name}</span>
+          </label>
+        ))}
+        {people.length === 0 ? <p className="stage-hint">这台小手机里还没有角色。</p> : <p className="stage-hint">已选 {cast.length} 人</p>}
+      </div>
+      <div className="stage-cats" role="group" aria-label="世界 AU">
+        <button type="button" className={auId === '' ? 'is-on' : ''} onClick={() => setAuId('')}>不换世界</button>
+        {aus.map((item) => (
+          <button key={item.id} type="button" className={auId === item.id ? 'is-on' : ''} onClick={() => setAuId(item.id)}>{item.name}</button>
+        ))}
+      </div>
+      <textarea className="soft-input" rows={3} aria-label="番外要求" value={wish} onChange={(event) => setWish(event.target.value)} placeholder="这场番外想发生什么。例如：雨夜共处，但不要改人设" />
+      <button type="button" className="chip mt-2" disabled={busy !== '' || !ready} onClick={() => {
+        setBusy('draft')
+        setError('')
+        const picked = people.filter((person) => chosen.has(person.id))
+        void draftStageBrief({ wish, people: picked, kind: stageKind(auId) ?? null }).then((next) => setDraft(next)).catch((reason: unknown) => {
+          setError(reason instanceof Error ? reason.message : '没有生成指令')
+        }).finally(() => setBusy(''))
+      }}>{busy === 'draft' ? '正在写指令' : '生成指令'}</button>
+      {draft ? <>
+        <input className="soft-input mt-2" aria-label="指令标题" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+        <textarea className="soft-input mt-2" rows={8} aria-label="番外指令" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
+        <button type="button" className="chip chip-solid mt-2" disabled={busy !== '' || !draft.title.trim() || !draft.body.trim()} onClick={() => {
+          setBusy('save')
+          setError('')
+          void saveStagePlay(props.namespace, draft).then(() => {
+            props.onSaved(draft)
+            setDraft(null)
+          }).catch((reason: unknown) => {
+            setError(reason instanceof Error ? reason.message : '保存失败')
+          }).finally(() => setBusy(''))
+        }}>保存指令</button>
+      </> : null}
+      {error ? <p role="alert" className="mt-2 text-sm">{error}</p> : null}
+    </details>
+  )
 }
 
 function StageSettings(props: { prefs: StagePrefs; onChange: (next: StagePrefs) => void; onBack: () => void }) {
@@ -70,7 +143,7 @@ function StageSettings(props: { prefs: StagePrefs; onChange: (next: StagePrefs) 
           <span>大约每 {prefs.every} 次来回尝试一场</span>
           <input type="range" min={2} max={20} value={prefs.every} aria-label="小剧场触发间隔" onChange={(event) => props.onChange({ ...prefs, every: clampStageEvery(Number(event.target.value)) })} />
         </label>
-        <p className="stage-hint">已选 {chosen.size} 种。没选中的不会生成。写成之后，手机会提示。</p>
+        <p className="stage-hint">已选 {chosen.size} 种。没选中的不会在聊天里生成。世界 AU 默认不参与随机一场，要的话打开那一类。写成之后，手机会提示。</p>
       </section>
       <input className="soft-input stage-search" aria-label="搜索小剧场种类" placeholder="搜种类" value={query} onChange={(event) => setQuery(event.target.value)} />
       {STAGE_CATEGORIES.map((category) => {
@@ -109,10 +182,7 @@ export function StageApp(props: { onBack: () => void }) {
   const [category, setCategory] = useState('')
   const [open, setOpen] = useState<StagePlay | null>(null)
   const [settings, setSettings] = useState(false)
-  const [wish, setWish] = useState('')
-  const [draft, setDraft] = useState<StagePlay | null>(null)
-  const [working, setWorking] = useState(false)
-  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setNeedle(query.trim()), 300)
@@ -141,13 +211,16 @@ export function StageApp(props: { onBack: () => void }) {
   if (open) {
     const kind = fallbackKind(open)
     return (
-      <Screen title={open.title} subtitle={kind.name} onBack={() => setOpen(null)}>
+      <Screen title={open.title} subtitle={open.form === 'brief' ? '番外指令' : kind.name} onBack={() => { setCopied(false); setOpen(null) }}>
         <article className="stage-detail">
           <StageCover kind={kind} seed={open.seed} tall />
-          <p className="stage-kicker">{kind.category} · {kind.name}</p>
+          <p className="stage-kicker">{open.form === 'brief' ? '番外指令' : kind.category} · {kind.name}</p>
           <p className="stage-lead">{open.blurb}</p>
-          {open.withName ? <p className="stage-with">和{open.withName}有关</p> : null}
+          {open.withName ? <p className="stage-with">按{open.withName}的原设</p> : null}
           <div className="stage-body">{open.body}</div>
+          {open.form === 'brief' ? <button type="button" className="chip" onClick={() => {
+            void navigator.clipboard.writeText(open.body).then(() => setCopied(true)).catch(() => window.alert('没有复制成功'))
+          }}>{copied ? '已复制' : '复制指令'}</button> : null}
         </article>
       </Screen>
     )
@@ -169,27 +242,7 @@ export function StageApp(props: { onBack: () => void }) {
       right={prefs ? <button type="button" className="stage-settings" onClick={() => setSettings(true)}>设置</button> : null}
     >
       {!identity ? <p>先到「设置 → 身份」选一台小手机。</p> : null}
-      {identity ? <details className="menu-card mb-3">
-        <summary>AI 撰写小剧场</summary>
-        <textarea className="soft-input mt-2" rows={3} value={wish} onChange={event => setWish(event.target.value)} placeholder="描述人物、情节和想要的篇幅" />
-        <button type="button" className="chip mt-2" disabled={working || !wish.trim()} onClick={async () => {
-          setWorking(true); setError('')
-          try { setDraft(await draftStage(wish.trim())) }
-          catch (reason) { setError(reason instanceof Error ? reason.message : '撰写失败') }
-          finally { setWorking(false) }
-        }}>撰写</button>
-        {draft ? <>
-          <input className="soft-input mt-2" aria-label="小剧场标题" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
-          <textarea className="soft-input mt-2" rows={8} aria-label="小剧场正文" value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} />
-          <button type="button" className="chip chip-solid mt-2" disabled={working || !draft.title.trim() || !draft.body.trim()} onClick={async () => {
-            setWorking(true); setError('')
-            try { await saveStagePlay(identity.namespace, draft); setOpen(draft); setDraft(null) }
-            catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败') }
-            finally { setWorking(false) }
-          }}>保存小剧场</button>
-        </> : null}
-        {error ? <p role="alert" className="mt-2 text-sm">{error}</p> : null}
-      </details> : null}
+      {identity ? <StageBriefWriter namespace={identity.namespace} onSaved={(play) => { setCopied(false); setOpen(play) }} /> : null}
       <input className="soft-input stage-search" aria-label="搜索已生成的小剧场" placeholder="搜已经写成的" value={query} onChange={(event) => setQuery(event.target.value)} />
       {categories.length > 1 ? (
         <div className="stage-cats" role="tablist" aria-label="已生成的小剧场分类">
@@ -204,10 +257,10 @@ export function StageApp(props: { onBack: () => void }) {
         {shown.map((play) => {
           const kind = fallbackKind(play)
           return (
-            <button key={play.id} type="button" className="stage-card" onClick={() => setOpen(play)}>
+            <button key={play.id} type="button" className="stage-card" onClick={() => { setCopied(false); setOpen(play) }}>
               <StageCover kind={kind} seed={play.seed} />
               <span className="stage-copy">
-                <em>{kind.category} · {kind.name}</em>
+                <em>{play.form === 'brief' ? '指令 · ' : ''}{kind.category} · {kind.name}</em>
                 <strong>{play.title}</strong>
                 <span>{play.blurb}</span>
               </span>

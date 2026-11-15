@@ -1,5 +1,5 @@
 import { moduleAdapter, readJson } from '../lib/ask.ts'
-import { canGenerateAppImages, generateAppImage, SMS_IMAGE_RULE, smsImageDirection, takeSmsImage } from '../lib/appImages.ts'
+import { canGenerateAppImages, characterLookSummary, compactPortrait, generateAppImage, portraitLockOf, SMS_IMAGE_RULE, smsImageDirection, takeSmsImage, usesSenderLook } from '../lib/appImages.ts'
 import { SMS_MONEY_RULE, takeSmsMoney } from './chatMoney.ts'
 import { takePaymentDecision, takeWalletActivity, WALLET_ACTIVITY_RULE } from './characterWallet.ts'
 import { walletTask } from '../lib/wallet.ts'
@@ -207,7 +207,7 @@ function replyNote(chat: Chat): string {
   const { min, max } = replyRange(chat)
   bits.push(
     max > 1
-      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独占一行，这一行只能是 ${SMS_SPLIT}。不要少写后面的尖括号，不要把 <<<分 留在短信正文里，不要编号，也不要写 ===== Page 1 =====。每条只说一个意思。`
+      ? `像真人发短信一样，把这次回复拆成 ${min === max ? max : `${min} 到 ${max}`} 条消息。每条之间单独占一行，这一行只能是 ${SMS_SPLIT}。不要少写后面的尖括号，不要把 <<<分 留在短信正文里，不要编号，也不要写 ===== Page 1 =====。每条只说一个意思，写成连贯的话，不要在同一条里用换行把好几句短话叠在一起。`
       : '这次只发一条消息。',
   )
   if (chat.backstory?.trim()) bits.push(`${chat.kind === 'group' ? '群内公开背景（不视为每位成员都亲历）' : '你和对方的过往与关系（对方补充的，当作你们共同的记忆）'}：\n${chat.backstory.trim()}`)
@@ -218,7 +218,7 @@ function replyNote(chat: Chat): string {
 
 const PROFILE_RULE = `你的头像、个性签名、昵称由你自己做主。只有你真心想改时，才在回复里单独写一行指令（对方看不到指令本身）：
 玩家发来的图片按先后编号，图1最早，数字最大的是刚发的那张。玩家说「这张」「刚发的」，就用数字最大的编号；玩家点明第几张，就用那个编号。
-【换头像：图N】——N 必须是你真正想用的那一张。有多张图时不能不写编号，也不能猜另一张。只有一张图时可以只写【换头像】。
+【换头像：图N】——N 必须是你真正想用的那一张玩家发来的图。有多张图时不能不写编号，也不能猜另一张。只有一张图时可以只写【换头像】。你自己刚生成的照片想用作头像时，写【换头像：自己的】。
 【改签名：新的签名】；
 【改昵称：新的昵称】。
 不想改就不用写，也可以拒绝对方。`
@@ -226,15 +226,21 @@ const PROFILE_RULE = `你的头像、个性签名、昵称由你自己做主。�
 interface ProfileChange {
   avatar: boolean
   avatarIndex?: number
+  avatarFromSelf?: boolean
   signature?: string
   nickname?: string
 }
 
 function takeProfileChange(content: string): { text: string; change: ProfileChange } {
   const change: ProfileChange = { avatar: false }
-  let text = content.replace(/【换头像(?:\s*[:：]\s*图?\s*(\d+))?】/g, (_, raw: string | undefined) => {
+  let text = content.replace(/【换头像(?:\s*[:：]\s*([^\s】]+))?】/g, (_, raw: string | undefined) => {
     change.avatar = true
-    if (raw) change.avatarIndex = Number(raw)
+    const token = raw?.trim() ?? ''
+    if (/^(自己的|这张|刚发的)$/.test(token)) change.avatarFromSelf = true
+    else {
+      const num = token.match(/\d+/)
+      if (num) change.avatarIndex = Number(num[0])
+    }
     return ''
   })
   text = text.replace(/【改签名[:：]\s*([^】]*)】/g, (_, value: string) => {
@@ -249,27 +255,41 @@ function takeProfileChange(content: string): { text: string; change: ProfileChan
   return { text: text.replace(/\n{3,}/g, '\n\n').trim(), change }
 }
 
-async function applyProfileChange(namespace: string, character: Character, chatId: string, history: ChatMessage[], change: ProfileChange): Promise<string[]> {
+async function applyProfileChange(namespace: string, character: Character, chatId: string, history: ChatMessage[], change: ProfileChange, ownImage?: string): Promise<string[]> {
   const notes: string[] = []
-  const next: Character = { ...character, updatedAt: Date.now() }
-  const shown = character.nickname || character.name
+  const current = (await storage.getCharacter(namespace, character.id)) ?? character
+  const next: Character = { ...current, updatedAt: Date.now() }
+  const shown = current.nickname || current.name
+  const selfImage = ownImage?.startsWith('data:') ? ownImage : undefined
   let changed = false
   if (change.avatar) {
-    const images = smsSeenHistory(history).filter((item) => item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:'))
-    const image = change.avatarIndex ? images[change.avatarIndex - 1] : images.length === 1 ? images[0] : undefined
-    if (image) {
-      next.avatar = image.content
+    if (change.avatarFromSelf && selfImage) {
+      next.avatar = selfImage
       changed = true
-      notes.push(`${shown} 换上了你发来的${change.avatarIndex ? `图${change.avatarIndex}` : '头像'}`)
-    } else if (change.avatarIndex) {
-      notes.push(`${shown} 想换头像，但没有图${change.avatarIndex}，所以没换`)
-    } else if (images.length > 1) {
-      notes.push(`${shown} 愿意换头像，但这会儿有 ${images.length} 张图，没有写明用哪一张，所以没换`)
+      notes.push(`${shown} 换上了自己刚发的照片`)
+    } else if (change.avatarFromSelf) {
+      notes.push(`${shown} 想用自己刚发的照片当头像，但这会儿没有那张图`)
     } else {
-      notes.push(`${shown} 想换头像，但这会儿没有能用的图片`)
+      const images = smsSeenHistory(history).filter((item) => item.role === 'user' && item.kind === 'image' && item.content.startsWith('data:'))
+      const image = change.avatarIndex ? images[change.avatarIndex - 1] : images.length === 1 ? images[0] : undefined
+      if (image) {
+        next.avatar = image.content
+        changed = true
+        notes.push(`${shown} 换上了你发来的${change.avatarIndex ? `图${change.avatarIndex}` : '头像'}`)
+      } else if (!change.avatarIndex && images.length === 0 && selfImage) {
+        next.avatar = selfImage
+        changed = true
+        notes.push(`${shown} 换上了自己刚发的照片`)
+      } else if (change.avatarIndex) {
+        notes.push(`${shown} 想换头像，但没有图${change.avatarIndex}，所以没换`)
+      } else if (images.length > 1) {
+        notes.push(`${shown} 愿意换头像，但这会儿有 ${images.length} 张图，没有写明用哪一张，所以没换`)
+      } else {
+        notes.push(`${shown} 想换头像，但这会儿没有能用的图片`)
+      }
     }
   }
-  if (change.signature !== undefined && change.signature !== character.signature) {
+  if (change.signature !== undefined && change.signature !== current.signature) {
     next.signature = change.signature
     changed = true
     notes.push(change.signature ? `${shown} 把签名改成了「${change.signature}」` : `${shown} 清空了签名`)
@@ -483,21 +503,37 @@ export async function replyInChat(input: {
       useMellow.getState().touchData()
     }
     if (allowImage && imagePrompt) {
+      const appearance = `${input.character.description}\n${input.character.personality}`
+      const summary = characterLookSummary(appearance)
+      const saved = portraitLockOf(input.character.extensions)
+      const sameLook = saved?.summary === summary
       const latestRequest = input.proactive
         ? ''
         : [...history].reverse().find(item => item.role === 'user' && item.kind === 'text' && !item.hidden)?.content ?? ''
+      const senderPhoto = usesSenderLook(imagePrompt, latestRequest)
       const image = await generateAppImage('messages', smsImageDirection(
-        imagePrompt, latestRequest, `${input.character.description}\n${input.character.personality}`,
-      ))
+        imagePrompt, latestRequest, appearance, sameLook ? saved?.summary ?? '' : '',
+      ), senderPhoto && sameLook ? saved?.image : undefined)
       if (image) {
         const chat = await storage.getChat(input.namespace, input.chat.id)
         if (chat && !chat.blocked && chat.memberIds.includes(input.character.id)) {
           replies.push(...await deliverReplyParts({ ...delivery, chat, parts: [{ kind: 'image', content: image }], proactive: false }))
+          if (senderPhoto) {
+            try {
+              const fresh = await storage.getCharacter(input.namespace, input.character.id)
+              if (fresh) await storage.putCharacter(input.namespace, {
+                ...fresh,
+                extensions: { ...fresh.extensions, portraitLock: { summary, image: await compactPortrait(image), at: Date.now() } },
+                updatedAt: Date.now(),
+              })
+            } catch { /* 记下形象失败时，这张图仍然留在聊天里 */ }
+          }
         }
       }
     }
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
-    await applyProfileChange(input.namespace, input.character, input.chat.id, all, change)
+    const ownImage = [...replies].reverse().find((item) => item.kind === 'image' && item.content.startsWith('data:'))?.content
+    await applyProfileChange(input.namespace, input.character, input.chat.id, all, change, ownImage)
     if (replies.length) scheduleChatMemory(input.namespace, input.chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
     if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})

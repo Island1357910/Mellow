@@ -44,6 +44,17 @@ export function downloadBytes(filename: string, bytes: Uint8Array, mime: string)
   downloadBlob(filename, new Blob([bytes as BlobPart], { type: mime }))
 }
 
+export function downloadDataUrl(filename: string, dataUrl: string): void {
+  const match = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(dataUrl)
+  if (!match?.[3]) throw new Error('这张图片暂时不能保存')
+  const mime = match[1] || 'image/jpeg'
+  const bytes = match[2]
+    ? Uint8Array.from(atob(match[3]), (char) => char.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(match[3]))
+  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg'
+  downloadBytes(`${filename}.${ext}`, bytes, mime)
+}
+
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
 }

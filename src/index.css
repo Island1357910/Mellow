@@ -172,6 +172,10 @@ button {
   touch-action: manipulation;
 }
 
+.home-pager[data-widget-typing] {
+  touch-action: manipulation;
+}
+
 @media (pointer: coarse) {
   .home-pager [data-home-widget-input] { font-size: 16px; }
   .home-pager[data-widget-typing] .home-toolbar,
@@ -1668,7 +1672,7 @@ button {
 
 .home-pager .desk-pet-card,
 .home-pager .desk-pet-card :is(button, a, img, span) { touch-action: pan-y; }
-.desk-pet-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px 10px 12px; }
+.desk-pet-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; padding: 8px 10px 12px; }
 .desk-pet-card.is-typing {
   top: 44px;
   right: 12px;
@@ -1737,18 +1741,31 @@ button {
 }
 
 .scroll {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  /* pan-x 必须留着。只写 pan-y 时，里面的长输入和选项条都划不动。 */
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
 }
 
-.scroll button,
-.scroll a,
-.scroll label,
-.scroll summary {
-  touch-action: pan-y;
+.scroll :is(button, a, label, summary) {
+  touch-action: pan-x pan-y;
+}
+
+.device :is(input, textarea, select),
+.modal-portal :is(input, textarea, select) {
+  touch-action: pan-x pan-y;
+}
+
+.device :is(.overflow-x-auto, .stage-cats, .bind-strip, .safe-tab-strip, .life-tabs),
+.modal-portal :is(.overflow-x-auto, .stage-cats, .bind-strip, .safe-tab-strip, .life-tabs) {
+  max-width: 100%;
+  min-width: 0;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .scroll::-webkit-scrollbar {

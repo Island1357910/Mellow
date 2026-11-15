@@ -136,7 +136,7 @@ export function buildImagePrompt(description: string, subject: ImageSubject, sty
   return [IMAGE_SUBJECTS[subject].prompt, IMAGE_STYLES[style].prompt, description.trim()].filter(Boolean).join('\n\n')
 }
 
-export async function generateImage(prompt: string, signal: AbortSignal, subject: ImageSubject = 'free', style: ImageStyle = 'free'): Promise<Blob> {
+export async function generateImage(prompt: string, signal: AbortSignal, subject: ImageSubject = 'free', style: ImageStyle = 'free', reference?: string): Promise<Blob> {
   const profile = await readProfile()
   if (!profile) throw new Error('请先保存图片 API 设置')
   const text = prompt.trim()
@@ -146,9 +146,11 @@ export async function generateImage(prompt: string, signal: AbortSignal, subject
   const fullPrompt = buildImagePrompt(text, subject, style)
   if (cloudflare && fullPrompt.length > 2048) throw new Error('请缩短画面描述，Cloudflare 模型的完整提示词最多 2048 字符')
   const headers = { Authorization: `Bearer ${await decryptSecret(profile.encryptedKey)}`, 'Content-Type': 'application/json' }
+  const referenceImage = reference?.startsWith('data:image/') && isSiliconFlow(provider) ? reference : undefined
   const data = cloudflare ? { prompt: fullPrompt } : {
     model: profile.model,
     prompt: fullPrompt,
+    ...(referenceImage ? { image: referenceImage } : {}),
     ...(isSiliconFlow(provider) ? {
       image_size: profile.model.startsWith('Qwen/Qwen-Image') ? '1328x1328' : '1024x1024',
     } : { n: 1 }),

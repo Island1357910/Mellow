@@ -66,7 +66,7 @@ export function SettingsApp(props: { onBack: () => void }) {
           })}
         </nav>
         {group.panes.length > 1 ? (
-          <div className="mt-3 flex flex-wrap gap-2" role="tablist">
+          <div className="safe-tab-strip mt-3" role="tablist">
             {group.panes.map((item) => {
               const on = item.id === pane
               return (

@@ -75,6 +75,17 @@ export function expandReplyParts(parts: string[], stickers?: Sticker[]): ReplySe
   return parts.flatMap((part) => parseReplySegments(part, stickers)).filter((item) => item.content.trim())
 }
 
+/** 条数不够时把两句接成一句人话，不再用换行在同一个气泡里叠短句。 */
+function spokenJoin(prev: string, next: string): string {
+  const left = prev.trim()
+  const right = next.trim()
+  if (!left) return right
+  if (!right) return left
+  if (/[，、：:；;]$/u.test(left)) return left + right
+  if (/[。！？!?…~～]$/u.test(left)) return `${left}${right}`
+  return `${left}，${right}`
+}
+
 /** 合并相邻文字以控制条数，绝不截掉正文或跨越表情包重排消息。 */
 export function capReplySegments(segments: ReplySegment[], textMax: number): ReplySegment[] {
   const out = segments.map(item => ({ ...item }))
@@ -88,7 +99,7 @@ export function capReplySegments(segments: ReplySegment[], textMax: number): Rep
       if (size < shortest) { index = i; shortest = size }
     }
     if (index < 0) break
-    out.splice(index, 2, { kind: 'text', content: `${out[index].content}\n${out[index + 1].content}` })
+    out.splice(index, 2, { kind: 'text', content: spokenJoin(out[index].content, out[index + 1].content) })
     texts--
   }
   return out

@@ -9,7 +9,7 @@ import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
 import { CharacterWorldBookScreen, CharacterWorldBookShortcut } from './WorldBookApp.tsx'
 import { isTrustedVoiceCache, minimaxSpeak, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
 import { modePresetId } from '../../lib/defaults.ts'
-import { downloadJson } from '../../lib/download.ts'
+import { downloadDataUrl, downloadJson } from '../../lib/download.ts'
 import { formatChatTime, initialOf } from '../../lib/format.ts'
 import { messagePreview, voiceDurationSec } from '../../lib/messagePreview.ts'
 import { normalizeMinimaxKey } from '../../engine/minimax.ts'
@@ -368,6 +368,28 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
                 .catch(error => window.alert(error instanceof Error ? error.message : '领取失败，请重试'))
             } : undefined}
             onSpeak={() => speak(message)}
+            onSaveImage={message.kind === 'image' && message.content.startsWith('data:') ? () => {
+              try {
+                downloadDataUrl(`mellow-${message.createdAt}`, message.content)
+              } catch (error) {
+                window.alert(error instanceof Error ? error.message : '这张图片暂时不能保存')
+              }
+              setActionId(null)
+            } : undefined}
+            onUseAvatar={message.kind === 'image' && message.role === 'assistant' && message.content.startsWith('data:') ? () => {
+              const person = people.find((item) => item.id === message.charId)
+              if (!person) return
+              void (async () => {
+                try {
+                  const fresh = (await storage.getCharacter(props.identity.namespace, person.id)) ?? person
+                  await storage.putCharacter(props.identity.namespace, { ...fresh, avatar: message.content, updatedAt: Date.now() })
+                  props.onPeople?.()
+                  setActionId(null)
+                } catch (error) {
+                  window.alert(error instanceof Error ? error.message : '头像没有换成这张图')
+                }
+              })()
+            } : undefined}
             onQuote={() => {
               setQuote({ id: message.id, text: messagePreview(message.content, message.kind).slice(0, 80) })
               setActionId(null)
@@ -689,6 +711,8 @@ function Bubble(props: {
   onRevealVoice: () => void
   onSpeak: () => void
   onQuote: () => void
+  onSaveImage?: () => void
+  onUseAvatar?: () => void
   onStar: () => void
   onDelete: () => void
   onRemove: () => void
@@ -821,6 +845,8 @@ function Bubble(props: {
         </button>
         {props.menuOpen ? (
           <div className="mt-1 flex flex-wrap gap-1">
+            {props.onSaveImage ? <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onSaveImage}>保存图片</button> : null}
+            {props.onUseAvatar ? <button type="button" className="chip chip-pink px-2 py-0.5 text-[10px]" onClick={props.onUseAvatar}>设为头像</button> : null}
             <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onQuote}>引用</button>
             {props.onThought ? <button type="button" className="chip px-2 py-0.5 text-[10px]" onClick={props.onThought}>思维链</button> : null}
             <button type="button" className="chip chip-mint px-2 py-0.5 text-[10px]" onClick={props.onStar}>{message.starred ? '取消收藏' : '收藏'}</button>

@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "check:earnings": "node --import ./scripts/check-env.mjs scripts/check-earnings.ts",
     "check:release": "node --import ./scripts/check-env.mjs scripts/check-release.ts",
     "check:sms": "node --import ./scripts/check-env.mjs scripts/check-sms.ts",
+    "check:stage": "node --import ./scripts/check-env.mjs scripts/check-stage.ts",
     "check:together": "node --import ./scripts/check-env.mjs scripts/check-together.ts",
     "check:mcp": "node --import ./scripts/check-env.mjs scripts/check-mcp.ts",
     "check:netease": "node --import ./scripts/check-env.mjs scripts/check-netease.ts",

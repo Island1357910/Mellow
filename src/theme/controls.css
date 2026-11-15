@@ -203,7 +203,7 @@ button:disabled { cursor: not-allowed; }
 .uno-color-options { display:flex; gap:8px; flex-wrap:wrap; }
 .uno-note { margin-top:12px; min-height:20px; text-align:center; font-size:11px; line-height:1.7; color:#d9e3d9; }
 /* Topic tabs wrap as whole pills and reserve room for selected outlines. */
-.safe-tab-strip { display:flex; flex-wrap:wrap; gap:10px; overflow:visible; padding:7px 7px 9px; margin:0 0 10px; scroll-padding-inline:7px; scrollbar-width:none; overscroll-behavior-x:contain; touch-action:pan-x pan-y; }
+.safe-tab-strip { display:flex; flex-wrap:nowrap; gap:10px; overflow-x:auto; overflow-y:hidden; padding:7px 7px 9px; margin:0 0 10px; scroll-padding-inline:7px; scrollbar-width:none; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y; }
 .safe-tab-strip::-webkit-scrollbar { display:none; }
 .safe-tab-strip>.chip { flex-shrink:0; scroll-margin-inline:8px; }
 .safe-tab-strip,.safe-tab-strip button { touch-action:pan-x pan-y !important; }

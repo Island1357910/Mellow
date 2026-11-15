@@ -69,9 +69,15 @@ assert.equal(chatStatusLine('===== Page 1 =====\n今晚见。'), '今晚见')
 assert.equal(chatStatusLine(''), '在线')
 assert.equal(chatStatusLine('[IDENTITY::LOCK=TRUE]'), '在线')
 const explicit = buildSmsReplySegments('第一句话<<<分>>>第二句话<<<分>>>第三句话<<<分>>>第四句话', range)
-assert.equal(explicit.map(item => item.content).join('').replace(/\n/g, ''), '第一句话第二句话第三句话第四句话')
+assert.equal(explicit.map(item => item.content).join('').replace(/\n/g, ''), '第一句话，第二句话第三句话第四句话')
 const overflow = capReplySegments([{ kind: 'text', content: '一' }, { kind: 'sticker', content: 'image' }, { kind: 'text', content: '二' }, { kind: 'text', content: '三' }], 1)
-assert.equal(overflow.map(item => item.content).join('').replace(/\n/g, ''), '一image二三')
+assert.equal(overflow.map(item => item.content).join('').replace(/\n/g, ''), '一image二，三')
+const stacked = buildSmsReplySegments('好\n只要能让你消气\n想要什么我都给你看\n这下可以原谅我了吗\n亲爱的', { min: 1, max: 2 })
+assert.equal(stacked.length, 2)
+assert.ok(stacked.every(item => !item.content.includes('\n')))
+assert.deepEqual(visibleSmsParts('好\n只要能让你消气\n想要什么我都给你看'), ['好', '只要能让你消气', '想要什么我都给你看'])
+assert.deepEqual(visibleSmsParts('这下可以原谅我了吗\n亲爱的'), ['这下可以原谅我了吗', '亲爱的'])
+assert.deepEqual(visibleSmsParts('我觉得这件事\n没有那么简单。'), ['我觉得这件事没有那么简单。'])
 
 const originalRandom = Math.random
 Math.random = () => 0

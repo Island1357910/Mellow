@@ -19,8 +19,28 @@ export function normalizeSmsSplitMarks(content: string): string {
     .replace(/<<<\s*分\s*(?:>>>|>>|>)?|<<\s*分\s*>>/g, '\n<<<分>>>\n')
 }
 
+/** 上一行还没说完时，换行不另起一条。 */
+function joins(prev: string, next: string): boolean {
+  if (/^\d{1,2}\.$/.test(prev)) return true
+  if (/^[，、）)”」』]/.test(next)) return true
+  if (/[。！？!?…~～」』”"]$/u.test(prev)) return false
+  if (/[，、：:；;（(“「『]$/u.test(prev)) return true
+  return /^(而且|并且|但是|然后|所以|因为|如果|不过|还是|或者|就是|没有那么|并不是)/.test(next)
+}
+
+function groupSpeechLines(block: string): string[] {
+  const lines = block.split(/\n+/u).map((line) => line.trim()).filter(Boolean)
+  const grouped: string[] = []
+  for (const line of lines) {
+    const prev = grouped[grouped.length - 1]
+    if (prev && joins(prev, line)) grouped[grouped.length - 1] = prev + line
+    else grouped.push(line)
+  }
+  return grouped
+}
+
 export function visibleSmsParts(content: string): string[] {
-  const parts = normalizeSmsSplitMarks(content).split(/<<<\s*分\s*>>>/u).map((part) => part.trim()).filter(Boolean)
+  const parts = normalizeSmsSplitMarks(content).split(/<<<\s*分\s*>>>/u).flatMap(groupSpeechLines).map((part) => part.trim()).filter(Boolean)
   return parts.length ? parts : [content.trim()]
 }
 
@@ -95,30 +115,12 @@ function splitText(text: string, max: number): string[] {
   return packSentences(parts, max)
 }
 
-/** 上一行还没说完时，换行不另起一条。 */
-function joins(prev: string, next: string): boolean {
-  if (/^\d{1,2}\.$/.test(prev)) return true
-  if (/^[，、）)”」』]/.test(next)) return true
-  if (/[。！？!?…~～」』”"]$/u.test(prev)) return false
-  if (/[，、：:；;（(“「『]$/u.test(prev)) return true
-  return /^(而且|并且|但是|然后|所以|因为|如果|不过|还是|或者|就是|没有那么|并不是)/.test(next)
-}
-
 export function buildSmsReplySegments(content: string, range: { min: number; max: number }, stickers?: Sticker[]): ReplySegment[] {
   const min = Math.max(1, Math.min(10, Math.round(range.min) || 1))
   const max = Math.max(min, Math.min(10, Math.round(range.max) || 1))
   const raw = content.includes('\\n') && !content.includes('\n') ? content.replace(/\\n/g, '\n') : content
   const normalized = normalizeSmsSplitMarks(raw)
-  const parts = normalized.split(/<<<\s*分\s*>>>/u).flatMap((block) => {
-    const lines = block.split(/\n+/u).map((line) => line.trim()).filter(Boolean)
-    const grouped: string[] = []
-    for (const line of lines) {
-      const prev = grouped[grouped.length - 1]
-      if (prev && joins(prev, line)) grouped[grouped.length - 1] = prev + line
-      else grouped.push(line)
-    }
-    return grouped
-  }).map(stripVoicePrefix).filter(Boolean)
+  const parts = normalized.split(/<<<\s*分\s*>>>/u).flatMap(groupSpeechLines).map(stripVoicePrefix).filter(Boolean)
   const segments = expandReplyParts(parts, stickers)
   const textCount = segments.filter(item => item.kind === 'text').length
   let available = Math.max(0, max - textCount)

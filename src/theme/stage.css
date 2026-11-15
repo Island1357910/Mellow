@@ -57,8 +57,12 @@
 .stage-cats {
   display: flex;
   gap: 6px;
+  max-width: 100%;
   margin-bottom: 12px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .stage-cats button {
@@ -216,6 +220,21 @@
 .stage-kind input { margin-top: 3px; accent-color: var(--m-primary); }
 .stage-kind span { display: grid; gap: 2px; }
 .stage-kind strong { font-size: 14px; font-weight: 600; }
+
+.stage-cast {
+  display: grid;
+  gap: 4px;
+  max-height: 168px;
+  margin: 8px 0;
+  overflow: auto;
+}
+
+.stage-cast label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
 
 .bazaar-shelf { display: grid; gap: 18px; }
 .bazaar-era {

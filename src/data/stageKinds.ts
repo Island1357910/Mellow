@@ -10,7 +10,7 @@ export interface StageKind {
   ink: string
 }
 
-export const STAGE_CATEGORIES = ['纸上', '日子', '时间', '旁观', '相处', '物件', '节目', '心里'] as const
+export const STAGE_CATEGORIES = ['世界AU', '纸上', '日子', '时间', '旁观', '相处', '物件', '节目', '心里'] as const
 
 function kind(
   id: string,
@@ -25,6 +25,20 @@ function kind(
 }
 
 export const STAGE_KINDS: StageKind[] = [
+  kind('sentinel', '哨向', '世界AU', '哨兵与向导只是外壳。谁护着谁、性格的大趋势都按原设，不要对调', 'star', ['#E4E4F6', '#C4C4E4'], '#4A4870'),
+  kind('abo', 'ABO', '世界AU', '第二性别只换世界外壳。信息素点到即可，攻受和性格按原设，不要对调', 'wave', ['#F8E4EE', '#E4C0D4'], '#7A4868'),
+  kind('hanahaki', '花吐症', '世界AU', '说不出口的感情变成花。花和病是情境，人还是原来的人', 'leaf', ['#F8E8F0', '#E4C8D4'], '#7A4C64'),
+  kind('livestream', '直播体', '世界AU', '用一场直播来写。镜头和弹幕是形式，说话方式仍是本人', 'window', ['#E8F2F8', '#C4DCEA'], '#3E6478'),
+  kind('academy', '学院pa', '世界AU', '换成校园身份。年级可以变，处事和性格的大趋势不变', 'paper', ['#F6F0DC', '#E4D8A8'], '#6A5C34'),
+  kind('hp-au', 'HP AU', '世界AU', '魔法学校的外壳。院系和咒语只换场景，不把人写成另一个性格', 'star', ['#E8E4F4', '#C8B8E0'], '#544070'),
+  kind('patron', '网黄&金主', '世界AU', '一个在镜头前，一个在镜头外。金钱和注视是关系外壳，上下位按原设，不写成露骨流程', 'lamp', ['#F8E4D4', '#E8C09A'], '#7A4C32'),
+  kind('fwb', '炮友转正', '世界AU', '从不清不楚走到把关系说开。亲近可以留白，性格不要突然变成另一个人', 'wave', ['#F8E8E4', '#E8C8BC'], '#7A5048'),
+  kind('marry-first', '先婚后爱', '世界AU', '先有婚姻，感情往后长。婚约是外壳，处事仍按原设', 'paper', ['#F8EEE4', '#E8D4C0'], '#6E5644'),
+  kind('smith', '史密斯夫妇', '世界AU', '对外是另一重身份，回家仍是原来的相处。能力和秘密不改性格', 'clock', ['#E8EEF2', '#C4D0DE'], '#3E5870'),
+  kind('forum', '论坛体', '世界AU', '用论坛帖和楼层来写。马甲可以有，掀开之后还是原来的人', 'paper', ['#F4F0E6', '#DDD2BC'], '#5E5644'),
+  kind('apocalypse', '末日pa', '世界AU', '世界坏了，人还按原来的方式做选择。求生是情境，不是换人格', 'rain', ['#E4E8E4', '#C0C8C0'], '#445448'),
+  kind('road', '公路文学', '世界AU', '一段路上的同行。地点在变，两个人的脾气不变', 'leaf', ['#F4F0DC', '#D8E4B4'], '#5A6438'),
+
   kind('sleeve-note', '折进袖口的便笺', '纸上', '一张很小的纸条，边角有折痕，话写得很短', 'paper', ['#F6E7D4', '#E7C4A8'], '#8A5A42'),
   kind('unstamped', '没贴出去的邮票', '纸上', '信已经封好，邮票还捏在指尖', 'paper', ['#F8E4D8', '#E7B7A2'], '#8C4E46'),
   kind('half-reply', '写到一半的回信', '纸上', '句子停在逗号上，墨还没干', 'paper', ['#F3E6DC', '#D9C2AE'], '#6E5348'),
