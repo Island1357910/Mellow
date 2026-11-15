@@ -1,5 +1,6 @@
 import { CLINIC_GIFT } from '../theme/clinic.ts'
 import { WINTER_GIFTS } from '../theme/winter.ts'
+import { LAUNCH_GIFTS } from '../theme/seine.ts'
 import { storage } from '../storage/StorageService.ts'
 import { APPLE_THEME } from '../theme/apple.ts'
 import { walletTask } from './wallet.ts'
@@ -9,9 +10,16 @@ export const APPLE_CODE_START=Date.parse('2026-11-01T00:00:00+08:00')
 export const APPLE_CODE_END=Date.parse('2026-11-08T00:00:00+08:00')
 export const WINTER_CODE_END=Date.parse('2026-11-10T00:00:00+08:00')
 export const CLINIC_CODE_END = Date.parse('2026-11-13T00:00:00+08:00')
+export const LAUNCH_CODE_END = Date.parse('2026-11-24T00:00:00+08:00')
+export const LAUNCH_CODE_DEADLINE = '2026 年 11 月 24 日 00:00（北京时间）'
 export const CLINIC_CODE_DEADLINE = '2026 年 11 月 13 日 00:00（北京时间）'
 export interface RedeemState { claims: Record<string,{at:number;coins:number;themeId?:string}> }
 export function codeReward(code:string,now:number) {
+  const launch = LAUNCH_GIFTS.find(gift => gift.code === code.trim())
+  if (launch) {
+    if (now >= LAUNCH_CODE_END) throw Error(`该兑换码已于 ${LAUNCH_CODE_DEADLINE} 到期`)
+    return { id: launch.id, coins: launch.coins, themeId: launch.theme?.id }
+  }
   if(code.trim()==='半糖Mellow'){
     if(now<APPLE_CODE_START)throw Error('该兑换码于 2026 年 11 月 1 日 00:00（北京时间）开放')
     if(now>=APPLE_CODE_END)throw Error('该兑换码已于 2026 年 11 月 8 日 00:00（北京时间）到期')
@@ -36,6 +44,7 @@ export function codeReward(code:string,now:number) {
 
 export function openRedeemCodes(now = Date.now()): Array<{ code: string; note: string }> {
   const catalog = [
+    ...LAUNCH_GIFTS.map(gift => ({ code: gift.code, note: `${gift.coins} 枚${gift.theme ? `，并获得「${gift.theme.name}」` : ''}。${LAUNCH_CODE_DEADLINE} 截止。` })),
     { code: '半糖Mellow', note: '3000 枚，并获得苹果主题。2026 年 11 月 8 日截止。' },
     { code: '冬天来一杯热可可吧！', note: '2000 枚，热可可主题。2026 年 11 月 10 日截止。' },
     { code: '冰蓝色初冬', note: '2000 枚，冰蓝主题。2026 年 11 月 10 日截止。' },
@@ -56,6 +65,9 @@ export async function restoreRedeemTheme(namespace:string){
   if(saved?.claims?.opening_apple_2026?.themeId===APPLE_THEME.id)await storage.saveTheme(APPLE_THEME)
   for (const gift of WINTER_GIFTS) if (saved?.claims?.[gift.id]?.themeId === gift.theme.id) await storage.saveTheme(gift.theme)
   if (saved?.claims?.[CLINIC_GIFT.id]?.themeId === CLINIC_GIFT.theme.id) await storage.saveTheme(CLINIC_GIFT.theme)
+  for (const gift of LAUNCH_GIFTS) {
+    if (gift.theme && saved?.claims?.[gift.id]?.themeId === gift.theme.id) await storage.saveTheme(gift.theme)
+  }
 }
 const ACCOUNT_NAMESPACE='mellow_account_rewards'
 export async function accountRewards(): Promise<RedeemState> {

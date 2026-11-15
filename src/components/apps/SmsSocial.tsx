@@ -665,7 +665,7 @@ export function MeTab(props: {
   }
   return (
     <div>
-      <div className="overflow-hidden rounded-[28px] bg-white/80">
+        <div className="sms-profile-card overflow-hidden rounded-[28px] bg-white/80">
         <div className="h-28" style={{ background: props.profile.cover ? `center/cover url(${props.profile.cover})` : 'linear-gradient(145deg, var(--m-primary), var(--m-secondary))' }} />
         <div className="flex items-start gap-3 px-4 pb-4">
           <Face value={shown || initialOf(props.profile.nickname || '我')} className="-mt-6 h-16 w-16 overflow-hidden rounded-2xl border-2 border-white text-lg" />
@@ -679,7 +679,7 @@ export function MeTab(props: {
         </div>
         <div className="px-4 pb-4">{[props.profile.gender, props.profile.region, props.profile.birthday].filter(Boolean).join(' · ') ? <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>{[props.profile.gender, props.profile.region, props.profile.birthday].filter(Boolean).join(' · ')}</p> : <PillNote tone="sky" compact>资料还空着</PillNote>}</div>
       </div>
-      <div className="mt-3 space-y-2">
+        <div className="sms-profile-links mt-3 space-y-2">
         <button type="button" className="flex w-full items-center rounded-[22px] bg-[#FFF1F5] px-4 py-3 text-left text-sm" onClick={() => unread[0] && props.onOpenChat(unread[0].id)}>
           <span className="mr-2 grid h-8 w-8 place-items-center rounded-xl bg-[#F3A8BA] text-xs">信</span>
           <span className="flex-1">消息</span>

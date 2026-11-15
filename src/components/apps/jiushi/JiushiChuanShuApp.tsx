@@ -13,6 +13,7 @@ import { storage } from '../../../storage/StorageService.ts'
 import { useMellow } from '../../../store/useMellow.ts'
 import type { Character, Identity } from '../../../types/index.ts'
 import { JiushiNote, JiushiScreen } from './JiushiShell.tsx'
+import { ReplyAssist } from '../ReplyAssist.tsx'
 
 export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }) {
   const dataRevision = useMellow((state) => state.dataRevision)
@@ -47,26 +48,35 @@ export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }
   const thread = letters.find((item) => item.charId === charId)
   const busy = person ? isAiJobRunning(jobKey(props.phone.namespace, 'jiushi-letter', person.id)) : false
 
-  const send = async () => {
-    if (!person || !config || !draft.trim()) return
+  const send = async (text = draft, clearDraft = true) => {
+    if (!person || !config || !text.trim() || busy) return
     touchImmersive('jiushi')
     setNote('正在回信…')
-    runAiJob(jobKey(props.phone.namespace, 'jiushi-letter', person.id), async () => {
-      try {
-        await replyJiushiLetter({
-          namespace: props.phone.namespace,
-          character: person,
-          config,
-          userText: draft.trim(),
-        })
-        setDraft('')
-        setLetters(await listJiushiLetters(props.phone.namespace))
-        setNote('')
-      } catch (error) {
-        setNote(error instanceof Error ? error.message : '传书失败')
-      }
+    await new Promise<void>((resolve, reject) => {
+      const started = runAiJob(jobKey(props.phone.namespace, 'jiushi-letter', person.id), async () => {
+        try {
+          await replyJiushiLetter({
+            namespace: props.phone.namespace,
+            character: person,
+            config,
+            userText: text.trim(),
+          })
+          if (clearDraft) setDraft(current => current === text ? '' : current)
+          setLetters(await listJiushiLetters(props.phone.namespace))
+          setNote('')
+          resolve()
+        } catch (error) {
+          const message = error instanceof Error ? error.message : '传书失败'
+          setNote(message)
+          reject(new Error(message))
+        }
+      })
+      if (!started) reject(new Error('上一封信还在写'))
     })
   }
+  const last = thread?.lines.at(-1)
+  const turnId = !busy && last?.role === 'assistant' ? `${charId}:${last.at}` : ''
+  const context = (thread?.lines ?? []).slice(-6).map(row => `${row.role === 'user' ? '我的来信' : person?.name ?? '对方'}：${row.content.slice(-900)}`).join('\n')
 
   if (!chars.length) {
     return (
@@ -106,6 +116,8 @@ export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }
         {!thread?.lines.length ? <JiushiNote compact>尚无传书，写第一笺吧</JiushiNote> : null}
       </div>
 
+      <ReplyAssist key={charId} namespace={props.phone.namespace} mode="jiushi" turnId={turnId}
+        context={context} draft={draft} disabled={!person || !config || busy} onRewrite={setDraft} onSend={text => send(text, false)} />
       <div className="flex items-end gap-2 border-t px-4 pb-4 pt-3" style={{ borderColor: 'var(--js-border-light)' }}>
         <textarea
           value={draft}
@@ -115,7 +127,7 @@ export function JiushiChuanShuApp(props: { phone: Identity; onBack: () => void }
           className="soft-input min-h-11 flex-1 resize-none leading-6"
           style={{ fontFamily: 'var(--js-serif)' }}
         />
-        <button type="button" className="jiushi-btn jiushi-btn-primary shrink-0 px-4 py-2.5" onClick={() => void send()} disabled={!draft.trim() || busy}>
+        <button type="button" className="jiushi-btn jiushi-btn-primary shrink-0 px-4 py-2.5" onClick={() => void send().catch(error => setNote(error.message))} disabled={!draft.trim() || busy}>
           {busy ? '候笺…' : '寄出'}
         </button>
       </div>

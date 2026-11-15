@@ -8,6 +8,7 @@ import { parseCharacterCard } from '../../lib/sillytavern.ts'
 import { readCoins, spendCoins } from '../../lib/wallet.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
+import { applyEmbeddedTheme } from '../../theme/embeddedTheme.ts'
 import type { AIMessage } from '../../types/index.ts'
 
 type Anchor = {
@@ -29,8 +30,10 @@ export function LiveSimulatorApp({ onBack }: { onBack: () => void }) {
   const namespace = phone.namespace
   const src = `${import.meta.env.BASE_URL}live-simulator/index.html?identity=${encodeURIComponent(namespace)}`
 
-  return <div className={`relative h-full min-h-0 bg-[var(--m-background)] ${Capacitor.isNativePlatform() ? '' : 'pt-8'}`}>
-    <iframe key={namespace} title="神豪模拟器 · 直播间" className="block h-full w-full border-0" src={src} allow="autoplay" onLoad={event => {
+  const native = Capacitor.isNativePlatform()
+  return <div className="embedded-host h-full min-h-0">
+    <iframe key={namespace} title="神豪模拟器 · 直播间" className="embedded-frame" style={native ? undefined : { top: 32 }} src={src} allow="autoplay" onLoad={event => {
+      applyEmbeddedTheme(event.currentTarget, 'live')
       const child = event.currentTarget.contentWindow
       if (!child) return
       const frameUrl = event.currentTarget.src

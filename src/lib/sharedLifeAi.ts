@@ -31,10 +31,13 @@ export async function recentLifeChat(namespace: string, charId: string) {
 
 /** Background observation proposes plans; only the player can confirm them. */
 export async function observeSharedLifeTurn(namespace: string, person: Character, history: ChatMessage[], replyId: string, now = Date.now()) {
+  const latestPlayerMessage = history.slice().reverse().find(message => message.role === 'user' && !message.hidden)
+  if (!latestPlayerMessage) return
+  const observedTurn = `turn:${latestPlayerMessage.id}`
   const before = await ensureSharedCharacter(namespace, person.id), c = characterLife(before, person.id)
-  if (c.processed.includes(replyId)) return
+  if (c.processed.includes(replyId) || c.processed.includes(observedTurn)) return
   const raw = await complete(person, namespace,
-    '分析最新一轮真实对话，把有依据的变化保存到共同生活。返回{"delta":{"familiarity":-3至3,"trust":-3至3,"attraction":-3至3,"reliance":-3至3,"mood":"简短当前感受"},"appointment":null或{"title":"具体约定","place":"地点","at":"带时区的ISO时间","evidence":"对话中的原句"},"giftUse":null或{"id":"现有礼物ID","text":"实际说到怎样用了它"},"eventAdvice":null或{"id":"现有事件ID","text":"玩家实际给出的建议"},"returnGift":null或{"name":"贴合玩家喜好的回礼","reason":"选择原因","cost":24至200}}。只有明确谈到具体未来时间才提议约定，时间不明确必须null，严禁编造玩家已经同意。礼物使用和事件建议必须在本轮对话中真实出现。没有进展delta为0。回礼可以慢慢攒钱，不必每次都产生，亲密也不代表必须恋爱。',
+    '分析最新一轮真实对话，把有依据的变化保存到共同生活。返回{"delta":{"familiarity":-3至3,"trust":-3至3,"attraction":-3至3,"reliance":-3至3,"mood":"简短当前感受"},"appointment":null或{"title":"具体约定","place":"地点","at":"带时区的ISO时间","evidence":"对话中的原句"},"giftUse":null或{"id":"现有礼物ID","text":"实际说到怎样用了它"},"eventAdvice":null或{"id":"现有事件ID","text":"玩家实际给出的建议"},"returnGift":null或{"name":"贴合玩家喜好的回礼","reason":"选择原因","cost":24至200}}。只有明确谈到具体未来时间才提议约定，时间不明确必须null，严禁编造玩家已经同意。礼物使用和事件建议必须在本轮对话中真实出现。没有进展delta为0。亲密付、红包或送礼本身不增加心动。心动依据角色取向、性格和玩家实际相处，友谊也可以始终不转成恋爱。另返回 romanceBoundary 字段：仅在本轮玩家明确拒绝追求或要求只做朋友时为 closed，只有玩家明确说愿意重新接受追求时为 opened，其他为 null。回礼可以慢慢攒钱，不必每次都产生，亲密也不代表必须恋爱。',
     { time: new Date(now).toISOString(), dialogue: history.filter(m => !m.hidden && m.kind !== 'system').slice(-12).map(m => ({ id: m.id, role: m.role, content: describeMessage(m).slice(0, 600) })) }, 1400,
   )
   const delta = raw.delta && typeof raw.delta === 'object' ? raw.delta as Partial<Relationship> : {}
@@ -44,8 +47,10 @@ export async function observeSharedLifeTurn(namespace: string, person: Character
   const returnGift = raw.returnGift as Record<string, unknown> | null
   await changeSharedLife(namespace, s => {
     const current = characterLife(s, person.id)
-    if (current.processed.includes(replyId)) return s
-    const nextChar = { ...current, relationship: adjustRelationship(current.relationship, delta, now), processed: [...current.processed, replyId].slice(-100) }
+    if (current.processed.includes(replyId) || current.processed.includes(observedTurn)) return s
+    const romanceBoundary = raw.romanceBoundary === 'closed' ? 'closed' as const
+      : raw.romanceBoundary === 'opened' ? undefined : current.romanceBoundary
+    const nextChar = { ...current, romanceBoundary, relationship: adjustRelationship(current.relationship, delta, now), processed: [...current.processed, observedTurn].slice(-100) }
     if (returnGift && !current.returnPlan && current.relationship.familiarity >= 25 && now - current.lastReturnAt >= 7 * DAY && text(returnGift.name)) {
       const cost = typeof returnGift.cost === 'number' && Number.isFinite(returnGift.cost) ? Math.max(24, Math.min(200, Math.round(returnGift.cost))) : 48
       nextChar.returnPlan = { name: text(returnGift.name, 60), reason: text(returnGift.reason, 240), cost, saved: 0, lastSavedAt: now, createdAt: now }

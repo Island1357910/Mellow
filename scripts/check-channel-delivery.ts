@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
+import { takeSmsMoney } from '../src/domain/chatMoney.ts'
+import { readCharacterWallet, takeWalletActivity } from '../src/domain/characterWallet.ts'
 import { newSave, putSave, loadConfig, saveConfig, focusChars, buildStoryPrompt } from '../src/engine/story.ts'
 import { smsBridgeForStory, storyBridgeForSms } from '../src/lib/channelBridge.ts'
 import { patchChatMemory } from '../src/lib/chatMemory.ts'
@@ -11,8 +13,53 @@ import { useMellow } from '../src/store/useMellow.ts'
 import type { Character, ChatMessage } from '../src/types/index.ts'
 
 const snap = await storage.boot(), identity = snap.identities[0]!, ns = identity.namespace
+const payment = takeSmsMoney('祝你生日快乐！\n【红包：12.34｜生日快乐】\n【转账：3｜多一笔】', identity.name, 3)
+assert.equal(payment.body, '祝你生日快乐！')
+assert.equal(payment.payment?.kind, 'redpacket')
+assert.equal(payment.payment?.incomingMoney.cents, 411)
+assert.match(payment.payment!.content, /群红包 · 3 份/)
+assert.equal(takeSmsMoney('【转账：201｜超限】', identity.name).payment, undefined)
+const transfer = takeSmsMoney('【转账：12.34｜给你的】', '玩家', 3)
+assert.equal(transfer.payment?.incomingMoney.cents, 1234)
+assert.match(transfer.payment!.content, /给 玩家/)
+const received: ChatMessage = {
+  ...payment.payment!, id: 'claim-regression', chatId: 'claim-group', role: 'assistant',
+  charId: 'a', createdAt: 1, status: 'sent',
+}
+await storage.putMessage(ns, received)
+await assert.rejects(storage.claimChatMoney(ns, 'another-chat', received.id), /不可领取/)
+await Promise.all([storage.claimChatMoney(ns, received.chatId, received.id), storage.claimChatMoney(ns, received.chatId, received.id)])
+const [claimed] = await storage.listMessages(ns, received.chatId)
+assert.ok(claimed?.incomingMoney?.claimedAt)
+await storage.updateMessage(ns, { ...received, starred: true })
+assert.deepEqual((await storage.listMessages(ns, received.chatId))[0]?.incomingMoney, claimed?.incomingMoney)
 const a = { id: 'a', name: '甲', nickname: '', remark: '', description: '', personality: '', scenario: '', mesExample: '', systemPrompt: '', postHistoryInstructions: '', extensions: {} } as Character
 const b = { ...a, id: 'b', name: '乙' }
+assert.equal(readCharacterWallet(null, { ...a, description: '手头只有 12.50 元' }).balanceCents, 1250)
+assert.equal(readCharacterWallet(null, { ...a, description: '身无分文' }).balanceCents, 0)
+assert.equal(readCharacterWallet(null, { ...a, description: '经济拮据' }).balanceCents, 2000)
+assert.equal(readCharacterWallet({ balanceCents: 0 }, { ...a, description: '家境殷实' }).balanceCents, 0)
+assert.deepEqual(takeWalletActivity('我刚刚结了稿费。\n【记账：收入｜15.20｜结了稿费】'), {
+  body: '我刚刚结了稿费。', activity: { delta: 1520, evidence: '结了稿费' },
+})
+assert.equal(takeWalletActivity('还没收到。\n【记账：收入｜15.20｜结了稿费】').activity, undefined)
+await storage.putCharacter(ns, a)
+await storage.putChat(ns, { id: 'wallet-chat', kind: 'group', title: '群聊', memberIds: [a.id, b.id], unread: 0 } as import('../src/types/index.ts').Chat)
+const beforeCoins = await storage.getBag(ns, 'coins')
+const walletOrder: Delivery = { id: 'wallet-order', shop: 'duotao', items: [{ name: '茶', qty: 1, price: 6 }], total: 6, recipient: 'self', recipientName: '我', told: false, note: '', createdAt: 1, arrivesAt: 2, reacted: false, payerId: a.id }
+await storage.updateCharacterWallet(ns, a.id, wallet => ({ ...wallet, balanceCents: 1_000 }))
+await assert.rejects(storage.purchaseDelivery(ns, walletOrder), /亲密付目前不可用/)
+await storage.updateCharacterWallet(ns, a.id, wallet => ({ ...wallet, authorization: 'approved' }))
+const fundedCard: ChatMessage = { ...received, id: 'funded-payment', chatId: 'wallet-chat', charId: a.id, incomingMoney: { cents: 500, totalCents: 500 } }
+const competing = await Promise.allSettled([
+  storage.fundCharacterMessage(ns, fundedCard),
+  storage.purchaseDelivery(ns, walletOrder),
+])
+const paidCard = competing[0]?.status === 'fulfilled' && competing[0].value
+const paidOrder = competing[1]?.status === 'fulfilled'
+assert.equal(Number(paidCard) + Number(paidOrder), 1)
+assert.equal((await storage.characterWallet(ns, a.id)).balanceCents, paidCard ? 500 : 400)
+assert.equal(await storage.getBag(ns, 'coins'), beforeCoins)
 const save = newSave('首次线下', { lines: [
   { id: 'u1', role: 'user', content: '和甲去吃华夫饼', createdAt: 1, participantIds: ['a'] },
   { id: 'a1', role: 'assistant', content: '甲已经接到你，约好了吃草莓华夫饼', createdAt: 2, participantIds: ['a'] },

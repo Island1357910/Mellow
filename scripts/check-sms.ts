@@ -65,8 +65,9 @@ assert.deepEqual(repaired.map(item => item.content), ['我没点接收，这分�
 assert.ok(repaired.every(item => !item.content.includes('<<<') && !/page/i.test(item.content)))
 assert.deepEqual(visibleSmsParts(leaked), ['我没点接收，这分手就不作数。', '把门锁好，我进地下车库了。'])
 assert.deepEqual(visibleSmsParts('我现在上电梯了。\n<<<分\n既然你有胆量提分手。\n<<<分'), ['我现在上电梯了。', '既然你有胆量提分手。'])
-assert.equal(chatStatusLine('===== Page 1 =====', '今晚见。'), '今晚见')
-assert.equal(chatStatusLine('', '===== Page 1 =====\n地下车库见。'), '地下车库见')
+assert.equal(chatStatusLine('===== Page 1 =====\n今晚见。'), '今晚见')
+assert.equal(chatStatusLine(''), '在线')
+assert.equal(chatStatusLine('[IDENTITY::LOCK=TRUE]'), '在线')
 const explicit = buildSmsReplySegments('第一句话<<<分>>>第二句话<<<分>>>第三句话<<<分>>>第四句话', range)
 assert.equal(explicit.map(item => item.content).join('').replace(/\n/g, ''), '第一句话第二句话第三句话第四句话')
 const overflow = capReplySegments([{ kind: 'text', content: '一' }, { kind: 'sticker', content: 'image' }, { kind: 'text', content: '二' }, { kind: 'text', content: '三' }], 1)
@@ -116,7 +117,7 @@ assert.equal(dmBuilt.messages[1]!.content, '我在家。')
 const before = new Set((await storage.listMessages(identity.namespace, chat.id)).map(item => item.id))
 await storage.saveApiProfile({ name: 'sms-test', endpoint: 'https://example.test/v1', model: 'test', key: 'test-only', ready: true })
 const complete = AIAdapter.prototype.complete
-AIAdapter.prototype.complete = async () => ({ content: '<think source="model">hidden reasoning 【改昵称：错误昵称】</think>' + sample, model: 'test' })
+AIAdapter.prototype.complete = async () => ({ content: '<think source="model">hidden reasoning 【改昵称：错误昵称】</think>' + sample + '\n【发图：anime | 一幅插画】', model: 'test' })
 useMellow.setState({ viewingChatId: chat.id })
 Math.random = () => 0
 try {
@@ -127,7 +128,7 @@ try {
   assert.ok(saved.filter(item => item.kind === 'text' || item.kind === 'voice').length >= 3)
   assert.ok(saved.every(item => item.kind !== 'voice' || isSpeakableSms(item.content)))
   assert.ok(saved.at(-1)?.content.endsWith('哪儿也不去。'))
-  assert.ok(saved.every(item => !/hidden reasoning|错误昵称|<think/.test(item.content)))
+  assert.ok(saved.every(item => !/hidden reasoning|错误昵称|<think|【发图/.test(item.content)))
   assert.notEqual((await storage.getCharacter(identity.namespace, character.id))?.nickname, '错误昵称')
 } finally {
   AIAdapter.prototype.complete = complete

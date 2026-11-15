@@ -1,10 +1,10 @@
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { importChatBackground } from '../../lib/wallpaper.ts'
 import { AIError } from '../../engine/AIAdapter.ts'
-import { postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
+import { chooseGroupSpeakers, postPaidGiftMessage, postUserText, replyInChat, replyRange } from '../../domain/messaging.ts'
 import { readWorld, type WorldEntry } from '../../lib/worldbook.ts'
 import { CharacterWorldBookScreen, CharacterWorldBookShortcut } from './WorldBookApp.tsx'
 import { isTrustedVoiceCache, minimaxSpeak, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
@@ -27,6 +27,7 @@ import { CallScreen, CardBubble, GiftSheet, MoneySheet } from './ChatExtras.tsx'
 import { ChatMemoryPanel } from './ChatMemoryPanel.tsx'
 import { StickerShelf } from './StickerShelf.tsx'
 import { apiErrorText } from '../../lib/apiErrorText.ts'
+import { ReplyAssist, splitAssistedSms } from './ReplyAssist.tsx'
 
 type ToolId = 'album' | 'sticker' | 'redpacket' | 'transfer' | 'party' | 'anon'
 
@@ -54,7 +55,10 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const refreshInbox = useMellow((state) => state.refreshInbox)
   const setViewingChat = useMellow((state) => state.setViewingChat)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [visibleCount, setVisibleCount] = useState(80)
   const [draft, setDraft] = useState('')
+  const [assistedDraft, setAssistedDraft] = useState(false)
+  const assistedSend = useRef(false)
   const [panel, setPanel] = useState<'tools' | 'stickers' | null>(null)
   const [menu, setMenu] = useState(false)
   const [worldBookOpen, setWorldBookOpen] = useState(false)
@@ -72,6 +76,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [worldRows, setWorldRows] = useState<WorldEntry[]>([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const previousScroll = useRef<{ height: number; top: number } | null>(null)
   const replyLock = useRef(false)
   const chat = props.chat
   const people = chat.memberIds.map((id) => props.characters.find((item) => item.id === id)).filter((item): item is Character => Boolean(item))
@@ -79,8 +84,9 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const typing = pending === chat.id
   const title = chat.remark?.trim() || (chat.kind === 'dm' ? primary?.nickname : '') || chat.title
   const tools = chat.kind === 'group' ? GROUP_TOOLS : DM_TOOLS
-  const status = typing ? '正在输入中……' : chat.kind === 'group' ? `${people.length} 人` : chatStatusLine(primary?.signature, primary?.personality)
+  const status = typing ? '正在输入中……' : chat.kind === 'group' ? `${people.length} 人` : chatStatusLine(primary?.signature)
   const scope = `chat-${chat.id.replace(/[^a-zA-Z0-9_-]/g, '')}`
+  const visibleMessages = messages.filter(message => !message.hidden)
 
   const reload = async () => {
     setMessages(await storage.listMessages(props.identity.namespace, chat.id))
@@ -89,24 +95,21 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
 
   useEffect(() => {
     setViewingChat(chat.id)
-    void reload().then(() => storage.markChatRead(props.identity.namespace, chat.id).then(() => refreshInbox()))
     return () => setViewingChat(null)
-    // 打开会话时拉一次记录
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.id, props.identity.namespace])
+  }, [chat.id, setViewingChat])
 
   useEffect(() => {
-    void reload().then(() => storage.markChatRead(props.identity.namespace, chat.id).then(() => refreshInbox()))
+    let current = true
+    const namespace = props.identity.namespace
+    void storage.listMessages(namespace, chat.id).then(async next => {
+      if (!current) return
+      setMessages(next)
+      await storage.markChatRead(namespace, chat.id)
+      if (current) await refreshInbox()
+    })
+    return () => { current = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataRevision, chat.id])
-
-  useEffect(() => {
-    if (pending !== chat.id) return
-    const timer = window.setInterval(() => {
-      void reload().then(() => storage.markChatRead(props.identity.namespace, chat.id).then(() => refreshInbox()))
-    }, 450)
-    return () => window.clearInterval(timer)
-  }, [pending, chat.id, props.identity.namespace, refreshInbox])
+  }, [dataRevision, chat.id, props.identity.namespace])
 
   const toBottom = () => {
     const node = scrollRef.current
@@ -114,6 +117,13 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   }
 
   useEffect(toBottom, [messages, typing])
+
+  useLayoutEffect(() => {
+    const node = scrollRef.current
+    const previous = previousScroll.current
+    if (node && previous) node.scrollTop = previous.top + node.scrollHeight - previous.height
+    previousScroll.current = null
+  }, [visibleCount])
 
   useEffect(() => {
     if (!menu) return
@@ -129,7 +139,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
   const send = async (text: string, kind: MessageKind = 'text') => {
     const body = text.trim()
     if (!body) return
-    if (kind === 'text' || kind === 'voice') setDraft('')
+    if (kind === 'text' || kind === 'voice') { setDraft(''); setAssistedDraft(false) }
     await postUserText({
       namespace: props.identity.namespace,
       identity: props.identity,
@@ -142,6 +152,35 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
     setQuote(null)
     await reload()
   }
+
+  const sendAssisted = async (text: string, clearDraft = false) => {
+    if (assistedSend.current) return
+    const parts = splitAssistedSms(text)
+    if (!parts.length) return
+    assistedSend.current = true
+    try {
+      await postUserText({
+        namespace: props.identity.namespace,
+        identity: props.identity,
+        chat,
+        text: anon ? `匿名：${parts[0]}` : parts[0]!,
+        additionalTexts: parts.slice(1).map(part => anon ? `匿名：${part}` : part),
+        kind: anon ? 'anon' : 'text',
+        quoteOf: quote?.id ?? null,
+        quoteText: quote?.text ?? null,
+      })
+      if (clearDraft) { setDraft(''); setAssistedDraft(false) }
+      setQuote(null)
+    } finally {
+      assistedSend.current = false
+      await reload()
+    }
+  }
+
+  const lastMessage = messages.filter(item => item.role !== 'system' && !item.hidden).at(-1)
+  const assistTurn = !typing && lastMessage?.role === 'assistant' ? lastMessage.id : ''
+  const assistContext = messages.filter(item => !item.hidden && item.kind === 'text').slice(-8)
+    .map(item => `${item.role === 'user' ? props.identity.name : people.find(person => person.id === item.charId)?.name ?? '对方'}：${item.content.slice(-700)}`).join('\n')
 
   const patchMessage = async (message: ChatMessage) => {
     await storage.updateMessage(props.identity.namespace, message)
@@ -190,28 +229,32 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
 
   const reply = async () => {
     if (replyLock.current || typing) return
-    const speaker = nextSpeaker(chat, people, messages)
-    if (!speaker) return
+    if (!people.length) return
     replyLock.current = true
     beginReply(chat.id)
     try {
-      await replyInChat({
-        namespace: props.identity.namespace,
-        identity: props.identity,
-        character: speaker,
-        chat,
-        presets,
-        activePresetId: modePresetId(settings, 'sms'),
-        fourthWall: settings.fourthWall,
-        voiceReady: settings.minimax.ready,
-      })
-      await reload()
+      const speakers = chat.kind === 'group' && !chat.blocked
+        ? await chooseGroupSpeakers({ namespace: props.identity.namespace, identity: props.identity, chat, people })
+        : people.slice(0, 1)
+      for (const speaker of speakers) {
+        await replyInChat({
+          namespace: props.identity.namespace,
+          identity: props.identity,
+          character: speaker,
+          chat,
+          presets,
+          activePresetId: modePresetId(settings, 'sms'),
+          fourthWall: settings.fourthWall,
+            voiceReady: settings.minimax.ready,
+        })
+        await reload()
+      }
       const fresh = await storage.getChat(props.identity.namespace, chat.id)
       if (fresh) props.onChat(fresh)
       props.onPeople?.()
     } catch (error) {
       if (error instanceof AIError && error.message === 'BUSY') return
-      throw error
+      window.alert(error instanceof Error ? error.message : '这轮回复没有生成，请重试。')
     } finally {
       replyLock.current = false
       endReply()
@@ -297,11 +340,19 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         )}
       </header>
       <div ref={scrollRef} className="scroll min-h-0 flex-1 space-y-2 px-4 pb-2" onClick={() => setPanel(null)}>
-        {messages.filter((item) => !item.hidden).map((message) => (
+        {visibleMessages.length > visibleCount && (
+          <button type="button" className="chip mx-auto block" onClick={() => {
+            const node = scrollRef.current
+            if (node) previousScroll.current = { height: node.scrollHeight, top: node.scrollTop }
+            setVisibleCount(count => count + 80)
+          }}>加载更早的消息</button>
+        )}
+        {visibleMessages.slice(-visibleCount).map((message) => (
           <Bubble
             key={message.id}
             message={message}
             people={people}
+            group={chat.kind === 'group'}
             canSpeak={settings.minimax.ready}
             speaking={speaking === message.id}
             voiceRevealed={Boolean(revealedVoice[message.id])}
@@ -311,6 +362,11 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             onToggleSelect={() => toggleSelected(message.id)}
             onMenu={() => setActionId((current) => (current === message.id ? null : message.id))}
             onRevealVoice={() => setRevealedVoice((current) => ({ ...current, [message.id]: true }))}
+            onClaimMoney={message.role === 'assistant' && message.incomingMoney && !message.incomingMoney.claimedAt
+              && (message.kind === 'redpacket' || message.kind === 'transfer') ? () => {
+              void storage.claimChatMoney(props.identity.namespace, chat.id, message.id).then(reload)
+                .catch(error => window.alert(error instanceof Error ? error.message : '领取失败，请重试'))
+            } : undefined}
             onSpeak={() => speak(message)}
             onQuote={() => {
               setQuote({ id: message.id, text: messagePreview(message.content, message.kind).slice(0, 80) })
@@ -347,13 +403,16 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             <button type="button" className="chip chip-pink shrink-0 px-2 py-0.5 text-[10px]" onClick={() => setQuote(null)}>取消</button>
           </div>
         ) : null}
-        {!selectMode ? (
+        {!selectMode ? (<>
+        <ReplyAssist key={chat.id} namespace={props.identity.namespace} mode="messages" turnId={assistTurn} context={assistContext}
+          draft={draft} disabled={typing || voice} onRewrite={(text) => { setDraft(text); setAssistedDraft(true) }} onSend={text => sendAssisted(text)} />
         <form
           className="conversation-composer flex items-center gap-1.5 px-3 pt-1 transition-[padding]"
           style={{ paddingBottom: panel ? 8 : 56 }}
           onSubmit={(event) => {
             event.preventDefault()
-            void send(draft, voice ? 'voice' : 'text')
+            if (assistedSend.current) return
+            void (assistedDraft && !voice ? sendAssisted(draft, true) : send(draft, voice ? 'voice' : 'text')).catch(() => window.alert('发送未完成，请查看会话后重试'))
           }}
         >
           <button
@@ -396,7 +455,7 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
             <SendHorizontal size={17} />
           </button>
         </form>
-        ) : null}
+        </>) : null}
         {!selectMode ? (
         <AnimatePresence initial={false}>
           {panel ? (
@@ -451,10 +510,8 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
           activePresetId={modePresetId(settings, 'sms')}
           fourthWall={settings.fourthWall}
           voiceEnabled={Boolean(chat.voiceEnabled && settings.minimax.ready)}
-          onEnd={(content) => {
-            setCalling(false)
-            void send(content, 'call')
-          }}
+          onClose={() => setCalling(false)}
+          onEnd={(content) => { void send(content, 'call').catch(() => window.alert('通话已结束，但未能保存记录')) }}
         />
       ) : null}
       {menu ? (
@@ -542,13 +599,6 @@ function bubbleSheet(scope: string, radius: number, shape: BubbleStyle, custom: 
     `.${scope} .b-mine{${cleanCss(custom?.mine)}}`,
     `.${scope} .b-theirs{${cleanCss(custom?.theirs)}}`,
   ].join('\n')
-}
-
-function nextSpeaker(chat: Chat, people: Character[], messages: ChatMessage[]): Character | undefined {
-  if (chat.kind === 'dm') return people[0]
-  const last = [...messages].reverse().find((item) => item.role === 'assistant' && item.charId)
-  const index = people.findIndex((item) => item.id === last?.charId)
-  return people[(index + 1) % people.length] ?? people[0]
 }
 
 function waveOf(text: string) {
@@ -643,6 +693,8 @@ function Bubble(props: {
   onDelete: () => void
   onRemove: () => void
   onThought?: () => void
+  onClaimMoney?: () => void
+  group: boolean
 }) {
   const hold = useRef(0)
   const skipClick = useRef(false)
@@ -733,6 +785,9 @@ function Bubble(props: {
       {!mine && !selectable ? <MiniFace name={person?.nickname || person?.name || '群'} avatar={person?.avatar ?? ''} /> : null}
       {!mine && selectable ? check : null}
       <div className={mine ? 'flex flex-col items-end' : ''}>
+        {props.group && person && message.incomingMoney && !selectable && (
+          <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>{person.nickname || person.name}</p>
+        )}
         {!mine && message.starred && !selectable ? <p className="mb-0.5 text-[10px]" style={{ color: 'var(--m-text-secondary)' }}>已收藏</p> : null}
         <button
           type="button"
@@ -752,7 +807,8 @@ function Bubble(props: {
               skipClick.current = false
               return
             }
-            props.onMenu()
+            if (props.onClaimMoney) props.onClaimMoney()
+            else props.onMenu()
           }}
           onContextMenu={(event) => {
             if (selectable) return

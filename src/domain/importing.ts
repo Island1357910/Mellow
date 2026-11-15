@@ -1,6 +1,8 @@
 import { presetFromUnknown } from '../data/officialPresets.ts'
 import { eventBus } from '../engine/EventBus.ts'
 import { uid } from '../lib/id.ts'
+import { checkImportSize, readFileText } from '../lib/fileSnapshot.ts'
+import { importChatBackground } from '../lib/wallpaper.ts'
 import { resolveImportJson, resolveImportText } from '../lib/cardTextImport.ts'
 import { looksLikeCharacter, parseCharacterCards } from '../lib/sillytavern.ts'
 import type { CardDraft } from '../lib/sillytavern.ts'
@@ -13,15 +15,6 @@ import { ensureDirectChat } from './messaging.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-async function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(new Error('头像没有读出来'))
-    reader.readAsDataURL(file)
-  })
 }
 
 export async function characterFromDraft(
@@ -70,7 +63,7 @@ export async function importCardFile(
   let avatar = ''
   const { card: raw, via } = await resolveImportJson(file, 'character', onProgress)
   const drafts = parseCharacterCards(raw)
-  if (isPng) avatar = await fileToDataUrl(file)
+  if (isPng) avatar = await importChatBackground(file).catch(() => '')
   const characters: Character[] = []
   for (const draft of drafts) {
     characters.push(await characterFromDraft(identity.namespace, draft, avatar))
@@ -115,7 +108,8 @@ export async function importDroppedJson(
     const { characters } = await importCardFile(file, identity)
     return { kind: 'character', name: characters.map((item) => item.name).join('、'), id: characters[0]?.id ?? '' }
   }
-  const raw = JSON.parse(await file.text()) as unknown
+  checkImportSize(file, 16)
+  const raw = JSON.parse(await readFileText(file)) as unknown
   const theme = themeFromUnknown(raw)
   if (theme) {
     await storage.saveTheme(theme)
@@ -127,7 +121,12 @@ export async function importDroppedJson(
     return { kind: 'preset', name: preset.name, id: preset.id }
   }
   if (looksLikeCharacter(raw) || (Array.isArray(raw) && raw.some((item) => looksLikeCharacter(item)))) {
-    const { characters } = await importCardFile(file, identity)
+    const characters = []
+    for (const draft of parseCharacterCards(raw)) characters.push(await characterFromDraft(identity.namespace, draft))
+    eventBus.emit({
+      type: 'import_char', app: 'messages', identityId: identity.id,
+      meta: { count: characters.length, name: characters[0]?.name ?? '' },
+    })
     return { kind: 'character', name: characters.map((item) => item.name).join('、'), id: characters[0]?.id ?? '' }
   }
   if (isRecord(raw) && (raw.entries || raw.character_book)) {

@@ -44,29 +44,36 @@ export async function importWallpaper(file: File): Promise<string> {
 const CHAT_IMAGE_BYTES = 2 * 1024 * 1024
 const CHAT_IMAGE_EDGE = 1600
 
-export async function importChatBackground(file: File): Promise<string> {
+export async function importChatBackground(file: File, { maxBytes = CHAT_IMAGE_BYTES, maxEdge = CHAT_IMAGE_EDGE } = {}): Promise<string> {
   if (!file.size) throw new Error('图片是空文件，请重新选择')
-  const header = await file.slice(0, 1024).arrayBuffer()
-  const type = wallpaperMime(new Uint8Array(header), file.type)
+  if (file.size > 16 * 1024 * 1024) throw new Error('图片超过 16 MB，请先缩小后重试')
+  const header = await readFileBytes(file.slice(0, 1024))
+  const type = wallpaperMime(header, file.type)
+  if (type === 'image/png' && header.byteLength >= 24 && header[0] === 137) {
+    const dimensions = new DataView(header.buffer, header.byteOffset, header.byteLength)
+    if (dimensions.getUint32(16) * dimensions.getUint32(20) > 16_000_000) {
+      throw new Error('PNG 像素过多，请先缩小后重试')
+    }
+  }
   const source = file.slice(0, file.size, type)
   const url = URL.createObjectURL(source)
   try {
     const image = await loadImage(url)
     const longestEdge = Math.max(image.naturalWidth, image.naturalHeight)
-    if (source.size <= CHAT_IMAGE_BYTES && longestEdge <= CHAT_IMAGE_EDGE) return await imageDataUrl(source)
+    if (source.size <= maxBytes && longestEdge <= maxEdge) return await imageDataUrl(source)
 
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d')
     if (!context || !longestEdge) throw new Error('图片无法缩小，请换一张图重试')
     const outputType = type === 'image/jpeg' ? 'image/jpeg' : 'image/webp'
     try {
-      for (let edge = Math.min(longestEdge, CHAT_IMAGE_EDGE); edge >= 1; edge = Math.floor(edge / 2)) {
+      for (let edge = Math.min(longestEdge, maxEdge); edge >= 1; edge = Math.floor(edge / 2)) {
         const scale = edge / longestEdge
         canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
         canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
         context.drawImage(image, 0, 0, canvas.width, canvas.height)
         const resized = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, outputType, 0.88))
-        if (resized?.size && resized.size <= CHAT_IMAGE_BYTES) return await imageDataUrl(resized)
+        if (resized?.size && resized.size <= maxBytes) return await imageDataUrl(resized)
       }
       throw new Error('图片无法缩小，请换一张图重试')
     } finally {

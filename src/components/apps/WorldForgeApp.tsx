@@ -2,8 +2,9 @@ import { Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { cardImportAccept, resolveImportJson } from '../../lib/cardTextImport.ts'
+import { readDocxFile } from '../../lib/docxText.ts'
 import { loadJiushiConfig } from '../../lib/jiushi.ts'
-import { applyForgeResult, forgeWithReferences, forgeWorldFromCard, forgeWorldFromProse, reviseForgeResult, type ForgeResult } from '../../lib/worldForge.ts'
+import { applyForgeResult, forgeWithReferences, forgeWorldFromCard, forgeWorldFromDocument, forgeWorldFromProse, reviseForgeResult, type ForgeResult } from '../../lib/worldForge.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { loreEntries } from '../../lib/sillytavern.ts'
 import type { Character } from '../../types/index.ts'
@@ -69,25 +70,41 @@ export function WorldForgeApp(props: {
 
   const pickFile = async (file: File | undefined) => {
     if (!file) return
-    setRawName(file.name)
-    setResult(null)
-    setApplied(false)
-    setNote('AI 正在阅读并整理大世界卡…')
+    const docx = /\.docx$/i.test(file.name) || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
+      let docxRead = false
       try {
-        const { card: raw } = await resolveImportJson(file, 'world', (msg) => setNote(msg))
-        const identity = await creationIdentity()
-        const original = await forgeWorldFromCard(raw, identity)
-        const forged = references.length ? await reviseForgeResult(original, '参考已选角色设定，补齐与他们有关的世界背景，保留原草稿的全部条目和角色。', identity, referenceText()) : original
+        let forged: ForgeResult
+        if (docx) {
+          setNote(`正在读取 ${file.name}…`)
+          const text = await readDocxFile(file)
+          docxRead = true
+          setNote('DOCX 正文已读取，正在搭建世界…')
+          const identity = await creationIdentity()
+          forged = await forgeWorldFromDocument(text, references.length ? referenceText() : '', identity)
+        } else {
+          setNote('AI 正在阅读并整理大世界卡…')
+          const { card: raw } = await resolveImportJson(file, 'world', setNote)
+          const identity = await creationIdentity()
+          const original = await forgeWorldFromCard(raw, identity)
+          forged = references.length ? await reviseForgeResult(original, '参考已选角色设定，补齐与他们有关的世界背景，保留原草稿的全部条目和角色。', identity, referenceText()) : original
+        }
         await storage.setBag(namespace, draftKey, { result: forged, name: file.name })
+        setRawName(file.name)
         setResult(forged)
+        setApplied(false)
         setNote(
           forged.local
             ? `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定（部分角色保留原文）`
             : `已拆出 ${forged.characters.length} 位角色、${forged.worldEntries.length} 条世界设定，确认后可导入`,
         )
       } catch (error) {
-        setNote(error instanceof Error ? error.message : '拆分失败')
+        const reason = error instanceof Error ? error.message : '拆分失败'
+        if (docxRead && /failed to fetch|networkerror|load failed|network request failed/i.test(reason)) {
+          setNote('DOCX 正文已读取，但文字 AI 接口连接失败。请检查网络和文字 API 后重新选择文件。')
+        } else {
+          setNote(docxRead ? `DOCX 正文已读取。${reason}` : reason)
+        }
       }
     })
   }
@@ -138,7 +155,7 @@ export function WorldForgeApp(props: {
     setApplying(true)
     setNote('正在写入世界书与角色…')
     try {
-      const { characters } = await applyForgeResult(phone, result, {
+      const { created, updated } = await applyForgeResult(phone, result, {
         jiushi: props.jiushi,
         skipChat: props.jiushi,
         worldNamespace: props.worldNamespace,
@@ -146,11 +163,11 @@ export function WorldForgeApp(props: {
       setApplied(true)
       await storage.setBag(namespace, draftKey, { result, name: rawName, applied: true })
       touchData()
-      setNote(
-        props.jiushi
-          ? `已纳入 ${characters.length} 位旧世人物。各条设定可在「世界书 → 世界观」单独查看。`
-          : `已导入 ${characters.length} 位角色。各条设定可在「世界书 → 世界观」单独查看。`,
-      )
+      const summary = [
+        created ? `新加入 ${created} 位${props.jiushi ? '旧世人物' : '角色'}` : '',
+        updated ? `覆盖了 ${updated} 位同名角色的设定，已有聊天记录保留` : '',
+      ].filter(Boolean).join('，')
+      setNote(summary ? `${summary}。各条设定可在「世界书 → 世界观」单独查看。` : '世界设定已更新。')
     } catch (error) {
       setNote(error instanceof Error ? error.message : '导入失败')
     } finally {
@@ -172,6 +189,7 @@ export function WorldForgeApp(props: {
             <li>· 直接打字也行，不必先做成 JSON</li>
             <li>· 每条世界设定独立写入世界书</li>
             <li>· 全部 NPC {props.jiushi ? '纳入旧世人物，不进现代短信' : '拆成可短信角色'}</li>
+            <li>· 再次导入同名角色时覆盖原设定，已有聊天记录保留</li>
           </ul>
         </div>
 

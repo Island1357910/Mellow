@@ -214,24 +214,24 @@ export function ChengfengApp(props: { onBack: () => void }) {
 function Lobby(props: { best: Record<string, number>; coins: number; onPick: (id: GameId) => void }) {
   return (
     <div>
-      <div className="mb-3 flex items-center gap-3 rounded-[24px] p-4 shadow-[0_10px_22px_rgba(242,180,138,0.16)]" style={{ background: 'linear-gradient(135deg,#FFE3C4,#F8D0DC 58%,#E6DDF8)' }}>
+      <div className="chengfeng-hero mb-3 flex items-center gap-3 rounded-[24px] p-4 shadow-[0_10px_22px_rgba(242,180,138,0.16)]" style={{ background: 'linear-gradient(135deg,#FFE3C4,#F8D0DC 58%,#E6DDF8)' }}>
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] bg-white/80 text-3xl shadow-[inset_0_-3px_0_rgba(0,0,0,0.04)]">🌬️</span>
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">今天想赚一点？</span>
           <span className="mt-0.5 block text-xs leading-5" style={DIM}>过关拿满奖励，没过关也记 5 枚。现在余额 {props.coins} 枚。</span>
         </span>
       </div>
-      <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-[24px] bg-white/85 shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
+      <ul className="chengfeng-list divide-y divide-black/[0.05] overflow-hidden rounded-[24px] bg-white/85 shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
         {GAMES.map((game) => {
           const score = props.best[game.id] ?? 0
           return (
             <li key={game.id}>
               <button type="button" className="flex w-full items-center gap-3 px-3 py-3 text-left transition-transform active:scale-[0.99]" onClick={() => props.onPick(game.id)}>
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-[22px]" style={{ background: game.tint }}>{game.icon}</span>
+                <span className="chengfeng-tint grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-[22px]" style={{ background: game.tint }}>{game.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-[15px] font-medium">{game.name}</span>
-                    <span className="shrink-0 rounded-full px-1.5 text-[10px]" style={{ background: game.tint, color: `var(--m-detail-ink, ${game.deep})` }}>{game.tag}</span>
+                    <span className="chengfeng-tint shrink-0 rounded-full px-1.5 text-[10px]" style={{ background: game.tint, color: `var(--m-detail-ink, ${game.deep})` }}>{game.tag}</span>
                   </span>
                   <span className="mt-0.5 line-clamp-1 block text-xs" style={DIM}>{game.intro}</span>
                   <span className="mt-1 flex items-center gap-2">

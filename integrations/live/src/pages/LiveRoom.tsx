@@ -97,6 +97,8 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
   const enteredRef = useRef(false);
   const subtitleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callConnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callToken = useRef(0);
 
   useEffect(() => {
     danmuRef.current = danmuList;
@@ -187,6 +189,8 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
     return () => {
       if (subtitleTimerRef.current) clearTimeout(subtitleTimerRef.current);
       if (callTimerRef.current) clearInterval(callTimerRef.current);
+      if (callConnectRef.current) clearTimeout(callConnectRef.current);
+      callToken.current++;
       const highlights = extractLiveHighlights(danmuRef.current, playerName || '姐姐');
       if (highlights.length >= 2) {
         useSocialStore.getState().addLiveRecap(anchorId, highlights, playerName || '姐姐');
@@ -340,7 +344,10 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
     if (callPhase !== 'idle') return;
     setCallPhase('connecting');
     markInteract(anchorId);
-    setTimeout(async () => {
+    const token = ++callToken.current;
+    callConnectRef.current = setTimeout(async () => {
+      callConnectRef.current = null;
+      if (callToken.current !== token) return;
       setCallPhase('active');
       setCallSeconds(0);
       callTimerRef.current = setInterval(() => setCallSeconds((s) => s + 1), 1000);
@@ -350,6 +357,7 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
         userMessage: '（系统事件：你和观众刚刚视频连麦接通了，你能实时看到她的画面。请你热情地打招呼，表现出害羞或开心，不超过50字。）',
         history: historyRef.current.slice(-4),
       });
+      if (callToken.current !== token) return;
       setCallSubtitle({ id: `call_${Date.now()}`, text: reply });
       pushHistory('assistant', reply);
     }, 1600);
@@ -358,6 +366,7 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
   const sendCallMessage = async () => {
     const text = callInput.trim();
     if (!text) return;
+    const token = callToken.current;
     setCallInput('');
     markInteract(anchorId);
     pushHistory('user', text);
@@ -367,18 +376,25 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
       userMessage: text,
       history: historyRef.current.slice(-8),
     });
+    if (callToken.current !== token) return;
     setCallSubtitle({ id: `call_${Date.now()}_${Math.random()}`, text: reply });
     pushHistory('assistant', reply);
   };
 
   const endCall = () => {
+    callToken.current++;
+    if (callConnectRef.current) clearTimeout(callConnectRef.current);
+    callConnectRef.current = null;
     if (callTimerRef.current) clearInterval(callTimerRef.current);
     callTimerRef.current = null;
-    const bonus = Math.min(8, Math.max(2, Math.floor(callSeconds / 12)));
-    boostFavor(anchorId, bonus);
+    setCallInput('');
+    if (callPhase === 'idle') return;
     setCallPhase('idle');
     setCallSubtitle(null);
     setCallSeconds(0);
+    if (callPhase === 'connecting') return;
+    const bonus = Math.min(8, Math.max(2, Math.floor(callSeconds / 12)));
+    boostFavor(anchorId, bonus);
     (async () => {
       const reply = await generateAnchorReply({
         anchorId,
@@ -386,7 +402,7 @@ export default function LiveRoom({ anchorId }: { anchorId: string }) {
         userMessage: '（系统事件：视频连麦刚刚结束了，请你表现出意犹未尽、不舍得挂断的感觉，发一句依依不舍的话，不超过40字。）',
       });
       useChatStore.getState().addMessage(anchorId, 'anchor', reply);
-    })();
+    })().catch(() => {});
   };
 
   return (

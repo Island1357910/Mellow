@@ -72,7 +72,7 @@ export function MarketApp(props: { onBack: () => void }) {
           ))}
         </div>
         {tab === 'all' ? (
-          <div className="mb-3 flex items-center gap-3 rounded-[24px] p-4 shadow-[0_10px_22px_rgba(243,168,186,0.18)]" style={{ background: 'linear-gradient(135deg,#FFE3EE,#EFE6FF 60%,#DDF3EA)' }}>
+          <div className="market-arrival-card mb-3 flex items-center gap-3 rounded-[24px] p-4 shadow-[0_10px_22px_rgba(243,168,186,0.18)]" style={{ background: 'linear-gradient(135deg,#FFE3EE,#EFE6FF 60%,#DDF3EA)' }}>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-white/80 text-2xl"><Sparkles size={25} strokeWidth={1.75} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold">今日上新</span>

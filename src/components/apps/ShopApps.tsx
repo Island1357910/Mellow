@@ -1,6 +1,8 @@
 import { ShoppingBag } from 'lucide-react'
+import type { CharacterWallet } from '../../domain/characterWallet.ts'
 import { useEffect, useRef, useState } from 'react'
 import { moduleAi, readJson } from '../../lib/ask.ts'
+import { attachAppImage, canGenerateAppImages, OPTIONAL_IMAGE_FIELD } from '../../lib/appImages.ts'
 import {
   merchantOf,
   DUOTAO,
@@ -55,6 +57,9 @@ function ShopApp(props: {
   const [orders, setOrders] = useState<Delivery[]>([])
   const [chars, setChars] = useState<Character[]>([])
   const [coins, setCoins] = useState(0)
+  const [payerId, setPayerId] = useState('')
+  const [wallets, setWallets] = useState<Record<string, CharacterWallet>>({})
+  const dataRevision = useMellow(state => state.dataRevision)
   const [who, setWho] = useState('self')
   const [told, setTold] = useState(false)
   const [note, setNote] = useState('')
@@ -64,6 +69,17 @@ function ShopApp(props: {
   const [wish, setWish] = useState('')
   const [ideas, setIdeas] = useState<Goods[]>([])
   const [finding, setFinding] = useState(false)
+
+  useEffect(() => {
+    if (!phone || tab !== 'cart') return
+    let live = true
+    void Promise.all(chars.filter(person => !person.blocked).map(async person => [
+      person.id, await storage.characterWallet(phone.namespace, person.id),
+    ] as const)).then(rows => {
+      if (live) setWallets(Object.fromEntries(rows))
+    }).catch(() => { if (live) setError('无法读取亲密付余额') })
+    return () => { live = false }
+  }, [phone, tab, chars, dataRevision])
 
   useEffect(() => {
     if (!phone) return
@@ -102,6 +118,9 @@ function ShopApp(props: {
   const lines=allLines.filter(l=>merchantOf(l.goods!,props.shop)===payStore)
   const stores=Array.from(new Set(shelf.map(g=>merchantOf(g,props.shop))))
   const total = lines.reduce((sum, line) => sum + (line.goods?.price ?? 0) * line.qty, 0)
+  const payers = chars.filter(person => !person.blocked && wallets[person.id]?.authorization === 'approved')
+  const payerWallet = payerId ? wallets[payerId] : undefined
+  const available = payerId ? (payerWallet?.authorization === 'approved' ? payerWallet.balanceCents / 100 : 0) : coins
   const count = allLines.reduce((sum, line) => sum + line.qty, 0)
   const shown = shelf.filter((item) => (!merchant||merchantOf(item,props.shop)===merchant) && (cat === '全部' || item.cat === cat) && (!query.trim() || item.name.includes(query.trim())))
   const pin = (item: Goods) => {
@@ -122,8 +141,9 @@ function ShopApp(props: {
       const savedShops = [...await readMerchantHistory(phone.namespace, props.shop), ...catalog].filter(item => item.merchant && item.merchantQuery)
       const exactShop = savedShops.find(item => item.merchantQuery?.toLowerCase().replace(/[\s\p{P}]/gu, '') === normalized)?.merchant
       local = draftGoods(props.shop, text, exactShop)
+      const withImage = await canGenerateAppImages(props.shop)
       const raw = await moduleAi(props.shop).askLine(
-        `你是${props.title}的店员。只返回 JSON 数组，正好 3 件货。每项 {"name":"名字","price":数字,"level":"普通或精致或稀有","blurb":"一句","emoji":"一个表情","cat":"分类","trait":"一句属性","merchant":"店铺名"}。价格在 4 到 80。三件是同一需求在同一家店的不同等级。已有店铺中有经营同类商品的，复用准确店名，否则根据需求拟一个贴合商品的虚构店名。`,
+        `你是${props.title}的店员。只返回 JSON 数组，正好 3 件货。每项 {"name":"名字","price":数字,"level":"普通或精致或稀有","blurb":"一句","emoji":"一个表情","cat":"分类","trait":"一句属性","merchant":"店铺名"}。价格在 4 到 80。三件是同一需求在同一家店的不同等级。已有店铺中有经营同类商品的，复用准确店名，否则根据需求拟一个贴合商品的虚构店名。${withImage ? OPTIONAL_IMAGE_FIELD : ''}`,
         JSON.stringify({ wish: text, existing: savedShops.slice(0, 24).map(({ merchant, merchantQuery, cat, name }) => ({ merchant, merchantQuery, cat, name })) }),
         750,
       )
@@ -131,11 +151,11 @@ function ShopApp(props: {
       if (!Array.isArray(parsed)) throw new Error('empty')
       const made = parsed.flatMap((item) => {
         if (!item || typeof item !== 'object') return []
-        const row = item as { name?: unknown; price?: unknown; level?: unknown; blurb?: unknown; emoji?: unknown; cat?: unknown; trait?: unknown; merchant?: unknown }
+        const row = item as { name?: unknown; price?: unknown; level?: unknown; blurb?: unknown; emoji?: unknown; cat?: unknown; trait?: unknown; merchant?: unknown; imagePrompt?: unknown }
         const name = typeof row.name === 'string' ? row.name.trim() : ''
         if (!name) return []
         const price = typeof row.price === 'number' ? Math.max(1, Math.round(row.price)) : 12
-        return [{
+        return [{ imagePrompt: withImage ? row.imagePrompt : undefined, item: {
           id: uid('good'),
           name: name.slice(0, 16),
           price,
@@ -146,11 +166,12 @@ function ShopApp(props: {
           trait: typeof row.trait === 'string' ? row.trait.slice(0, 24) : '',
           merchant: typeof row.merchant === 'string' ? row.merchant.trim().slice(0, 24) : '',
           merchantQuery: text.slice(0, 100),
-        }]
+        } satisfies Goods }]
       })
-      const store = exactShop || made.find(item => item.merchant)?.merchant || local[0]?.merchant
-      const generated = made.length ? made.map(item => ({ ...item, merchant: store })) : local
-      if (generated[0]) await rememberMerchant(phone.namespace, props.shop, generated[0])
+      const store = exactShop || made.find(row => row.item.merchant)?.item.merchant || local[0]?.merchant
+      const generated = made.length ? (await attachAppImage<Goods>(props.shop, made)).map(item => ({ ...item, merchant: store })) : local
+      const first = generated[0]
+      if (first) await rememberMerchant(phone.namespace, props.shop, { ...first, image: undefined })
       setIdeas(generated)
     } catch (reason) {
       setIdeas(local)
@@ -180,6 +201,7 @@ function ShopApp(props: {
         namespace: phone.namespace,
         shop: props.shop,
         merchant: payStore,
+        payerId: payerId || undefined,
         purchasedIds: lines.map(l=>l.id),
         items: lines.map((line) => ({ name: line.goods?.name ?? '', qty: line.qty, price: line.goods?.price ?? 0 })),
         recipient: who,
@@ -190,6 +212,10 @@ function ShopApp(props: {
       setCart(await readCart(phone.namespace,props.shop))
       setOrders((current) => [order, ...current])
       setCoins(await readCoins(phone.namespace))
+      if (payerId) {
+        const wallet = await storage.characterWallet(phone.namespace, payerId)
+        setWallets(current => ({ ...current, [payerId]: wallet }))
+      }
       setNote('')
       setTab('orders')
     } catch (reason) {
@@ -297,9 +323,17 @@ function ShopApp(props: {
               ) : null}
               <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="留言，可以空着" className="soft-input mt-3" />
               <p className="mt-3 text-sm">合计 {total} 枚</p>
+              {(payers.length > 0 || payerId) && <label className="mt-2 block text-xs">付款方式
+                <select className="soft-select w-full" value={payerId} onChange={event => setPayerId(event.target.value)}>
+                  <option value="">我的余额 · {coins} 枚</option>
+                  {payerId && !payers.some(person => person.id === payerId) && <option value={payerId}>原亲密付已不可用</option>}
+                  {payers.map(person => <option key={person.id} value={person.id}>{person.name}的亲密付 · {wallets[person.id]!.balanceCents / 100} 枚</option>)}
+                </select>
+              </label>}
+              {!payers.length && !payerId && lines.length > 0 && <p className="mt-1 text-xs">可在短信联系人里的角色设置申请亲密付。</p>}
               <p className="mt-1 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{props.shop==='flash'?'本店合单配送，约20～40分钟送达。':'本店商品合单发货，约两三天送达。'}</p>
               {error ? <div className="mt-2"><PillNote tone="peach" inline>{error}</PillNote></div> : null}
-              <button type="button" className="chip chip-solid mt-3" disabled={!lines.length || coins < total} onClick={() => void pay()}>{coins < total && lines.length ? `还差 ${total - coins} 枚` : '结账'}</button>
+              <button type="button" className="chip chip-solid mt-3" disabled={!lines.length || available < total || Boolean(payerId && payerWallet?.authorization !== 'approved')} onClick={() => void pay()}>{available < total && lines.length ? '余额不足' : '结账'}</button>
             </section>
           </div>
         ) : null}
@@ -309,6 +343,7 @@ function ShopApp(props: {
               <article key={order.id} className="menu-card">
                 <p className="mb-2 text-xs opacity-65">{order.merchant??props.title}</p><p className="text-sm font-medium">{order.items.map((item) => `${item.name}×${item.qty}`).join('、')}</p>
                 <p className="mt-1 text-xs" style={{ color: 'var(--m-text-secondary)' }}>送给 {order.recipientName} · {order.total} 枚</p>
+                {order.payerId && <p className="text-xs">{chars.find(person => person.id === order.payerId)?.name ?? '角色'}亲密付</p>}
                 <p className="mt-2 text-sm">{stageOf(order, now)} · {arriveLabel(order, now)}</p>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/5">
                   <div className="h-full rounded-full" style={{ width: now >= order.arrivesAt ? '100%' : `${Math.max(8, Math.min(92, ((now - order.createdAt) / Math.max(1, order.arrivesAt - order.createdAt)) * 100))}%`, background: props.tint }} />
@@ -337,6 +372,7 @@ const PRODUCT_CELLS: Record<string, [number, number]> = {
   blanket: [2,0], ribbon: [2,1], card: [2,2], scarf: [2,3], pen: [2,4], tea: [2,5], taro: [2,6], rice: [2,7], porridge: [2,8], pudding: [2,9], oden: [2,10], pajama: [2,11],
 }
 function ProductPicture({ item, className }: { item: Goods; className: string }) {
+  if (item.image) return <img src={item.image} alt={item.name} loading="lazy" className={className} />
   const cell = PRODUCT_CELLS[item.id]
   if (!cell) return <span role="img" aria-label={item.name} className={className + ' grid place-items-center bg-white/50'}><ShoppingBag size={30} strokeWidth={1.5} /></span>
   const [atlas, index] = cell

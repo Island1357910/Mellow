@@ -8,6 +8,7 @@ import { ChevronRight, Download, ImagePlus, Palette, Plug, Shield, Sparkles, Upl
 import { PRESET_GROUPS, presetFromUnknown } from '../../data/officialPresets.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { downloadJson } from '../../lib/download.ts'
+import { checkImportSize, readFileText } from '../../lib/fileSnapshot.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
@@ -16,6 +17,7 @@ import type { Preset, PresetMode } from '../../types/index.ts'
 import { candyStyle } from '../../lib/candy.ts'
 import { Field, ModalPortal, PillNote, Screen, SectionTitle, SoftCard, Toggle } from '../ui/primitives.tsx'
 import { ApiPanel, BackupPanel, IconPanel, MinimaxPanel, PrivacyPanel } from './SettingsPanels.tsx'
+import { ImageApiPanel } from './ImageApiPanel.tsx'
 
 const AVATARS = ['🙂', '🌙', '🌸', '🐱', '🍵', '⭐', '🫧', '🍀']
 
@@ -99,6 +101,7 @@ export function SettingsApp(props: { onBack: () => void }) {
             />
           ) : null}
           {pane === 'api' ? <ApiPanel /> : null}
+          {pane === 'image-api' ? <ImageApiPanel /> : null}
           {pane === 'voice' ? <MinimaxPanel /> : null}
           {pane === 'preset' ? <PresetCard /> : null}
           {pane === 'role' ? <RoleCard /> : null}
@@ -116,11 +119,11 @@ export function SettingsApp(props: { onBack: () => void }) {
 }
 
 type TabId = 'me' | 'link' | 'talk' | 'look' | 'data'
-type PaneId = 'identity' | 'api' | 'voice' | 'preset' | 'role' | 'notify' | 'theme' | 'icons' | 'privacy' | 'backup' | 'redeem'
+type PaneId = 'identity' | 'api' | 'image-api' | 'voice' | 'preset' | 'role' | 'notify' | 'theme' | 'icons' | 'privacy' | 'backup' | 'redeem'
 
 const TABS: Array<{ id: TabId; label: string; tint: string; icon: ReactNode; panes: Array<{ id: PaneId; label: string }> }> = [
   { id: 'me', label: '身份', tint: '#E9B949', icon: <UserRound size={16} />, panes: [{ id: 'identity', label: '身份' }, { id: 'redeem', label: '兑换码' }] },
-  { id: 'link', label: '连接', tint: '#7FB8E0', icon: <Plug size={16} />, panes: [{ id: 'api', label: '接口与模型' }, { id: 'voice', label: 'MiniMax 语音' }] },
+  { id: 'link', label: '连接', tint: '#7FB8E0', icon: <Plug size={16} />, panes: [{ id: 'api', label: '接口与模型' }, { id: 'image-api', label: '图片 API' }, { id: 'voice', label: 'MiniMax 语音' }] },
   { id: 'talk', label: '对话', tint: '#EE9AB0', icon: <Sparkles size={16} />, panes: [{ id: 'preset', label: '预设' }, { id: 'role', label: '角色行为' }, { id: 'notify', label: '通知' }] },
   { id: 'look', label: '外观', tint: '#B9A3E3', icon: <Palette size={16} />, panes: [{ id: 'theme', label: '主题' }, { id: 'icons', label: '应用图标' }] },
   { id: 'data', label: '数据', tint: '#8EB5A6', icon: <Shield size={16} />, panes: [{ id: 'privacy', label: '隐私' }, { id: 'backup', label: '备份与恢复' }] },
@@ -175,8 +178,9 @@ function ThemeCard() {
                 const file = event.target.files?.[0]
                 event.target.value = ''
                 if (!file) return
-                void file.text().then(async (text) => {
-                  const theme = themeFromUnknown(JSON.parse(text) as unknown)
+                void Promise.resolve().then(async () => {
+                  checkImportSize(file, 16)
+                  const theme = themeFromUnknown(JSON.parse(await readFileText(file)) as unknown)
                   if (!theme) throw new Error('这不是主题')
                   theme.id = 'theme_user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
                   await storage.saveTheme(theme)
@@ -341,8 +345,9 @@ function PresetCard() {
                 const file = event.target.files?.[0]
                 event.target.value = ''
                 if (!file) return
-                void file.text().then(async (text) => {
-                  const preset = presetFromUnknown(JSON.parse(text) as unknown)
+                void Promise.resolve().then(async () => {
+                  checkImportSize(file, 16)
+                  const preset = presetFromUnknown(JSON.parse(await readFileText(file)) as unknown)
                   if (!preset) throw new Error('这不是预设')
                   await storage.savePreset(preset)
                   await reloadLibraries()

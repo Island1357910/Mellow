@@ -14,6 +14,7 @@ export type ShopId = 'duotao' | 'flash'
 
 export interface Goods {
   id: string
+  image?: string
   name: string
   price: number
   blurb: string
@@ -37,6 +38,7 @@ export interface DeliveryItem {
 }
 
 export interface Delivery {
+  payerId?: string
   merchant?: string
   id: string
   shop: ShopId
@@ -176,6 +178,7 @@ export async function checkout(input: {
   note: string
   merchant?: string
   purchasedIds?: string[]
+  payerId?: string
 }): Promise<Delivery> {
   const total = input.items.reduce((sum, item) => sum + item.price * item.qty, 0)
   if(!input.items.length||input.items.some(i=>!Number.isInteger(i.qty)||i.qty<1||!Number.isFinite(i.price)||i.price<0))throw Error('订单商品无效')
@@ -184,6 +187,7 @@ export async function checkout(input: {
     id: uid('order'),
     shop: input.shop,
     merchant: input.merchant,
+    payerId: input.payerId,
     items: input.items,
     total,
     recipient: input.recipient,

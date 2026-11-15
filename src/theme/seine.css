@@ -1,0 +1,153 @@
+.device[data-theme-pack="seine"]:not([data-wallpaper="custom"]) .wallpaper-base {
+  background: #bacbd2 url("./seine-wallpaper.png") center / cover no-repeat !important;
+}
+
+.device[data-theme-pack="seine"] .wallpaper-wash,
+.device[data-theme-pack="seine"] .everyday-blossoms { display: none; }
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] {
+  --winter-entry: #dfede4;
+  --winter-border: #68877958;
+  --winter-bubble-mine: #cbded2eb;
+  --winter-bubble-theirs: #f5faf2eb;
+  --control-key-surface: #edf6efd9;
+  --control-key-ink: var(--m-text);
+  --control-key-border: var(--winter-border);
+  --control-pressed: var(--m-accent);
+  --control-pressed-ink: var(--m-surface);
+  --m-detail-ink: #456457;
+}
+
+.device[data-theme-pack="seine"] :is(.memo-widget, .home-widget) :is(span, button)[class*="bg-[#"],
+.device[data-theme-pack="seine"] :is(.story-persona-card, .chengfeng-list, .chengfeng-tint) {
+  background: #dcece5e8 !important;
+  color: #314f43 !important;
+}
+
+.device[data-theme-pack="seine"] .stamp-dot {
+  background: #f3f8f1 !important;
+  box-shadow: none !important;
+}
+.device[data-theme-pack="seine"] .stamp-dot[data-stamped="true"] { background: #bcd5c9 !important; }
+.device[data-theme-pack="seine"] .stamp-dot[data-today="true"] { box-shadow: 0 0 0 1.5px #628777 !important; }
+.device[data-theme-pack="seine"] .home-widget [data-today="true"] + span { color: #456457 !important; }
+
+.device[data-theme-pack="seine"] :is(.market-arrival-card, .chengfeng-hero) {
+  background: linear-gradient(135deg, #eaf3ec, #d5e5de 60%, #c8dce2) !important;
+  box-shadow: 0 8px 20px #36574a19;
+}
+.device[data-theme-pack="seine"] .story-start-button {
+  background: linear-gradient(120deg, #456457, #517981) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 20px #36574a24;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.app-glyph, .social-entry-icon):not(.jiushi-phone *, [data-holiday-preserve] *) {
+  background: linear-gradient(155deg, rgba(255, 255, 251, .73), rgba(223, 239, 236, .46)) !important;
+  color: var(--m-text) !important;
+  border: 1px solid rgba(255, 255, 250, .75);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .8), 0 4px 16px rgba(37, 61, 50, .12);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(
+  .dock-bar, .home-widget, .folder-card, .home-search-trigger,
+  .control-tile, .chip, .app-sidebar, .pet-app-window,
+  .menu-card, .soft-card, .pick-card, .menu-group, .modal-center, .music-widget,
+  .sms-profile-card, .sms-profile-links > button, .sms-tab-bar,
+  .social-entry, .hz-chat-head, .hz-thread-row, .hz-moment-card, .hz-star-card,
+  .jiushi-btn, .jiushi-note
+):not([data-holiday-preserve], [data-holiday-preserve] *, [data-theme-preserve], [data-theme-preserve] *, [data-custom-backdrop]) {
+  background: linear-gradient(155deg, rgba(255, 255, 251, .73), rgba(223, 239, 236, .46)) !important;
+  color: var(--m-text) !important;
+  border-color: rgba(255, 255, 250, .78);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .8), 0 4px 16px rgba(37, 61, 50, .12);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.app-screen-header, .conversation-shell > header, .jiushi-screen-head),
+.device[data-theme-pack="seine"] .conversation-shell form.conversation-composer {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border-color: transparent;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.pill-note, .sms-profile-links > button > span:first-child):not([data-theme-preserve] *, [data-holiday-preserve] *) {
+  background: #dcece5e8 !important;
+  color: #314f43 !important;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.sms-tab-bar button[aria-pressed="true"], [role="tab"][aria-selected="true"], nav button[aria-pressed="true"]) {
+  background: #bcd5c9 !important;
+  color: #273b32 !important;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(
+  button[class*="bg-[#"], button[style*="background: rgb"], label > input.bg-white,
+  label > textarea.bg-white, .preset-prompt-block, .hz-diary-sheet, .shop-editorial
+):not(.chip, .app-launch, .app-glyph, [data-theme-control], [data-theme-preserve], [data-theme-preserve] *, [data-holiday-preserve], [data-holiday-preserve] *, [data-custom-backdrop], [aria-pressed="true"], [aria-selected="true"]) {
+  background-color: #edf5eee8 !important;
+  color: var(--m-text);
+}
+
+.device[data-theme-pack="seine"] .app-launch > span:last-child {
+  color: #21332b;
+  text-shadow: 0 0 4px #fff, 0 1px 3px #fff;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.chip-solid, .control-tile[data-on="true"], .jiushi-btn-primary, [role="switch"][aria-checked="true"]) {
+  background: rgba(57, 91, 77, .88) !important;
+  color: #fff !important;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.chip-danger, .jiushi-btn-danger) {
+  background: #f6e5e4 !important;
+  color: #843d40 !important;
+}
+
+.modal-portal[data-theme-pack="seine"] { background: #233c416b; }
+
+.device[data-theme-pack="seine"] .jiushi-phone {
+  border-color: #7e988a;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.soft-input, .soft-select, .composer-input, .jiushi-msg-theirs, .hz-msg):not([data-theme-preserve], [data-theme-preserve] *, [data-holiday-preserve] *) {
+  background-color: #f6faf3df !important;
+  color: var(--m-text) !important;
+  border-color: #77948966;
+  accent-color: var(--m-accent);
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(.hz-msg.is-me, .jiushi-msg-user, .offline-bubble.is-mine, .side-bubble.is-mine):not([data-theme-preserve], [data-theme-preserve] *) {
+  background: #cbded2eb !important;
+  color: var(--m-text) !important;
+}
+
+.device[data-theme-pack="seine"] :is(.app-sidebar-handle svg, .pet-window-resize, .pet-window-bar, .pet-window-actions, .pet-window-dock, .app-sidebar header button) {
+  background: #dfefe9ad;
+  color: #34584c;
+}
+
+.device[data-theme-pack="seine"] :is(.lock-time, .lock-brand, .lock-brand-sub, .status-bar) {
+  text-shadow: 0 1px 5px #fff;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(
+  .app-screen-header button, .conversation-composer button, .home-search-trigger,
+  button[data-theme-control], .jiushi-back, .jiushi-msg-user, .jiushi-msg-theirs
+):not([data-holiday-preserve], [data-holiday-preserve] *, [data-theme-preserve], [data-theme-preserve] *) {
+  background-color: #e5f1e9df !important;
+  border-color: #7c9f9055;
+  color: var(--m-text) !important;
+}
+
+:is(.device, .modal-portal)[data-theme-pack="seine"] :is(
+  button[data-theme-control][data-on="true"], .conversation-composer button[type="submit"], .jiushi-btn-primary
+):not([data-theme-preserve] *) {
+  background: #456457 !important;
+  color: #f8fff8 !important;
+}

@@ -37,6 +37,7 @@ export function VoiceCallOverlay({
         <button
           type="button"
           onClick={onEnd}
+          aria-label="挂断通话"
           className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-2xl text-white shadow-lg active:scale-95"
         >
           📵
@@ -79,6 +80,7 @@ export function VideoCallOverlay({
         <button
           type="button"
           onClick={onEnd}
+          aria-label="挂断视频通话"
           className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-xl text-white shadow-lg active:scale-95"
         >
           📵

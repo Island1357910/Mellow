@@ -184,6 +184,7 @@ export interface ChatMessage {
   /** 这一轮的思维链。同一次回复拆成的几条短信共用同一段。 */
   reasoning?: string
   roundId?: string
+  incomingMoney?: { cents: number; totalCents?: number; claimedAt?: number }
 }
 
 export interface Group {

@@ -68,8 +68,11 @@ try {
   assert.equal(state.appointments.filter(a => a.source === 'same_reply').length, 1)
   assert.equal(state.appointments.find(a => a.source === 'same_reply')?.status, 'proposed')
   response = { appointment: { title: '捏造的约定', place: '海边', at: new Date(now + DAY).toISOString(), evidence: '从未说过的句子' } }
-  await observeSharedLifeTurn(ns, person, [user], 'invalid_proposal', now)
+  await observeSharedLifeTurn(ns, person, [{ ...user, id: 'another-turn' }], 'invalid_proposal', now)
   assert.ok(!(await readSharedLife(ns)).appointments.some(a => a.title === '捏造的约定'))
+  response = { romanceBoundary: 'closed' }
+  await observeSharedLifeTurn(ns, person, [{ ...user, id: 'friendship-only', content: '我只想和你做朋友' }], 'boundary-reply', now)
+  assert.equal((await readSharedLife(ns)).characters[person.id]?.romanceBoundary, 'closed')
   response = { contacts: [{ name: '陈序', relation: '出版社的老搭档', description: '爱打羽毛球，最近在赶一本新书' }] }
   await generateLifeCircle(ns, person); await generateLifeCircle(ns, person)
   state = await readSharedLife(ns)

@@ -1,4 +1,5 @@
 import { moduleAdapter } from './ask.ts'
+import { attachAppImage, canGenerateAppImages, OPTIONAL_IMAGE_FIELD } from './appImages.ts'
 import { isNearbyCharacter, listNearbySeen } from './nearbyContact.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
@@ -126,17 +127,19 @@ function asText(value: unknown): string {
 
 export async function generateMomentsFeed(namespace: string, names: string): Promise<SocialMoment[]> {
   const characters = await storage.listModernCharacters(namespace)
-  const raw = await ask(`为一部手机里的朋友圈写 10 条别人发的动态。熟人名单：${names}。有熟人时，让名单里的人发几条，作者名按名单原样填写；其余用新的名字。每条像随手记下的日常，15 到 40 个字，彼此不像。只返回 {"posts":[{"author":"","text":"","minutesAgo":30}]}`)
+  const withImage = await canGenerateAppImages('moments')
+  const raw = await ask(`为一部手机里的朋友圈写 10 条别人发的动态。熟人名单：${names}。有熟人时，让名单里的人发几条，作者名按名单原样填写；其余用新的名字。每条像随手记下的日常，15 到 40 个字，彼此不像。只返回 {"posts":[{"author":"","text":"","minutesAgo":30}]}。${withImage ? OPTIONAL_IMAGE_FIELD : ''}`)
   const data = readJson(raw) as { posts?: Array<Record<string, unknown>> }
-  const posts = (data.posts ?? []).slice(0, 12).flatMap((item) => {
+  const rows = (data.posts ?? []).slice(0, 12).flatMap((item) => {
     const author = asText(item.author)
     const body = asText(item.text)
     if (!author || !body) return []
     const minutes = Number(item.minutesAgo)
     const at = Date.now() - (Number.isFinite(minutes) ? minutes : 40) * 60_000
     const post = { id: uid(), author, text: body, at, mine: false }
-    return [{ ...post, charId: momentAuthor(post, characters)?.id }]
+    return [{ item: { ...post, charId: momentAuthor(post, characters)?.id } as SocialMoment, imagePrompt: withImage ? item.imagePrompt : undefined }]
   })
+  const posts = await attachAppImage('moments', rows)
   if (posts.length === 0) throw new Error('朋友圈是空的')
   await storage.setBag(namespace, 'circle-feed', { at: Date.now(), posts })
   return posts

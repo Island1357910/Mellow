@@ -1,12 +1,54 @@
-import { readFileBytes } from './fileSnapshot.ts'
+import { inflateSync } from 'fflate'
+import { checkImportSize, readFileBytes } from './fileSnapshot.ts'
 
-function readU32(data: Uint8Array, offset: number): number {
-  return (
-    (data[offset] ?? 0)
-    | ((data[offset + 1] ?? 0) << 8)
-    | ((data[offset + 2] ?? 0) << 16)
-    | ((data[offset + 3] ?? 0) << 24)
-  ) >>> 0
+const maxDocumentBytes = 8 * 1024 * 1024
+
+function extractBody(bytes: Uint8Array): Uint8Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const invalid = () => new Error('DOCX 文件不完整或格式无法识别，请重新保存后导入')
+  let end = bytes.length - 22
+  while (end >= Math.max(0, bytes.length - 22 - 65_535)) {
+    if (view.getUint32(end, true) === 0x06054b50 && end + 22 + view.getUint16(end + 20, true) === bytes.length) break
+    end--
+  }
+  if (end < Math.max(0, bytes.length - 22 - 65_535)) throw invalid()
+
+  const decoder = new TextDecoder()
+  let cursor = view.getUint32(end + 16, true)
+  const count = view.getUint16(end + 10, true)
+  for (let i = 0; i < count; i++) {
+    if (cursor + 46 > end || view.getUint32(cursor, true) !== 0x02014b50) throw invalid()
+    const nameStart = cursor + 46
+    const nameEnd = nameStart + view.getUint16(cursor + 28, true)
+    const next = nameEnd + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true)
+    if (next > end) throw invalid()
+    if (decoder.decode(bytes.subarray(nameStart, nameEnd)).replace(/\\/g, '/') !== 'word/document.xml') {
+      cursor = next
+      continue
+    }
+    if (view.getUint16(cursor + 8, true) & 1) throw new Error('DOCX 有密码保护，请解除保护后再导入')
+    const method = view.getUint16(cursor + 10, true)
+    const size = view.getUint32(cursor + 24, true)
+    const packedSize = view.getUint32(cursor + 20, true)
+    if (size > maxDocumentBytes) throw new Error('DOCX 正文解压后超过 8 MB，请拆分后再导入')
+    const local = view.getUint32(cursor + 42, true)
+    if (local + 30 > cursor || view.getUint32(local, true) !== 0x04034b50) throw invalid()
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
+    if (start + packedSize > cursor) throw invalid()
+    const packed = bytes.subarray(start, start + packedSize)
+    if (method !== 0 && method !== 8) throw new Error('DOCX 使用了不支持的压缩格式，请用 Word 或 WPS 重新保存')
+    let body = packed
+    if (method === 8) {
+      try {
+        body = inflateSync(packed, { out: new Uint8Array(size + 1) })
+      } catch {
+        throw invalid()
+      }
+    }
+    if (body.byteLength !== size) throw invalid()
+    return body
+  }
+  throw new Error('没有找到 DOCX 正文')
 }
 
 function decodeXml(text: string): string {
@@ -18,93 +60,15 @@ function decodeXml(text: string): string {
     .replace(/&apos;/g, "'")
 }
 
-async function inflateDeflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  if (typeof DecompressionStream === 'undefined') throw new Error('浏览器不支持解压 docx')
-  const copy = new Uint8Array(data)
-  const stream = new Blob([copy]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
-}
-
-async function decompressEntry(compression: number, compData: Uint8Array): Promise<Uint8Array | null> {
-  if (compression === 0) return compData
-  if (compression === 8) return inflateDeflateRaw(compData)
-  return null
-}
-
-async function readLocalEntry(data: Uint8Array, offset: number, compSize: number): Promise<Uint8Array | null> {
-  if (offset + 30 > data.length) return null
-  if (data[offset] !== 0x50 || data[offset + 1] !== 0x4b || data[offset + 2] !== 0x03 || data[offset + 3] !== 0x04) return null
-  const compression = (data[offset + 8] ?? 0) | ((data[offset + 9] ?? 0) << 8)
-  const localNameLen = (data[offset + 26] ?? 0) | ((data[offset + 27] ?? 0) << 8)
-  const localExtraLen = (data[offset + 28] ?? 0) | ((data[offset + 29] ?? 0) << 8)
-  const dataStart = offset + 30 + localNameLen + localExtraLen
-  const size = compSize || readU32(data, offset + 18)
-  const compData = data.slice(dataStart, dataStart + size)
-  return decompressEntry(compression, compData)
-}
-
-async function extractZipEntryViaCentralDir(data: Uint8Array, targetName: string): Promise<Uint8Array | null> {
-  const want = targetName.replace(/\\/g, '/')
-  for (let scan = Math.max(0, data.length - 65_536); scan < data.length - 22; scan += 1) {
-    if (data[scan] !== 0x50 || data[scan + 1] !== 0x4b || data[scan + 2] !== 0x05 || data[scan + 3] !== 0x06) continue
-    const centralOffset = readU32(data, scan + 16)
-    let cursor = centralOffset
-    while (cursor + 46 <= data.length) {
-      if (data[cursor] !== 0x50 || data[cursor + 1] !== 0x4b || data[cursor + 2] !== 0x01 || data[cursor + 3] !== 0x02) break
-      const compression = (data[cursor + 10] ?? 0) | ((data[cursor + 11] ?? 0) << 8)
-      const compSize = readU32(data, cursor + 20)
-      const nameLen = (data[cursor + 28] ?? 0) | ((data[cursor + 29] ?? 0) << 8)
-      const extraLen = (data[cursor + 30] ?? 0) | ((data[cursor + 31] ?? 0) << 8)
-      const commentLen = (data[cursor + 32] ?? 0) | ((data[cursor + 33] ?? 0) << 8)
-      const localOffset = readU32(data, cursor + 42)
-      const nameStart = cursor + 46
-      const name = new TextDecoder().decode(data.slice(nameStart, nameStart + nameLen)).replace(/\\/g, '/')
-      cursor = nameStart + nameLen + extraLen + commentLen
-      if (name !== want) continue
-      const local = await readLocalEntry(data, localOffset, compSize)
-      if (local) return local
-      return decompressEntry(compression, data.slice(localOffset))
-    }
-    break
-  }
-  return null
-}
-
-async function extractZipEntry(data: Uint8Array, targetName: string): Promise<Uint8Array | null> {
-  const want = targetName.replace(/\\/g, '/')
-  let offset = 0
-  while (offset + 30 <= data.length) {
-    if (data[offset] !== 0x50 || data[offset + 1] !== 0x4b || data[offset + 2] !== 0x03 || data[offset + 3] !== 0x04) {
-      offset += 1
-      continue
-    }
-    const compression = (data[offset + 8] ?? 0) | ((data[offset + 9] ?? 0) << 8)
-    const compSize = readU32(data, offset + 18)
-    const nameLen = (data[offset + 26] ?? 0) | ((data[offset + 27] ?? 0) << 8)
-    const extraLen = (data[offset + 28] ?? 0) | ((data[offset + 29] ?? 0) << 8)
-    const nameStart = offset + 30
-    const name = new TextDecoder().decode(data.slice(nameStart, nameStart + nameLen)).replace(/\\/g, '/')
-    const dataStart = nameStart + nameLen + extraLen
-    const compData = data.slice(dataStart, dataStart + (compSize || data.length - dataStart))
-    offset = dataStart + (compSize || 0)
-
-    if (name !== want) continue
-
-    const out = await decompressEntry(compression, compData)
-    if (out) return out
-  }
-  return extractZipEntryViaCentralDir(data, targetName)
-}
-
 function textFromWordXml(xml: string): string {
   const paragraphs: string[] = []
   for (const block of xml.split(/<w:p\b[^>]*>/)) {
-    const runs = [...block.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((match) => decodeXml(match[1]))
+    const runs = [...block.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map((match) => decodeXml(match[1]))
     const line = runs.join('').replace(/\u00a0/g, ' ').trim()
     if (line) paragraphs.push(line)
   }
   if (paragraphs.length > 0) return paragraphs.join('\n')
-  const flat = [...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)]
+  const flat = [...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
     .map((match) => decodeXml(match[1]))
     .join('')
     .replace(/\u00a0/g, ' ')
@@ -112,29 +76,17 @@ function textFromWordXml(xml: string): string {
   return flat
 }
 
-/** 从二进制里兜底扫描 XML 片段（兼容部分非标准 docx / 解压失败） */
-function scanWtFromBinary(bytes: Uint8Array): string {
-  const raw = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  const fromXml = textFromWordXml(raw)
-  if (fromXml.trim().length > 10) return fromXml
-  const docStart = raw.indexOf('<w:document')
-  if (docStart >= 0) {
-    const docEnd = raw.indexOf('</w:document>', docStart)
-    const slice = docEnd > docStart ? raw.slice(docStart, docEnd + 13) : raw.slice(docStart, docStart + 500_000)
-    const fromDoc = textFromWordXml(slice)
-    if (fromDoc.trim().length > 10) return fromDoc
-  }
-  return fromXml
-}
-
 export async function readDocxBytes(bytes: Uint8Array): Promise<string> {
-  const entry = await extractZipEntry(bytes, 'word/document.xml')
-  const xml = entry ? new TextDecoder('utf-8').decode(entry) : ''
-  const text = xml ? textFromWordXml(xml) : scanWtFromBinary(bytes)
-  if (text.trim().length > 10) return text.trim()
-  throw new Error('docx 读不出来，请另存为 .txt 再导入')
+  const body = extractBody(bytes)
+  const text = textFromWordXml(new TextDecoder().decode(body))
+  if (!text.trim()) throw new Error('DOCX 正文为空，扫描图片需要先转换为文字')
+  return text.trim()
 }
 
 export async function readDocxFile(file: File): Promise<string> {
-  return readDocxBytes(await readFileBytes(file))
+  checkImportSize(file, 16)
+  const bytes = await readFileBytes(file).catch(() => {
+    throw new Error('手机浏览器没能读取 DOCX 文件，请先保存到「下载」文件夹再选择')
+  })
+  return readDocxBytes(bytes)
 }

@@ -13,6 +13,7 @@ export interface FeedPost {
   author: string
   handle: string
   text: string
+  image?: string
   at: number
   likes: number
   liked: boolean
@@ -288,6 +289,7 @@ export function normalizeFeedPosts(raw: unknown): FeedPost[] {
       comments,
       mine: Boolean(row.mine),
       charId: typeof row.charId === 'string' ? row.charId : undefined,
+      image: typeof row.image === 'string' && /^data:image\/(png|jpeg|webp);base64,/i.test(row.image) ? row.image : undefined,
     }]
   }).slice(0, 40)
 }

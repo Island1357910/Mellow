@@ -6,7 +6,7 @@ import { Capacitor } from '@capacitor/core'
 import { ThemeShopApp } from '../apps/ThemeShopApp.tsx'
 import { ConnectionsApp } from '../apps/ConnectionsApp.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ChengfengApp } from '../apps/ChengfengApp.tsx'
 import { CreateApp } from '../apps/CreateApp.tsx'
@@ -22,11 +22,9 @@ import { MarketApp, OfflineApp, SideApp } from '../apps/QuietApps.tsx'
 import { SettingsApp } from '../apps/SettingsApp.tsx'
 import { DuotaoApp, FlashApp } from '../apps/ShopApps.tsx'
 import { StarApp } from '../apps/StarFeed.tsx'
-import { JiushiApp } from '../apps/JiushiApp.tsx'
-import { TableApp } from '../apps/TableApp.tsx'
 import { BazaarApp } from '../apps/BazaarApp.tsx'
-import { StageApp } from '../apps/StageApp.tsx'
 import { LiveSimulatorApp } from '../apps/LiveSimulatorApp.tsx'
+import { TipsApp } from '../apps/TipsApp.tsx'
 import { WorldForgeApp } from '../apps/WorldForgeApp.tsx'
 import { APP_BY_ID } from '../../data/apps.ts'
 import { maybeAskAboutLock } from '../../domain/locks.ts'
@@ -45,11 +43,16 @@ import { ControlCenter } from './ControlCenter.tsx'
 import { HomeScreen } from './HomeScreen.tsx'
 import { DesktopPet } from './DesktopPet.tsx'
 import { AppSidebar } from './AppSidebar.tsx'
+import { UpdateAnnouncement } from './UpdateAnnouncement.tsx'
 import { updateDeskPet } from '../../lib/deskPet.ts'
 import { PetAppWindow } from './PetAppWindow.tsx'
 import { LockScreen, Wallpaper } from './LockScreen.tsx'
 import { NotificationLayer } from './NotificationLayer.tsx'
 import { SecretLock } from './SecretLock.tsx'
+
+const JiushiApp = lazy(() => import('../apps/JiushiApp.tsx').then(module => ({ default: module.JiushiApp })))
+const TableApp = lazy(() => import('../apps/TableApp.tsx').then(module => ({ default: module.TableApp })))
+const StageApp = lazy(() => import('../apps/StageApp.tsx').then(module => ({ default: module.StageApp })))
 
 export function PhoneShell() {
   const boot = useMellow((state) => state.boot)
@@ -234,7 +237,9 @@ export function PhoneShell() {
                     exit={{ y: 20, opacity: 0 }}
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   >
-                    <AppHost id={activeApp} onBack={closeApp} />
+                    <Suspense fallback={<p role="status" className="grid h-full place-items-center text-sm">正在打开应用…</p>}>
+                      <AppHost id={activeApp} onBack={closeApp} />
+                    </Suspense>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
@@ -243,9 +248,12 @@ export function PhoneShell() {
               </div>
               <AppSidebar key={activeIdentityId} namespace={identities.find(item => item.id === activeIdentityId)?.namespace ?? ''} onOpen={setPetApp} />
               {petApp ? <PetAppWindow key={`${activeIdentityId}:${petApp}`} appId={petApp} title={APP_BY_ID[petApp]?.name ?? petApp} onClose={() => setPetApp('')}>
-                <AppHost id={petApp} onBack={() => setPetApp('')} />
+                <Suspense fallback={<p role="status" className="grid h-full place-items-center text-sm">正在打开应用…</p>}>
+                  <AppHost id={petApp} onBack={() => setPetApp('')} />
+                </Suspense>
               </PetAppWindow> : null}
               <ControlCenter />
+              <UpdateAnnouncement />
             </>
           ) : null}
           {theme.customCss ? <style>{'@scope (.device) { ' + theme.customCss + ' }'}</style> : null}
@@ -345,6 +353,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <StageApp onBack={props.onBack} />
     case 'live':
       return <LiveSimulatorApp onBack={props.onBack} />
+    case 'tips':
+      return <TipsApp onBack={props.onBack} />
     case 'pet':
       return <PetApp onBack={props.onBack} />
     case 'plant':

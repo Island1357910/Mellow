@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { CharacterWallet } from '../../domain/characterWallet.ts'
+import { uid } from '../../lib/id.ts'
 import { deleteCharacterConfirmText } from '../../domain/characterCleanup.ts'
 import { isTrustedVoiceCache, resolveCharacterVoiceId, voiceLabel, voiceOptions } from '../../engine/minimax.ts'
 import { storage } from '../../storage/StorageService.ts'
@@ -21,6 +23,29 @@ export function CharacterSettingsSheet(props: {
   const [voiceId, setVoiceId] = useState(props.character.voiceId?.trim() || '')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
+  const [wallet, setWallet] = useState<CharacterWallet>()
+  const [walletBusy, setWalletBusy] = useState(false)
+  const namespace = props.identity.namespace
+  const charId = props.character.id
+  useEffect(() => {
+    let live = true
+    void storage.characterWallet(namespace, charId).then(value => {
+      if (live) setWallet(value)
+    }).catch(() => { if (live) setStatus('角色余额读取失败') })
+    return () => { live = false }
+  }, [namespace, charId])
+
+  async function changeWallet(change: (value: CharacterWallet) => CharacterWallet, note: string) {
+    setWalletBusy(true)
+    try {
+      setWallet(await storage.updateCharacterWallet(namespace, charId, change))
+      setStatus(note)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '角色资金设置未保存')
+    } finally {
+      setWalletBusy(false)
+    }
+  }
   const label = useMemo(() => {
     if (!voiceId) return `跟随全局（${voiceLabel(voices, globalVoice)}）`
     return voiceLabel(voices, voiceId)
@@ -53,6 +78,25 @@ export function CharacterSettingsSheet(props: {
           </div>
           <button type="button" className="chip chip-pink shrink-0" onClick={props.onClose}>关闭</button>
         </div>
+
+        <section className="menu-card mt-3 min-w-0 space-y-2">
+          <h3 className="text-sm font-medium">角色资金与亲密付</h3>
+          {wallet && <p className="text-xs">角色余额 {wallet.balanceCents / 100} 枚</p>}
+          {wallet && <div className="space-y-2 border-t border-current/10 pt-2">
+            <p className="text-xs">{wallet.authorization === 'approved' ? '亲密付已绑定'
+              : wallet.authorization === 'pending' ? '已申请，等角色在私聊中答复'
+              : wallet.authorization === 'declined' ? '角色未同意绑定' : '亲密付未绑定'}</p>
+            <button type="button" className="chip" disabled={walletBusy || Boolean(props.character.blocked)} onClick={() => {
+              if (wallet.authorization === 'pending' || wallet.authorization === 'approved') {
+                void changeWallet(current => ({ ...current, authorization: 'none', requestId: undefined }), '亲密付已取消')
+              } else {
+                const requestId = uid('pay_request')
+                void changeWallet(current => current.authorization === 'pending' || current.authorization === 'approved'
+                  ? current : { ...current, authorization: 'pending', requestId }, '已申请。下次让角色在私聊回复时，TA 可以决定是否同意。')
+              }
+            }}>{wallet.authorization === 'approved' ? '解除绑定' : wallet.authorization === 'pending' ? '取消申请' : '申请亲密付'}</button>
+          </div>}
+        </section>
 
         <section className="menu-card mt-3 min-w-0">
           <p className="text-xs font-medium">MiniMax 音色</p>

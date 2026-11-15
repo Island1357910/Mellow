@@ -1,0 +1,62 @@
+.ingredient-thumb {
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: rgba(255, 252, 247, 0.65);
+  box-shadow: 0 1px 3px rgba(58, 46, 36, 0.08);
+}
+
+.ingredient-thumb--sm {
+  width: 22px;
+  height: 22px;
+}
+
+.ingredient-thumb--md {
+  width: 32px;
+  height: 32px;
+}
+
+.ingredient-thumb--lg {
+  width: 48px;
+  height: 48px;
+}
+
+.chip-btn .ingredient-thumb {
+  margin-right: 6px;
+}
+
+.proc-card .ingredient-thumb--lg {
+  align-self: center;
+  margin-bottom: 4px;
+}
+
+/* AI 采购品：同大类预设立绘 + 按类型变色滤镜；data-ai-variant 1/2 再偏色相，使同批三款外观不同 */
+.ingredient-thumb--ai-tint {
+  mix-blend-mode: normal;
+}
+.ingredient-thumb--ai-tint[data-ai-variant='1'] {
+  --ai-variant-spin: 52deg;
+}
+.ingredient-thumb--ai-tint[data-ai-variant='2'] {
+  --ai-variant-spin: -58deg;
+}
+.ingredient-thumb--ai-tint[data-ai-cat='面粉'] {
+  filter: hue-rotate(calc(-14deg + var(--ai-variant-spin, 0deg))) saturate(1.28) brightness(1.06) contrast(1.05);
+}
+.ingredient-thumb--ai-tint[data-ai-cat='液体'] {
+  filter: hue-rotate(calc(132deg + var(--ai-variant-spin, 0deg))) saturate(1.22) brightness(1.05) contrast(1.04);
+}
+.ingredient-thumb--ai-tint[data-ai-cat='酵母'] {
+  filter: hue-rotate(calc(78deg + var(--ai-variant-spin, 0deg))) saturate(1.18) brightness(1.04) contrast(1.06);
+}
+.ingredient-thumb--ai-tint[data-ai-cat='辅料'] {
+  filter: hue-rotate(calc(28deg + var(--ai-variant-spin, 0deg))) saturate(1.32) brightness(1.07) contrast(1.03);
+}
+.ingredient-thumb--ai-tint[data-ai-cat='风味'] {
+  filter: hue-rotate(calc(268deg + var(--ai-variant-spin, 0deg))) saturate(1.2) brightness(1.05) contrast(1.04);
+}
+.ingredient-thumb--ai-tint[data-ai-cat='馅料'] {
+  filter: hue-rotate(calc(312deg + var(--ai-variant-spin, 0deg))) saturate(1.15) brightness(1.04) contrast(1.05);
+}

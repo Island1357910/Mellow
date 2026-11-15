@@ -1,0 +1,60 @@
+.bakery-card-decor-host {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.bakery-card-decor-host > :not(.card-bread-decor-layer) {
+  position: relative;
+  z-index: 1;
+}
+
+.card-bread-decor-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.card-bread-decor-layer--chrome .card-bread-decor-img {
+  filter: drop-shadow(0 1px 2px rgba(58, 46, 36, 0.05));
+}
+
+.card-bread-decor-wrap {
+  position: absolute;
+  pointer-events: none;
+  line-height: 0;
+  will-change: transform;
+  animation: card-bread-drift-scale ease-in-out infinite;
+}
+
+.card-bread-decor-img {
+  display: block;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(58, 46, 36, 0.1));
+}
+
+/* 平移 + 多档 scale（含一次「鼓起」）形成错落 */
+@keyframes card-bread-drift-scale {
+  0%, 100% {
+    transform: translate(0, 0) scale(var(--decor-s-lo, 1));
+  }
+  28% {
+    transform: translate(2px, -5px) scale(var(--decor-s-mid, 1.06));
+  }
+  52% {
+    transform: translate(-3px, 2px) scale(var(--decor-pulse-hi, 1.12));
+  }
+  76% {
+    transform: translate(3px, 4px) scale(var(--decor-s-hi, 1.08));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-bread-decor-wrap {
+    animation: none;
+    transform: scale(var(--decor-s-mid, 1));
+  }
+}

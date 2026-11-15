@@ -1,5 +1,5 @@
 import { aiOrganizeDocument } from './aiCardImport.ts'
-import { readFileText } from './fileSnapshot.ts'
+import { checkImportSize, readFileBytes, readFileText } from './fileSnapshot.ts'
 import { readDocxFile } from './docxText.ts'
 import { parsePngCharacterCard } from './sillytavern.ts'
 import { plainTextCardJson, tryParseStructuredDoc } from './structuredDocImport.ts'
@@ -11,7 +11,7 @@ export function cardImportAccept(): string {
 }
 
 async function readDocText(file: File): Promise<string> {
-  const raw = await file.text()
+  const raw = await readFileText(file)
   const cleaned = raw.replace(/[^\u0020-\u007e\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim()
   if (cleaned.length > 80) return cleaned
   throw new Error('旧版 .doc 读不出来，请另存为 .txt 再导入')
@@ -21,7 +21,7 @@ export async function readDocumentText(file: File): Promise<string> {
   const lower = file.name.toLowerCase()
   if (lower.endsWith('.docx')) return readDocxFile(file)
   if (lower.endsWith('.doc')) return readDocText(file)
-  return file.text()
+  return readFileText(file)
 }
 
 function isTextLike(file: File): boolean {
@@ -99,8 +99,9 @@ export async function resolveImportJson(
   mode: 'auto' | 'character' | 'world' = 'auto',
   onProgress?: (message: string) => void,
 ): Promise<{ card: unknown; via: 'ai' | 'local' | 'raw' }> {
+  checkImportSize(file, 16)
   if (isPngLike(file)) {
-    const bytes = new Uint8Array(await file.arrayBuffer())
+    const bytes = await readFileBytes(file)
     const draft = parsePngCharacterCard(bytes)
     return {
       card: {
@@ -135,11 +136,5 @@ export async function resolveImportJson(
     if (!text.trim()) throw new Error('文件是空的')
     return textToCardJson(text, mode, file.name, onProgress)
   }
-  try {
-    return { card: JSON.parse(await file.text()) as unknown, via: 'raw' }
-  } catch {
-    const text = await readDocumentText(file)
-    if (!text.trim()) throw new Error('认不出文件格式')
-    return textToCardJson(text, mode, file.name, onProgress)
-  }
+  return resolveImportText(await readFileText(file), file.name, mode, onProgress)
 }

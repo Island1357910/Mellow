@@ -1,11 +1,12 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "1.1.40",
+  "version": "2.0.3",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
     "build:live": "vite build integrations/live --outDir ../../public/live-simulator --emptyOutDir",
+    "build:bakery": "vite build integrations/bakery --outDir ../../public/bakery",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -46,6 +47,7 @@
     "abort-controller": "^3.0.0",
     "core-js": "^3.51.0",
     "dexie": "^4.2.1",
+    "fflate": "^0.8.3",
     "framer-motion": "^12.23.22",
     "jsbi": "^4.3.2",
     "lucide-react": "^0.545.0",

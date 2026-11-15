@@ -24,11 +24,11 @@ export function visibleSmsParts(content: string): string[] {
   return parts.length ? parts : [content.trim()]
 }
 
-export function chatStatusLine(signature: string | undefined, personality: string | undefined): string {
-  const line = `${signature ?? ''}\n${personality ?? ''}`
+export function chatStatusLine(signature: string | undefined): string {
+  const line = (signature ?? '')
     .split(/[\n。]/)
     .map((item) => item.trim())
-    .find((item) => item && !isPageBanner(item) && !/^<<<\s*分/.test(item))
+    .find((item) => item && !isPageBanner(item) && !/^<<<\s*分/.test(item) && !/^\W*(?:IDENTITY\s*[:.]\s*|LOCK\s*=)/i.test(item))
   return line || '在线'
 }
 

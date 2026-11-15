@@ -1,10 +1,11 @@
 import { characterFromDraft } from '../domain/importing.ts'
+import { ensureDirectChat } from '../domain/messaging.ts'
 import { importCharacterRegex } from '../engine/story.ts'
 import { moduleAi } from './ask.ts'
 import { creationIdentityContext, type CreationIdentity } from './creationContext.ts'
 import { FORGE_JSON_RULES, requestForgeOutput } from './worldForgeFormat.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
-import { updateWorld, type WorldEntry } from './worldbook.ts'
+import { importCharacterWorld, updateWorld, type WorldEntry } from './worldbook.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity, LorebookEntry } from '../types/index.ts'
@@ -419,6 +420,14 @@ export function forgeWithReferences(text: string, references: string, identity?:
   return aiForge({ references, source: text }, identity)
 }
 
+export async function forgeWorldFromDocument(text: string, references: string, identity?: CreationIdentity): Promise<ForgeResult> {
+  const source = references ? { references, source: text } : text
+  if (cardToPrompt(source).length > AI_FORGE_SOURCE_LIMIT) {
+    throw new Error('文档与参考设定超过单次搭建的长度上限，请拆分文档或减少参考角色后再导入。')
+  }
+  return references ? forgeWithReferences(text, references, identity) : forgeWorldFromProse(text, identity)
+}
+
 export async function forgeWorldFromCard(raw: unknown, identity?: CreationIdentity): Promise<ForgeResult> {
   const local = localParseWorldCard(raw)
   if (local) {
@@ -455,23 +464,50 @@ export interface ForgeApplyOptions {
   extraTags?: string[]
 }
 
+function realmKey(name: string, jiushi: boolean) {
+  return `${jiushi ? 'old' : 'new'}:${name.trim().replace(/\s+/g, '').toLowerCase()}`
+}
+
+function isJiushiCharacter(character: Character) {
+  return Boolean(character.extensions?.jiushi) || character.tags.some(tag => tag === '旧世' || tag === '古风')
+}
+
 export async function applyForgeResult(
   identity: Identity,
   result: ForgeResult,
   options: ForgeApplyOptions = {},
-): Promise<{ world: WorldEntry[]; characters: Character[] }> {
+): Promise<{ world: WorldEntry[]; characters: Character[]; created: number; updated: number }> {
   const worldNs = options.worldNamespace ?? identity.namespace
   const stamped = Date.now()
   const imported = buildWorldEntries(result, stamped)
   const worldRows = await updateWorld(worldNs, prev => [...imported, ...prev.filter(item => item.worldForge !== result.worldTitle)])
 
   const skipChat = options.skipChat ?? options.jiushi ?? false
+  const jiushi = Boolean(options.jiushi)
+  const existing = await storage.listCharacters(identity.namespace)
+  const chats = skipChat ? [] : await storage.listChats(identity.namespace)
+  const hasDm = (person: Character) => chats.some(chat => chat.kind === 'dm' && chat.memberIds.includes(person.id))
+  const byKey = new Map<string, Character>()
+  for (const person of existing) {
+    const key = realmKey(person.name, isJiushiCharacter(person))
+    const previous = byKey.get(key)
+    if (!previous) {
+      byKey.set(key, person)
+      continue
+    }
+    const previousChat = hasDm(previous)
+    const personChat = hasDm(person)
+    const preferCurrent = personChat !== previousChat ? personChat : person.createdAt < previous.createdAt
+    if (preferCurrent) byKey.set(key, person)
+  }
   const characters: Character[] = []
+  let created = 0
+  let updated = 0
   for (const item of result.characters) {
     const tags = Array.from(new Set([
       ...item.draft.tags,
       '世界搭建',
-      ...(options.jiushi ? ['旧世', '古风'] : []),
+      ...(jiushi ? ['旧世', '古风'] : []),
       ...(options.extraTags ?? []),
     ]))
     const draft: CardDraft = {
@@ -479,19 +515,52 @@ export async function applyForgeResult(
       creatorNotes: '',
       tags,
       scenario: item.draft.scenario || result.worldTitle,
-      extensions: options.jiushi
+      extensions: jiushi
         ? { ...item.draft.extensions, jiushi: { importedAt: stamped, worldForge: true } }
         : item.draft.extensions,
     }
-    const character = await characterFromDraft(identity.namespace, draft, '', {
-      skipChat,
-      allowProactive: options.jiushi ? false : options.allowProactive ?? false,
-    })
-    await importCharacterRegex(identity.namespace, character)
+    const key = realmKey(draft.name, jiushi)
+    const match = draft.name.trim() ? byKey.get(key) : undefined
+    const character = match
+      ? {
+          ...match,
+          name: draft.name.trim() || match.name,
+          avatar: draft.avatar.trim() || match.avatar,
+          description: draft.description,
+          personality: draft.personality,
+          scenario: draft.scenario,
+          firstMes: draft.firstMes,
+          mesExample: draft.mesExample,
+          creatorNotes: '',
+          systemPrompt: draft.systemPrompt,
+          postHistoryInstructions: draft.postHistoryInstructions,
+          alternateGreetings: draft.alternateGreetings,
+          tags: Array.from(new Set([...match.tags, ...draft.tags])),
+          creator: draft.creator || match.creator,
+          characterVersion: draft.characterVersion || match.characterVersion,
+          characterBook: draft.characterBook,
+          extensions: { ...match.extensions, ...draft.extensions },
+          rawCard: draft.rawCard,
+          updatedAt: stamped,
+        }
+      : await characterFromDraft(identity.namespace, draft, draft.avatar, {
+          skipChat,
+          allowProactive: jiushi ? false : options.allowProactive ?? false,
+        })
+    if (match) {
+      await storage.putCharacter(identity.namespace, character)
+      await importCharacterWorld(identity.namespace, character)
+      await importCharacterRegex(identity.namespace, character)
+      if (!skipChat) await ensureDirectChat(identity.namespace, character)
+      updated += 1
+    } else {
+      created += 1
+    }
+    byKey.set(key, character)
     characters.push(character)
   }
 
   const bagKey = options.jiushi ? 'jiushi_worldforge_last' : 'worldforge_last'
   await storage.setBag(identity.namespace, bagKey, { result, at: stamped, worldNamespace: worldNs })
-  return { world: worldRows, characters }
+  return { world: worldRows, characters, created, updated }
 }

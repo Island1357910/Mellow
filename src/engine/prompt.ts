@@ -85,6 +85,7 @@ export function buildSmsMessages(input: {
     )
   }
   if (character.systemPrompt.trim()) systems.push(fill(character.systemPrompt, character, identity))
+  systems.push('短信每轮承接对方具体说过的话。按人物关系和当下情境变换消息长短、节奏与回应方式：可以直接回答、补一条细节、隔一会儿再追问、开个熟人玩笑，或把没说出口的话留到见面。避免连续使用相同开头、反问、调侃或强行升级暧昧。约定、称呼和边界以已经说清的为准；涉及成年角色自愿的权力角色扮演时，尊重双方明确约定的边界和暂停信号，不把角色扮演套用到每条短信。')
   const persona = identity.persona.trim()
   systems.push(persona ? `和你说话的人叫 ${identity.name}。关于这个人：${persona}` : `和你说话的人叫 ${identity.name}。`)
   const lore = loreFor(character, recent)
@@ -109,6 +110,7 @@ export function buildSmsMessages(input: {
   if (input.priority?.trim()) systems.push(input.priority.trim())
   systems.push(SCENE_HOLD)
 
+  if (input.groupMembers) systems.push('结合你的性格、与群里各人的关系和眼下的话题，像真人一样接话。可以回应刚发言的群友，补充你知道的细节、追问、开玩笑或简短表态。有人已经回答玩家时，顺着对话往下接，避免重复回答。只写你自己要发的消息。')
   const messages: AIMessage[] = [{ role: 'system', content: systems.join('\n\n') }]
   let imageNo = 0
   for (const item of history) {
@@ -217,18 +219,17 @@ export function smsSeenHistory(history: ChatMessage[]): ChatMessage[] {
 }
 
 export function describeMessage(item: ChatMessage, stickers?: Sticker[]): string {
+  if (item.kind === 'image') return '（发来一张图片）'
   const [head = '', ...rest] = parseCard(item.content)
   switch (item.kind) {
     case 'voice':
       return item.content
-    case 'image':
-      return '（发来一张图片）'
     case 'sticker':
       return `[表情:${stickerLabel(item.content, stickers)}]`
     case 'redpacket':
-      return `（发了一个红包：¥${head}${rest[0] ? `，写着“${rest[0]}”` : ''}${rest[1] ? `，${rest[1]}` : ''}）`
+      return `（发了一个红包：¥${head}${rest[0] ? `，写着“${rest[0]}”` : ''}${rest[1] ? `，${rest[1]}` : ''}${item.incomingMoney?.claimedAt ? '，玩家已领取' : ''}）`
     case 'transfer':
-      return `（转账 ¥${head}${rest[1] ? ` ${rest[1]}` : ''}${rest[0] ? `，备注“${rest[0]}”` : ''}）`
+      return `（转账 ¥${head}${rest[1] ? ` ${rest[1]}` : ''}${rest[0] ? `，备注“${rest[0]}”` : ''}${item.incomingMoney?.claimedAt ? '，玩家已收款' : ''}）`
     case 'gift':
       return `（${item.content.startsWith('[实物]') ? '买了实物礼物' : '送出虚拟礼物'}：${rest[0] ?? ''}${head ? ` ${head}` : ''}，${rest[1] ?? ''}${rest[2] ? `，附言“${rest[2]}”` : ''}）`
     case 'party':

@@ -1,0 +1,513 @@
+/* 千味面包房 · 布局氛围（参考比特啤酒花 Layout 结构，配色用面包房主色） */
+
+.bakery-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  color: var(--text);
+  /* 底图+遮罩见 .bakery-bg-photo / .bakery-bg-veil；此处仅作加载前兜底 */
+  background: var(--c-cream);
+}
+
+/* 全游戏摄影底图（public/images/底图.jpg） */
+.bakery-bg-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--c-cream);
+  background-image: url('../images/%E5%BA%95%E5%9B%BE.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* 半透明米色罩：压暗/统一色调，保证 UI 可读 */
+.bakery-bg-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgba(245, 236, 218, 0.78);
+  box-shadow: inset 0 0 120px rgba(243, 227, 195, 0.35);
+}
+
+/* 顶光氛围 · 按阶段微调 */
+.bakery-layout::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(
+    ellipse 85% 55% at 50% 0%,
+    rgba(255, 248, 235, 0.55) 0%,
+    rgba(245, 228, 200, 0.28) 42%,
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bakery-scene-develop::before {
+  background-image: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(255, 236, 200, 0.55) 0%,
+    rgba(252, 211, 69, 0.2) 45%,
+    transparent 70%
+  );
+}
+
+.bakery-scene-business::before {
+  background-image: radial-gradient(
+    ellipse 75% 48% at 50% 0%,
+    rgba(255, 245, 230, 0.5) 0%,
+    rgba(225, 149, 71, 0.15) 40%,
+    transparent 68%
+  );
+}
+
+.bakery-scene-night::before {
+  background-image: radial-gradient(
+    ellipse 80% 50% at 50% 0%,
+    rgba(200, 215, 240, 0.35) 0%,
+    rgba(157, 187, 220, 0.12) 45%,
+    transparent 70%
+  );
+}
+
+/* 暗角聚焦 */
+.bakery-layout::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 88% 88% at 50% 50%,
+    transparent 52%,
+    rgba(58, 46, 36, 0.08) 82%,
+    rgba(45, 38, 30, 0.14) 100%
+  );
+  pointer-events: none;
+  z-index: 4;
+}
+
+.bakery-grain-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.bakery-particle-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.bakery-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(193, 120, 55, 0.45);
+}
+
+.bakery-p-1 { left: 8%; top: 18%; animation: bakery-float-p 19s 0s infinite ease-in-out; }
+.bakery-p-2 { right: 10%; top: 22%; animation: bakery-float-p 23s 2s infinite ease-in-out; }
+.bakery-p-3 { left: 6%; bottom: 28%; animation: bakery-float-p 21s 4s infinite ease-in-out; }
+.bakery-p-4 { right: 14%; bottom: 22%; animation: bakery-float-p 17s 1s infinite ease-in-out; }
+.bakery-p-5 { left: 48%; top: 8%; animation: bakery-float-p 25s 3s infinite ease-in-out; }
+
+@keyframes bakery-float-p {
+  0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+  33% { transform: translate(12px, -16px); opacity: 0.45; }
+  66% { transform: translate(-8px, 12px); opacity: 0.3; }
+}
+
+.bakery-layout-stack {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* 顶栏：磨砂条（比特啤酒花 header 质感） */
+.bakery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0.48rem 0.75rem;
+  background: rgba(255, 250, 242, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(193, 120, 55, 0.22);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(58, 46, 36, 0.06);
+}
+
+.bakery-header .bar-left,
+.bakery-header .bar-center,
+.bakery-header .bar-right {
+  display: flex;
+  align-items: center;
+}
+
+.bakery-header .bar-left {
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+
+.bakery-header .header-nav-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.bakery-header .header-nav-col .btn {
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.bakery-header .header-player-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bakery-header .header-day-recipe-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  flex-shrink: 0;
+}
+
+.bakery-header .header-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bakery-header .bar-right {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bakery-header .phase-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bakery-header .logo {
+  color: var(--primary-dark);
+  text-shadow: none;
+}
+
+.bakery-header .day-badge {
+  background: rgba(225, 149, 71, 0.2);
+  color: var(--text);
+  border: 1px solid rgba(225, 149, 71, 0.35);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bakery-header .phase-btn {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(157, 187, 220, 0.45);
+  color: var(--text-secondary);
+}
+
+.bakery-header .phase-btn.active {
+  background: linear-gradient(135deg, var(--c-yellow), var(--c-peach));
+  color: var(--text);
+  border-color: transparent;
+}
+
+.bakery-header .phase-btn.done {
+  background: rgba(157, 187, 220, 0.25);
+  color: var(--text-secondary);
+}
+
+.bakery-header .stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.5);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 149, 71, 0.2);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bakery-hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  background: rgba(225, 149, 71, 0.15);
+  border: 1px solid rgba(225, 149, 71, 0.35);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bakery-hamburger:hover {
+  background: rgba(225, 149, 71, 0.28);
+}
+
+.bakery-hamburger span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--primary-dark);
+  border-radius: 2px;
+}
+
+.bakery-header .icon-btn {
+  background: rgba(157, 187, 220, 0.35);
+  border: 1px solid rgba(157, 187, 220, 0.5);
+  color: var(--text);
+}
+
+.bakery-header .icon-btn:hover {
+  background: rgba(157, 187, 220, 0.5);
+}
+
+/** 顶栏极简模式：汉堡+玩家信息 + 保存右对齐 */
+.bakery-header-minimal .bar-center { display: none; }
+.bakery-header-minimal .bar-right { display: flex; justify-content: flex-end; }
+
+/* 剧情金句条（对应 GoalBanner 的轻量版） */
+.bakery-goal-banner {
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.45);
+  border-bottom: 1px solid rgba(225, 149, 71, 0.12);
+  line-height: 1.5;
+}
+
+/* 主内容区（比特啤酒花 layout-main） */
+.bakery-layout .layout-main {
+  flex: 1;
+  padding: 1rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .bakery-layout .layout-main {
+    padding: 1.25rem 1.75rem;
+  }
+}
+
+/* ========== 侧栏抽屉（比特啤酒花 drawer 交互） ========== */
+.bakery-side-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.bakery-side-drawer.open {
+  pointer-events: auto;
+}
+
+.bakery-side-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 26, 22, 0.45);
+  opacity: 0;
+  transition: opacity 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.bakery-side-drawer.open .bakery-side-drawer-backdrop {
+  opacity: 1;
+}
+
+.bakery-side-drawer-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(292px, 86vw);
+  max-width: 100%;
+  height: 100%;
+  /* 与主界面同底图：cover 保持比例，只裁切不拉伸 */
+  background-color: var(--c-cream);
+  background-image:
+    linear-gradient(rgba(255, 252, 247, 0.62), rgba(255, 252, 247, 0.62)),
+    url('../images/%E5%BA%95%E5%9B%BE.jpg');
+  background-size: auto, cover;
+  background-position: 0 0, center center;
+  background-repeat: no-repeat;
+  background-clip: border-box;
+  border-right: 1px solid rgba(193, 120, 55, 0.22);
+  box-shadow: 8px 0 32px rgba(58, 46, 36, 0.12);
+  transform: translateX(-100%);
+  transition: transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.bakery-side-drawer.open .bakery-side-drawer-panel {
+  transform: translateX(0);
+}
+
+.drawer-save-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: .9rem; transition: background .2s; }
+.drawer-save-btn:hover { background: var(--surface-alt); }
+
+.bakery-drawer-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  background: rgba(225, 149, 71, 0.1);
+  border-bottom: 1px solid rgba(193, 120, 55, 0.15);
+  font-size: 0.88rem;
+}
+
+.bakery-drawer-stats span {
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  border: 1px solid rgba(157, 187, 220, 0.35);
+}
+
+.bakery-drawer-hint-bar {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  background: rgba(252, 211, 69, 0.2);
+  border: none;
+  border-bottom: 1px solid rgba(225, 149, 71, 0.2);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: background 0.2s;
+}
+
+.bakery-drawer-hint-bar:hover {
+  background: rgba(252, 211, 69, 0.32);
+}
+
+.drawer-settings-block { padding: 12px 16px; border-bottom: 1px solid rgba(193, 120, 55, 0.15); }
+.drawer-settings-block .drawer-subtitle { font-size: .9rem; margin-bottom: 8px; }
+.drawer-settings-block .drawer-label { display: block; font-size: .75rem; color: var(--text-muted); margin-top: 8px; }
+.drawer-settings-block .drawer-input { width: 100%; padding: 6px 10px; font-size: .82rem; border: 1px solid var(--border); border-radius: 6px; margin-top: 2px; }
+.drawer-settings-actions { display: flex; gap: 8px; margin-top: 10px; }
+.drawer-settings-msg { font-size: .8rem; color: var(--primary-dark); margin-top: 6px; }
+
+.bakery-drawer-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(193, 120, 55, 0.18);
+  gap: 10px;
+}
+.bakery-drawer-logo {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.bakery-drawer-header-row .icon-btn-save {
+  flex-shrink: 0;
+}
+.bakery-drawer-title {
+  padding: 0.4rem 0.85rem;
+  margin: 0;
+  border-bottom: 1px solid rgba(193, 120, 55, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.bakery-drawer-tutorial-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(193, 120, 55, 0.18);
+}
+.bakery-drawer-tutorial-row .drawer-tutorial-btn {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bakery-drawer-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.bakery-drawer-nav-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 10px;
+  padding: 12px 14px 20px;
+  flex: 1;
+  align-content: start;
+}
+
+.bakery-drawer-nav-grid .drawer-nav-btn {
+  min-height: 46px;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  gap: 4px;
+  padding: 10px 8px;
+  font-size: 0.8rem;
+}
+
+.bakery-drawer-nav-grid .drawer-nav-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.bakery-drawer-nav-grid .drawer-nav-label {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  line-height: 1.2;
+}

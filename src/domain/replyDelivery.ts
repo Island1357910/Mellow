@@ -65,7 +65,7 @@ export async function deliverReplyParts(input: {
   identity: Identity
   character: Character
   chat: Chat
-  parts: Array<{ kind: 'text' | 'sticker'; content: string }>
+  parts: Array<{ kind: 'text' | 'sticker' | 'image' | 'redpacket' | 'transfer'; content: string }>
   voiceReady: boolean
   history: ChatMessage[]
   proactive?: boolean
@@ -76,8 +76,8 @@ export async function deliverReplyParts(input: {
 
   for (const [index, part] of input.parts.entries()) {
     if (index > 0) await sleep(staggerDelay(index))
-    const kind = part.kind === 'sticker'
-      ? 'sticker'
+    const kind = part.kind !== 'text'
+      ? part.kind
       : shouldReplyAsVoice({
           chat,
           voiceReady: input.voiceReady,
@@ -92,7 +92,11 @@ export async function deliverReplyParts(input: {
       ...input.makeMessage(part.content, kind, index),
       createdAt: Date.now() + index * 3,
     }
-    await storage.putMessage(input.namespace, reply)
+    if (reply.incomingMoney) {
+      if (!await storage.fundCharacterMessage(input.namespace, reply)) continue
+    } else {
+      await storage.putMessage(input.namespace, reply)
+    }
     replies.push(reply)
     chat = await touchDelivered(input.namespace, chat, reply, 1)
     useMellow.getState().touchData()

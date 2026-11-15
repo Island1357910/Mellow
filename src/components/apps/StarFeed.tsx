@@ -229,6 +229,7 @@ export function StarApp(props: { onBack: () => void }) {
         {opened ? (
           <article className="menu-card">
             <div className="mb-4 flex items-center justify-between gap-2"><button className="text-sm font-semibold" onClick={()=>{setBlogger(opened.handle);setOpenId(null)}}>@{opened.handle}</button>{!opened.mine&&followButton(opened.handle)}</div><p className="whitespace-pre-wrap text-sm leading-7">{opened.text}</p>
+            {opened.image && <img src={opened.image} alt="动态配图" loading="lazy" className="mt-2 max-h-64 rounded-2xl object-contain" />}
             <p className="mt-2 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{when(opened.at)}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" className="chip" style={opened.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(opened.id)}><Heart size={12} /> {opened.likes}</button>
@@ -270,6 +271,7 @@ export function StarApp(props: { onBack: () => void }) {
                     {!item.mine&&followButton(item.handle)}
                   </div>
                   <button type="button" className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-7" onClick={()=>setOpenId(item.id)}>{item.text}</button>
+                  {item.image && <img src={item.image} alt="动态配图" loading="lazy" className="mt-2 max-h-48 rounded-2xl object-cover" />}
                   <div className="star-actions mt-3 flex flex-wrap gap-2 border-t border-current/10 pt-3">
                     <button type="button" className="chip" style={item.liked ? { background: '#F8D0DC' } : undefined} onClick={() => like(item.id)}><Heart size={12} /> {item.likes}</button>
                     <button type="button" className="chip" onClick={() => setOpenId(item.id)}><MessageCircle size={14} /> {item.comments.length}</button>

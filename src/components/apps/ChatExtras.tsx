@@ -266,6 +266,7 @@ export function CallScreen(props: {
   fourthWall: boolean
   voiceEnabled: boolean
   onEnd: (content: string) => void
+  onClose: () => void
 }) {
   const beginReply = useMellow((state) => state.beginReply)
   const endReply = useMellow((state) => state.endReply)
@@ -282,6 +283,7 @@ export function CallScreen(props: {
   const [speaking, setSpeaking] = useState(false)
   const [error, setError] = useState('')
   const [ending, setEnding] = useState(false)
+  const ended = useRef(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setConnected(true), 2200)
@@ -334,6 +336,7 @@ export function CallScreen(props: {
       userText: text,
       smsHistory: props.messages,
     })
+    if (ended.current) return
     if (result.error) {
       setTurns([...sessionRef.current.turns])
       if (result.error !== 'BUSY') setError(result.error)
@@ -348,6 +351,7 @@ export function CallScreen(props: {
       setSpeaking(true)
       try {
         const url = await playCallVoice({ settings: props.settings.minimax, character: speakerChar, text: result.assistant.text })
+        if (ended.current) return
         if (url) {
           stopAudio()
           const audio = new Audio(url)
@@ -364,21 +368,30 @@ export function CallScreen(props: {
   }
 
   const hangUp = () => {
-    if (ending) return
+    if (ended.current) return
+    ended.current = true
     setEnding(true)
     stopAudio()
+    if (busy) endReply()
+    props.onClose()
     void (async () => {
-      const content = await finishCallSession({
-        namespace: props.identity.namespace,
-        chatId: props.chat.id,
-        session: sessionRef.current,
-        seconds,
-        group: props.group,
-        identity: props.identity,
-        character: props.person ?? props.people[0]!,
-        cancelled: !connected,
-      })
-      props.onEnd(content)
+      const session = { ...sessionRef.current, turns: [...sessionRef.current.turns] }
+      const fallback = connected ? `通话时长 ${clock(seconds)}` : '已取消'
+      try {
+        const content = await finishCallSession({
+          namespace: props.identity.namespace,
+          chatId: props.chat.id,
+          session,
+          seconds,
+          group: props.group,
+          identity: props.identity,
+          character: props.person ?? props.people[0]!,
+          cancelled: !connected,
+        })
+        props.onEnd(content)
+      } catch {
+        props.onEnd(`${props.group ? '群语音通话' : '通话'} · ${fallback}`)
+      }
     })()
   }
 
@@ -485,6 +498,7 @@ export function CardBubble(props: { message: ChatMessage }) {
     )
   }
   const red = kind === 'redpacket'
+  const money = props.message.role === 'assistant' ? props.message.incomingMoney : undefined
   return (
     <span className="flex w-56 flex-col overflow-hidden rounded-[18px] text-white shadow-[0_8px_16px_rgba(240,140,110,0.25)]" style={{ background: red ? 'linear-gradient(135deg,#F27B7B,#F3A8BA)' : 'linear-gradient(135deg,#F2A66E,#F0C56A)' }}>
       <span className="flex items-center gap-3 px-3 py-3">
@@ -494,7 +508,10 @@ export function CardBubble(props: { message: ChatMessage }) {
           <span className="block truncate text-[11px] opacity-90">{red ? first || '恭喜发财，大吉大利' : first || '转账'}</span>
         </span>
       </span>
-      <span className="bg-white/90 px-3 py-1 text-[10px] text-[#b06a5a]">{red ? second || '红包' : second || '转账'}</span>
+      <span className="bg-white/90 px-3 py-1 text-[10px] text-[#b06a5a]">
+        {red ? second || '红包' : second || '转账'}
+        {money ? ` · ${money.claimedAt ? `已领取 ¥${(money.cents / 100).toFixed(2)}` : red ? '点击领取' : '点击收款'}` : ''}
+      </span>
     </span>
   )
 }

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { makeCard } from '../src/lib/cardMaker.ts'
-import { applyForgeResult, forgeWithReferences, forgeWorldFromCard, forgeWorldFromProse, reviseForgeResult } from '../src/lib/worldForge.ts'
+import { applyForgeResult, forgeWithReferences, forgeWorldFromCard, forgeWorldFromDocument, forgeWorldFromProse, reviseForgeResult } from '../src/lib/worldForge.ts'
 import { requestForgeOutput, validateForgeOutput } from '../src/lib/worldForgeFormat.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import type { AIRequest, Character, Identity } from '../src/types/index.ts'
@@ -14,6 +14,7 @@ const character = {
 }
 const valid = { worldTitle: '雨城', worldSummary: '三年不能说出自己的名字。', worldEntries: [], characters: [character] }
 const worldOnly = { ...valid, worldSummary: '旧城区的人把这里叫作“雨城”。', characters: [] }
+await assert.rejects(forgeWorldFromDocument('雨'.repeat(39_900), '参考'.repeat(100)), /超过单次搭建/)
 validateForgeOutput(valid)
 validateForgeOutput(worldOnly)
 assert.throws(() => validateForgeOutput({ ...worldOnly, worldSummary: '' }), /没有生成任何世界设定或角色/)
@@ -111,6 +112,48 @@ try {
     assert.match(prompt, /不少于4000字/)
   }
   assert.match(requests[1]!.messages.at(-1)!.content, /上次结果不是完整的角色卡 JSON/)
+
+  const draft = {
+    avatar: '', mesExample: '', creatorNotes: '', systemPrompt: '不要替玩家发言', postHistoryInstructions: '',
+    alternateGreetings: [] as string[], creator: 'worldforge', characterVersion: '1.0.0', characterBook: null, extensions: {}, rawCard: null,
+  }
+  const forged = (description: string, name = character.name) => ({
+    worldTitle: '雨城', worldSummary: worldOnly.worldSummary, worldEntries: [],
+    characters: [{ draft: { ...character, ...draft, name, description, tags: ['雨城'] }, note: '测试' }],
+  })
+  const ns = 'worldforge-update'
+  const first = await applyForgeResult({ namespace: ns } as Identity, forged('旧设定：夜班医生随身带着笔记。'))
+  assert.equal(first.created, 1)
+  assert.equal(first.updated, 0)
+  const originalId = first.characters[0]!.id
+  const chat = (await storage.listChats(ns)).find(item => item.memberIds.includes(originalId))
+  assert.ok(chat)
+  await storage.putMessage(ns, {
+    id: 'msg-keep', chatId: chat.id, role: 'user', kind: 'text', content: '昨晚没睡。', charId: null, createdAt: Date.now(), status: 'sent',
+  })
+  await storage.putCharacter(ns, { ...first.characters[0]!, avatar: 'avatar-keep', signature: '还在值班', voiceId: 'voice-keep' })
+  await storage.putCharacter(ns, {
+    ...first.characters[0]!, id: 'char-old-world', name: character.name, description: '旧世里的另一位夜班医生',
+    tags: ['旧世', '古风'], extensions: { jiushi: { importedAt: 1 } }, createdAt: 1,
+  })
+  const second = await applyForgeResult({ namespace: ns } as Identity, forged('新设定：夜班医生改去城南坐诊。'))
+  assert.equal(second.created, 0)
+  assert.equal(second.updated, 1)
+  assert.equal(second.characters[0]!.id, originalId)
+  assert.equal(second.characters[0]!.description, '新设定：夜班医生改去城南坐诊。')
+  assert.equal(second.characters[0]!.avatar, 'avatar-keep')
+  assert.equal(second.characters[0]!.signature, '还在值班')
+  assert.equal(second.characters[0]!.voiceId, 'voice-keep')
+  const people = await storage.listCharacters(ns)
+  assert.equal(people.filter(person => person.name === character.name).length, 2)
+  assert.equal(people.find(person => person.id === 'char-old-world')?.description, '旧世里的另一位夜班医生')
+  const messages = await storage.listMessages(ns, chat.id)
+  assert.equal(messages.filter(item => item.content === '昨晚没睡。').length, 1)
+  assert.equal(messages.filter(item => item.role === 'assistant' && item.content === character.firstMes).length, 1)
+  assert.equal((await storage.listChats(ns)).filter(item => item.memberIds.includes(originalId)).length, 1)
+  const renamed = await applyForgeResult({ namespace: ns } as Identity, forged('同一个人，只是名字里多了空格。', '夜班 医生'))
+  assert.equal(renamed.updated, 1)
+  assert.equal(renamed.characters[0]!.id, originalId)
 } finally {
   AIAdapter.fromStored = original
 }

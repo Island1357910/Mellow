@@ -1,0 +1,20 @@
+[data-seine-app="bakery"] :is(.bakery-header, .panel, .btn-secondary, .drawer-input) {
+  background: linear-gradient(155deg,#f8fcf4ee,#d5e6deeb) !important;
+  border-color: #adc5b9 !important;
+  color: #273b32 !important;
+  backdrop-filter: blur(9px);
+}
+
+[data-seine-app="bakery"] :is(.btn-primary, .btn-accent) {
+  background: #456457 !important;
+  color: #f7fff8 !important;
+}
+
+[data-seine-app="live"] :is([class*="bg-[#160b24]"], [class*="bg-[#1a0f2a]"], [class*="bg-[#26183d]"]) {
+  background-color: #284542eb !important;
+}
+[data-seine-app="live"] :is([class*="text-[#9b5cff]"], [class*="text-[#c4b5fd]"]) { color: #bbddcd !important; }
+[data-seine-app="live"] [class*="text-[#9b8fb0]"] { color: #c0d3ca !important; }
+[data-seine-app="live"] [class*="bg-[#9b5cff]"] { background-color: #4d786c !important; }
+[data-seine-app="live"] [class*="border-[#3d2a55]"] { border-color: #638378 !important; }
+[data-seine-app="live"] button:focus-visible { outline: 2px solid #bbddcd; outline-offset: 2px; }

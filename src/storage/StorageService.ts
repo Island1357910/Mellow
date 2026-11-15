@@ -25,6 +25,7 @@ import type {
   Theme,
 } from '../types/index.ts'
 import { purgeCharacterBindings } from '../domain/characterCleanup.ts'
+import { characterWalletKey, readCharacterWallet, type CharacterWallet } from '../domain/characterWallet.ts'
 import { normalizeForumThreads } from '../lib/forumAi.ts'
 import { normalizeFeedPosts } from '../lib/feed.ts'
 import { markBuildCurrent, needsDataUpgrade } from '../lib/upgrade.ts'
@@ -515,6 +516,11 @@ class StorageService {
     await this.ns(namespace).messages.put(message)
   }
 
+  async putMessages(namespace: string, messages: ChatMessage[]): Promise<void> {
+    const db = this.ns(namespace)
+    await db.transaction('rw', db.messages, () => db.messages.bulkPut(messages))
+  }
+
   async markChatRead(namespace: string, chatId: string): Promise<void> {
     await this.ns(namespace).chats.where('id').equals(chatId).and(chat => chat.unread !== 0).modify(chat => {
       chat.unread = 0
@@ -523,7 +529,56 @@ class StorageService {
   }
 
   async updateMessage(namespace: string, message: ChatMessage): Promise<void> {
-    await this.ns(namespace).messages.put(message)
+    await this.ns(namespace).messages.update(message.id, {
+      starred: message.starred,
+      hidden: message.hidden,
+      content: message.content,
+    })
+  }
+
+  async claimChatMoney(namespace: string, chatId: string, messageId: string): Promise<void> {
+    const db = this.ns(namespace)
+    await db.transaction('rw', db.messages, () => db.messages.get(messageId).then(message => {
+      const money = message?.incomingMoney
+      if (!message || message.chatId !== chatId || message.hidden || message.role !== 'assistant' ||
+          (message.kind !== 'redpacket' && message.kind !== 'transfer') || !money ||
+          !Number.isSafeInteger(money.cents) || money.cents <= 0 || money.cents > 20_000) {
+        throw new Error('这笔红包或转账已不可领取')
+      }
+      if (money.claimedAt) return
+      return db.messages.update(messageId, { incomingMoney: { ...money, claimedAt: Date.now() } })
+    }))
+  }
+
+  async characterWallet(namespace: string, charId: string): Promise<CharacterWallet> {
+    const [saved, character] = await Promise.all([this.getBag(namespace, characterWalletKey(charId)), this.getCharacter(namespace, charId)])
+    return readCharacterWallet(saved, character)
+  }
+
+  async updateCharacterWallet(namespace: string, charId: string, change: (wallet: CharacterWallet) => CharacterWallet): Promise<CharacterWallet> {
+    const key = characterWalletKey(charId)
+    const character = await this.getCharacter(namespace, charId)
+    if (!character) throw Error('角色已不存在')
+    const saved = await this.changeAppBags(namespace, [key], bags => ({ [key]: change(readCharacterWallet(bags[key], character)) }))
+    return readCharacterWallet(saved[key])
+  }
+
+  async fundCharacterMessage(namespace: string, message: ChatMessage): Promise<boolean> {
+    const db = this.ns(namespace)
+    const charId = message.charId
+    const cost = message.incomingMoney?.totalCents ?? 0
+    if (!charId || message.role !== 'assistant' || (message.kind !== 'transfer' && message.kind !== 'redpacket') ||
+        !Number.isSafeInteger(cost) || cost < 1 || cost > 20_000) return false
+    const key = characterWalletKey(charId)
+    return db.transaction('rw', db.chats, db.chars, db.appData, db.messages, () => Dexie.Promise.all([
+      db.messages.get(message.id), db.chats.get(message.chatId), db.chars.get(charId), db.appData.get(key),
+    ]).then(([existing, chat, character, saved]) => {
+      if (existing || !chat || chat.blocked || !chat.memberIds.includes(charId) || !character || character.blocked) return false
+      const wallet = readCharacterWallet(saved?.value, character)
+      if (wallet.balanceCents < cost) return false
+      return db.appData.put({ id: key, value: { ...wallet, balanceCents: wallet.balanceCents - cost } })
+        .then(() => db.messages.add(message)).then(() => true)
+    }))
   }
 
   async deleteMessage(namespace: string, messageId: string): Promise<void> {
@@ -650,15 +705,27 @@ class StorageService {
 
   async purchaseDelivery(namespace:string,order:import('../lib/delivery.ts').Delivery,purchasedIds?:string[]):Promise<void>{
     const db=this.ns(namespace),cartId=order.shop==='duotao'?'cart_duotao':'cart_flash'
-    await db.transaction('rw',db.appData,()=>db.appData.bulkGet(['coins',cartId,'deliveries']).then(([coinsRow,cartRow,ordersRow])=>{
-      const saved=coinsRow?.value
-      const coins=typeof saved==='number'&&Number.isFinite(saved)?saved:20
-      if(!Number.isFinite(order.total)||order.total<0||coins<order.total)throw Error('余额不足')
-      const cart=(cartRow?.value??[]) as Array<{id:string;qty:number}>
-      if(purchasedIds&&purchasedIds.some(id=>!cart.some(l=>l.id===id)))throw Error('购物车已经变化，请刷新后再结算')
+    const payerKey = order.payerId ? characterWalletKey(order.payerId) : 'coins'
+    await db.transaction('rw', db.appData, db.chars, () => Dexie.Promise.all([
+      db.appData.bulkGet([payerKey, cartId, 'deliveries']),
+      order.payerId ? db.chars.get(order.payerId) : Dexie.Promise.resolve(undefined),
+    ]).then(([[balanceRow, cartRow, ordersRow], payer]) => {
       const orders=(ordersRow?.value??[]) as import('../lib/delivery.ts').Delivery[]
       if(orders.some(o=>o.id===order.id))return
-      return db.appData.bulkPut([{id:'coins',value:coins-order.total},{id:'deliveries',value:[order,...orders]},{id:cartId,value:purchasedIds?cart.filter(l=>!purchasedIds.includes(l.id)):[]}])
+      const saved=balanceRow?.value
+      const coins=typeof saved==='number'&&Number.isFinite(saved)?saved:20
+      if(!Number.isFinite(order.total)||order.total<0)throw Error('订单金额无效')
+      const cart=(cartRow?.value??[]) as Array<{id:string;qty:number}>
+      if(purchasedIds&&purchasedIds.some(id=>!cart.some(l=>l.id===id)))throw Error('购物车已经变化，请刷新后再结算')
+      let balance: number | CharacterWallet = coins - order.total
+      if (order.payerId) {
+        const wallet = readCharacterWallet(saved, payer)
+        if (!payer || payer.blocked || wallet.authorization !== 'approved') throw Error('这个角色的亲密付目前不可用')
+        const cost = Math.round(order.total * 100)
+        if (!Number.isSafeInteger(cost) || cost > wallet.balanceCents) throw Error('角色余额不足，请换一种付款方式')
+        balance = { ...wallet, balanceCents: wallet.balanceCents - cost }
+      } else if (coins < order.total) throw Error('余额不足')
+      return db.appData.bulkPut([{id:payerKey,value:balance},{id:'deliveries',value:[order,...orders]},{id:cartId,value:purchasedIds?cart.filter(l=>!purchasedIds.includes(l.id)):[]}])
     }))
   }
 

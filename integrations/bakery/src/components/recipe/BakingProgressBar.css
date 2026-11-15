@@ -1,0 +1,56 @@
+.baking-progress-global {
+  position: fixed;
+  z-index: 1300;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 2px solid var(--c-peach);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.baking-progress-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--primary-dark);
+  white-space: nowrap;
+}
+
+.baking-progress-track {
+  width: 120px;
+  height: 12px;
+  background: var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.baking-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--c-amber), var(--c-yellow));
+  border-radius: 6px;
+  /* 与 rAF 同步刷新，避免 transition 与真实进度脱节 */
+}
+
+.baking-progress-pct {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary-dark);
+  min-width: 36px;
+}
+
+.baking-progress-draggable {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.baking-progress-drag-handle {
+  font-size: .7rem;
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+  padding: 2px 0;
+}
+.baking-progress-drag-handle:active { cursor: grabbing; }

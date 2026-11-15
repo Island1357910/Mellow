@@ -1,3 +1,4 @@
+import { characterWalletKey } from './characterWallet.ts'
 import { changeSharedLife } from '../lib/sharedLife.ts'
 import { deleteSave, loadConfig, saveConfig } from '../engine/story.ts'
 import { readWorld, writeWorld } from '../lib/worldbook.ts'
@@ -28,6 +29,7 @@ async function purgeAppData(namespace: string, charId: string): Promise<void> {
   await storage.deleteBag(namespace, `peek_${charId}`)
   await storage.deleteBag(namespace, `char_diary_${charId}`)
   await storage.deleteBag(namespace, `char_searches_${charId}`)
+  await storage.deleteBag(namespace, characterWalletKey(charId))
 
   const glance = (await storage.getBag<Record<string, string[]>>(namespace, 'glance')) ?? {}
   if (glance[charId]) {

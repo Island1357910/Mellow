@@ -16,6 +16,7 @@ const ICONS = {
   forum: BookMarked,
   map: Map,
   settings: Settings,
+  tips: Lightbulb,
   diary: NotebookPen,
   star: Sparkles,
   duotao: ShoppingBag,

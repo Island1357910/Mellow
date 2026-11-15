@@ -123,10 +123,13 @@ export function ejectTo(board: HomeCell[], folderId: string, appId: string, to: 
   return trimGaps(next)
 }
 
-export function chunkBoard(board: HomeCell[], size = HOME_PAGE_CAP): HomeCell[][] {
-  if (board.length === 0) return [[]]
-  const pages: HomeCell[][] = []
-  for (let index = 0; index < board.length; index += size) pages.push(board.slice(index, index + size))
+export const FULL_HOME_PAGE_CAP = 24
+
+export function chunkBoard(board: HomeCell[]) {
+  const pages = [{ start: 0, capacity: HOME_PAGE_CAP, cells: board.slice(0, HOME_PAGE_CAP) }]
+  for (let start = HOME_PAGE_CAP; start === HOME_PAGE_CAP || start < board.length; start += FULL_HOME_PAGE_CAP) {
+    pages.push({ start, capacity: FULL_HOME_PAGE_CAP, cells: board.slice(start, start + FULL_HOME_PAGE_CAP) })
+  }
   return pages
 }
 

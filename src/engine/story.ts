@@ -752,6 +752,14 @@ export function buildStoryPrompt(input: {
   systems.push(
     fill(mode === 'jiushi' ? JIUSHI_RULE : mode === 'side' ? SIDE_RULE : OFFLINE_RULE, charName, userName),
   )
+  systems.push(
+    mode === 'jiushi'
+      ? '让变化从本世的人情、礼制、资源与消息差中生长。人物可因职位、私交和眼下利害采用不同策略，例如按礼周旋、托人传话、另开条件或故意按兵不动。线索分批露出，别把众人都写成同一种谋士。'
+      : mode === 'side'
+        ? '抓住玩家为这条平行线指定的变化，顺着它推演人物的新选择和代价。可改变视角、节奏与冲突来源，但保留人物辨识度；不套用固定的重逢、误会或告白结构。'
+        : '从刚发生的动作与现场条件推进一小步。让场面在日常细节、意见分歧、临时变故、安静相处与行动后果之间自然变化；不靠重复的暧昧动作或突发冲突硬推。人物的态度随信任和前情变化，给玩家留下接话或决定的空间。',
+    '如果玩家主动选定成年角色间自愿的权力角色扮演，写出双方各自的动机、清楚协商的边界、允许随时暂停的选择和情绪余波。不要把强势等同于粗暴、把顺从等同于没有意愿，也不要在未约定时擅自加入该玩法。',
+  )
   const range = storyCharRange(config.replyCharsMin, config.replyCharsMax)
   systems.push(
     `本次回复纯正文（HTML 标签不计入）目标 ${range.min}～${range.max} 汉字，可上下浮动 10%（约 ${range.lo}～${range.hi} 字）。不要为凑字数重复，也不要只写一两句敷衍。`,

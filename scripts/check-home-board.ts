@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
-import { clampPet, ejectApp, ejectTo, mergeCell, moveCell, placeCell, resolveBoard } from '../src/lib/homeBoard.ts'
+import { chunkBoard, clampPet, ejectApp, ejectTo, mergeCell, moveCell, placeCell, resolveBoard } from '../src/lib/homeBoard.ts'
 import { openRedeemCodes } from '../src/lib/redeem.ts'
 
 const installed = ['diary', 'star', 'spark']
 const board = resolveBoard(installed, undefined)
+const full = chunkBoard(board)[1]!
+assert.deepEqual([full.start, full.capacity], [12, 24])
+const lowerSlot = full.start + full.capacity - 1
+const movedToBottom = resolveBoard(installed, placeCell(board, 0, lowerSlot))
+assert.deepEqual(chunkBoard(movedToBottom)[1]?.cells[23], board[0])
 assert.equal(board[0]?.kind, 'app')
 const moved = moveCell(board, 0, 2)
 assert.notEqual(moved[0], board[0])

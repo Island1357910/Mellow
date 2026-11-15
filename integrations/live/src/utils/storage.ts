@@ -10,6 +10,24 @@ export const STORAGE_PREFIX = 'shenhao_';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let migratePromise: Promise<void> | null = null;
+let preferLocal = false;
+
+function rememberLocal() {
+  preferLocal = true;
+  dbPromise = null;
+}
+
+function readLocal(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function writeLocal(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* 部分手机的内嵌页禁止写入本地存储 */ }
+}
+
+function removeLocal(key: string) {
+  try { localStorage.removeItem(key); } catch { /* 清理失败不影响页面继续使用 */ }
+}
 
 function requestToPromise<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -27,18 +45,45 @@ function txDone(tx: IDBTransaction): Promise<void> {
 }
 
 function openDB(): Promise<IDBDatabase> {
+  if (preferLocal || typeof indexedDB === 'undefined') {
+    rememberLocal();
+    return Promise.reject(new Error('indexedDB unavailable'));
+  }
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      rememberLocal();
+      reject(new Error('indexedDB timeout'));
+    }, 1200);
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (error) {
+      clearTimeout(timer);
+      rememberLocal();
+      reject(error);
+      return;
+    }
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      if (settled) { req.result.close(); return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(req.result);
+    };
     req.onerror = () => {
-      dbPromise = null;
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      rememberLocal();
       reject(req.error);
     };
   });
@@ -97,37 +142,68 @@ async function ensureReady() {
 }
 
 export async function storageGet(key: string): Promise<string | null> {
-  await ensureReady();
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const req = tx.objectStore(STORE_NAME).get(key);
-  const [value] = await Promise.all([requestToPromise(req), txDone(tx)]);
-  return typeof value === 'string' ? value : value == null ? null : String(value);
+  if (preferLocal) return readLocal(key);
+  try {
+    await ensureReady();
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(key);
+    const [value] = await Promise.all([requestToPromise(req), txDone(tx)]);
+    return typeof value === 'string' ? value : value == null ? null : String(value);
+  } catch {
+    rememberLocal();
+    return readLocal(key);
+  }
 }
 
 export async function storageSet(key: string, value: string): Promise<void> {
-  await ensureReady();
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  tx.objectStore(STORE_NAME).put(value, key);
-  await txDone(tx);
+  if (preferLocal) { writeLocal(key, value); return; }
+  try {
+    await ensureReady();
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(value, key);
+    await txDone(tx);
+  } catch {
+    rememberLocal();
+    writeLocal(key, value);
+  }
 }
 
 export async function storageRemove(key: string): Promise<void> {
-  await ensureReady();
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  tx.objectStore(STORE_NAME).delete(key);
-  await txDone(tx);
+  if (preferLocal) { removeLocal(key); return; }
+  try {
+    await ensureReady();
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+    await txDone(tx);
+  } catch {
+    rememberLocal();
+    removeLocal(key);
+  }
 }
 
 export async function storageKeys(): Promise<string[]> {
-  await ensureReady();
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const req = tx.objectStore(STORE_NAME).getAllKeys();
-  const [keys] = await Promise.all([requestToPromise(req), txDone(tx)]);
-  return keys.map(String).filter((key) => key !== MIGRATION_FLAG);
+  if (preferLocal) {
+    try {
+      return Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+        .filter((key): key is string => Boolean(key && key.startsWith('shenhao') && key !== MIGRATION_FLAG));
+    } catch {
+      return [];
+    }
+  }
+  try {
+    await ensureReady();
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).getAllKeys();
+    const [keys] = await Promise.all([requestToPromise(req), txDone(tx)]);
+    return keys.map(String).filter((key) => key !== MIGRATION_FLAG);
+  } catch {
+    rememberLocal();
+    return storageKeys();
+  }
 }
 
 const idbStorage: StateStorage = {

@@ -2,9 +2,8 @@ import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
 import { importCardFile, importPastedText, writeCharacter } from '../../domain/importing.ts'
-import { BUILD_ID } from '../../lib/buildInfo.ts'
 import { cardImportAccept } from '../../lib/cardTextImport.ts'
-import { deferTask, snapshotFile } from '../../lib/fileSnapshot.ts'
+import { deferTask } from '../../lib/fileSnapshot.ts'
 import { createNearbyContact, findNearbyContact, markNearbySeen } from '../../lib/nearbyContact.ts'
 import { resolveIdentityId } from '../../engine/identity.ts'
 import { chatTitle } from '../../lib/chats.ts'
@@ -16,6 +15,7 @@ import { CharacterSettingsSheet } from './CharacterSettings.tsx'
 import { ChatThread } from './ChatThread.tsx'
 import { Field, PillNote, Screen } from '../ui/primitives.tsx'
 import { FeedHub, MeTab, MomentsPage, NearbyPage, PeopleTab, type Moment, type NearPerson, type Profile } from './SmsSocial.tsx'
+import { BakeryApp } from './BakeryApp.tsx'
 
 const EMPTY_PROFILE: Profile = { nickname: '', signature: '', gender: '', region: '', birthday: '' }
 
@@ -53,7 +53,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   const nearbyHistory = useRef(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const jsonRef = useRef<HTMLInputElement | null>(null)
-  const importStageRef = useRef<'idle' | 'read' | 'ai'>('idle')
+  const importLock = useRef(false)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('沈予安')
@@ -61,12 +61,18 @@ export function MessagesApp(props: { onBack: () => void }) {
   const finishImport = async (
     run: (onProgress: (msg: string) => void) => Promise<{ characters: { name: string }[]; via: 'ai' | 'local' | 'raw' }>,
   ) => {
-    const { characters, via } = await run((msg) => setNotice(msg))
-    await load(identity!)
-    await refreshInbox()
-    touchData()
-    const names = characters.map((item) => item.name).join('、')
-    setNotice(via === 'ai' ? `已导入 ${names}` : `已导入 ${names}（AI 不可用，已本地解析）`)
+    if (importLock.current) throw new Error('正在导入另一份文件，请稍等')
+    importLock.current = true
+    try {
+      const { characters, via } = await run(setNotice)
+      await load(identity!)
+      await refreshInbox()
+      touchData()
+      const names = characters.map((item) => item.name).join('、')
+      setNotice(via === 'local' ? `已导入 ${names}（AI 不可用，已本地解析）` : `已导入 ${names}`)
+    } finally {
+      importLock.current = false
+    }
   }
 
   const load = async (who: Identity) => {
@@ -197,12 +203,7 @@ export function MessagesApp(props: { onBack: () => void }) {
     setOpenId(thread.id)
   }
 
-  if (social === 'games') return (
-    <div className="bakery-host relative h-full min-h-0">
-      <iframe title="千味面包房" className="block h-full w-full border-0" src={`${import.meta.env.BASE_URL}bakery/index.html`} allow="autoplay" />
-      <button type="button" className="bakery-back" aria-label="返回短信" onClick={() => setSocial(null)}>‹</button>
-    </div>
-  )
+  if (social === 'games') return <BakeryApp onBack={() => setSocial(null)} />
 
   return (
     <div className="sms-shell relative h-full min-h-0">
@@ -241,36 +242,10 @@ export function MessagesApp(props: { onBack: () => void }) {
             event.target.value = ''
             if (!picked) return
             void deferTask(async () => {
-              importStageRef.current = 'read'
               setNotice('正在读取文件…')
-              let file = picked
-              try {
-                file = await snapshotFile(picked)
-              } catch {
-                // 部分浏览器无法快照，仍用原 File 走 FileReader 兜底
-              }
-              importStageRef.current = 'ai'
-              setNotice(`AI 整理中（${BUILD_ID.slice(0, 7)}）…`)
-              await finishImport((onProgress) => importCardFile(file, identity, onProgress))
-              importStageRef.current = 'idle'
+              await finishImport(onProgress => importCardFile(picked, identity, onProgress))
             }).catch((error: unknown) => {
-              const stage = importStageRef.current
-              importStageRef.current = 'idle'
-              const msg = error instanceof Error ? error.message : '没放进来'
-              const fetchFail = msg.includes('Failed to fetch')
-              if (fetchFail && stage === 'read') {
-                setNotice('文件读不出来。Via 请从「下载」文件夹选文件，或用「粘贴导入」')
-                return
-              }
-              if (fetchFail) {
-                setNotice('AI 请求失败（不是文件问题）。可换更快的模型，或用「粘贴导入 / 导入 JSON」')
-                return
-              }
-              if (msg.includes('读不出来') || msg.includes('docx')) {
-                setNotice('docx 解压失败。请用「粘贴导入」或「导入 JSON」')
-                return
-              }
-              setNotice(msg)
+              setNotice(error instanceof Error ? error.message : '文件没读出来')
             })
           }}
         />
@@ -291,7 +266,7 @@ export function MessagesApp(props: { onBack: () => void }) {
             })
           }}
         />
-        <div className="mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
+        <div className="sms-tab-bar mb-3 grid grid-cols-4 gap-1 rounded-full bg-white/55 p-1 text-xs shadow-[0_8px_18px_rgba(120,80,100,0.05)]">
           {(
             [
               ['messages', '消息', '#F3A8BA'],
@@ -300,7 +275,7 @@ export function MessagesApp(props: { onBack: () => void }) {
               ['me', '我', '#C9B6E8'],
             ] as Array<[Tab, string, string]>
           ).map(([id, label, color]) => (
-            <button key={id} type="button" className="rounded-full py-1.5" style={{ background: tab === id ? color : 'transparent' }} onClick={() => { setTab(id); setMenu(false) }}>
+            <button key={id} type="button" aria-pressed={tab === id} className="rounded-full py-1.5" style={{ background: tab === id ? color : 'transparent' }} onClick={() => { setTab(id); setMenu(false) }}>
               {label}
             </button>
           ))}

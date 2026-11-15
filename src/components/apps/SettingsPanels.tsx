@@ -1,3 +1,4 @@
+import { checkImportSize, deferTask, readFileText } from '../../lib/fileSnapshot.ts'
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { uid } from '../../lib/id.ts'
 import { API_MODULES, MAX_API_PROFILES } from '../../lib/apiModules.ts'
@@ -475,6 +476,7 @@ export function BackupPanel() {
   const patchSettings = useMellow((state) => state.patchSettings)
   const backup = settings.backup
   const [status, setStatus] = useState('')
+  const [restoring, setRestoring] = useState(false)
   const saveBackup = async () => {
     const bundle = await storage.exportBundle()
     downloadJson(`mellow-backup-${new Date().toISOString().slice(0, 10)}.json`, bundle)
@@ -494,14 +496,22 @@ export function BackupPanel() {
         <button type="button" className="chip chip-solid" onClick={() => void saveBackup()}>现在备份</button>
         <label className="chip chip-mint">
           恢复
-          <input type="file" accept="application/json,.json" className="hidden" onChange={(event) => {
+          <input type="file" accept="application/json,.json" className="hidden" disabled={restoring} onChange={(event) => {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (!file) return
-            void file.text().then((text) => storage.importBundle(JSON.parse(text) as unknown)).then(() => {
+            setRestoring(true)
+            setStatus('正在读取备份…')
+            void deferTask(async () => {
+              checkImportSize(file, 32)
+              return storage.importBundle(JSON.parse(await readFileText(file)) as unknown)
+            }).then(() => {
               setStatus('已恢复，正在重新打开')
               window.location.reload()
-            }).catch((error: unknown) => setStatus(error instanceof Error ? error.message : '没恢复成'))
+            }).catch((error: unknown) => {
+              setRestoring(false)
+              setStatus(error instanceof Error ? error.message : '没恢复成')
+            })
           }} />
         </label>
       </div>

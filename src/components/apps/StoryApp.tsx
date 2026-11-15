@@ -3,6 +3,7 @@ import { BookOpen, ChevronLeft, Copy, Ellipsis, Pencil, Plus, RotateCcw, SendHor
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { runStoryGeneration } from '../../domain/storyRunner.ts'
+import { ReplyAssist } from './ReplyAssist.tsx'
 import { pickPreset } from '../../engine/prompt.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import {
@@ -236,6 +237,7 @@ function StoryView(props: {
 }) {
   const { config, save } = props
   const [draft, setDraft] = useState('')
+  const sending = useRef(false)
   const dataRevision = useMellow((state) => state.dataRevision)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
@@ -313,15 +315,21 @@ function StoryView(props: {
     setNote('正在写…')
   }, [aiBusy, props.namespace, props.save.id, dataRevision])
 
-  const send = async () => {
-    const text = draft.trim()
-    if (!text || busy) return
-    setDraft('')
-    if (props.mode === 'offline') touchImmersive('offline')
-    if (props.mode === 'jiushi') touchImmersive('jiushi')
-    const base = await props.onSave({ ...save, lines: [...save.lines, line('user', text)] })
-    await run(base)
+  const send = async (value = draft, clearDraft = true) => {
+    const text = value.trim()
+    if (!text || busy || sending.current) return
+    sending.current = true
+    try {
+      if (props.mode === 'offline') touchImmersive('offline')
+      if (props.mode === 'jiushi') touchImmersive('jiushi')
+      const base = await props.onSave({ ...save, lines: [...save.lines, line('user', text)] })
+      if (clearDraft) setDraft('')
+      await run(base)
+    } finally { sending.current = false }
   }
+  const lastLine = save.lines.at(-1)
+  const assistTurn = !busy && lastLine?.role === 'assistant' ? lastLine.id : ''
+  const assistContext = save.lines.slice(-6).map(item => `${item.role === 'user' ? userName : '剧情'}：${item.content.slice(-1400)}`).join('\n')
 
   const reroll = async (lineId: string) => {
     if (busy) return
@@ -481,11 +489,13 @@ function StoryView(props: {
       </div>
 
       {thought !== null ? <ThoughtSheet text={thought} onClose={() => setThought(null)} /> : null}
+      <ReplyAssist namespace={props.identity.namespace} mode={props.mode} turnId={assistTurn}
+        context={assistContext} draft={draft} disabled={busy} onRewrite={setDraft} onSend={text => send(text, false)} />
       <form
         className={sc('composer', 'conversation-composer flex shrink-0 items-end gap-1.5 px-3 pb-14 pt-1')}
         onSubmit={(event) => {
           event.preventDefault()
-          void send()
+          void send().catch(reason => setError(errorText(reason)))
         }}
       >
         <div className="flex min-h-11 min-w-0 flex-1 items-center rounded-[22px] bg-white/92 px-3 py-1.5 ring-1 ring-black/5">
@@ -685,7 +695,7 @@ function SideLobby(props: {
               存档名
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder={lead ? `${lead.name} 的番外` : '比如：如果那年没有分开'} className="soft-input mt-1" />
             </label>
-            <div className={`rounded-[20px] p-3 ${ancient ? 'jiushi-card' : 'bg-[#F7F3FD]'}`}>
+            <div className={`story-persona-card rounded-[20px] p-3 ${ancient ? 'jiushi-card' : 'bg-[#F7F3FD]'}`}>
               <p className="text-xs font-medium">{ancient ? '此世中的我' : '这一档里的我'}</p>
               <p className="mt-0.5 text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>只在这一档生效，可以和主线身份完全不同</p>
               <input value={personaName} onChange={(event) => setPersonaName(event.target.value)} placeholder="名字" className="soft-input mt-2" />
@@ -715,7 +725,7 @@ function SideLobby(props: {
               </div>
             </div>
             {warn ? <p className="text-xs text-[#b0505c]">{warn}</p> : null}
-            <button type="button" className={ancient ? 'jiushi-btn jiushi-btn-primary jiushi-btn-block py-3 text-sm font-semibold' : 'w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.3)]'} style={ancient ? undefined : { background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void create()}>{ancient ? '开卷入幕' : '开始这条番外'}</button>
+            <button type="button" className={ancient ? 'jiushi-btn jiushi-btn-primary jiushi-btn-block py-3 text-sm font-semibold' : 'story-start-button w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.3)]'} style={ancient ? undefined : { background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void create()}>{ancient ? '开卷入幕' : '开始这条番外'}</button>
           </motion.section>
         ) : null}
         <p className="mb-2 px-1 text-xs font-medium" style={{ color: 'var(--m-text-secondary)' }}>存档 · {props.saves.length}</p>

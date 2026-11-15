@@ -1,0 +1,182 @@
+/* 全屏开场：首帧静置 → 点击后播放 → 末尾渐隐 */
+.intro-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: #0a0908;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.95s ease;
+}
+
+.intro-sequence.intro-sequence--fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 视频铺满舞台，无粗边框与光晕框 */
+.intro-sequence-video-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.intro-sequence-video-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0a0908;
+}
+
+.intro-sequence-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  background: #0a0908;
+}
+
+/* 随意散布的面包装饰（首帧独占） */
+.intro-sequence-float-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@keyframes intro-float-drift {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1);
+  }
+  20% {
+    transform: translate(-50%, -50%) translate(5px, -9px) rotate(2.2deg) scale(1.03);
+  }
+  45% {
+    transform: translate(-50%, -50%) translate(-7px, 4px) rotate(-1.8deg) scale(0.98);
+  }
+  70% {
+    transform: translate(-50%, -50%) translate(4px, 8px) rotate(1.4deg) scale(1.02);
+  }
+}
+
+.intro-sequence-float-img {
+  position: absolute;
+  height: auto;
+  width: auto;
+  max-width: 22vw;
+  object-fit: contain;
+  opacity: 0.42;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.28));
+  transform-origin: center center;
+  transform: translate(-50%, -50%);
+  animation: intro-float-drift var(--intro-drift-dur, 8.6s) ease-in-out infinite;
+}
+
+@media (max-width: 640px) {
+  .intro-sequence-float-img {
+    opacity: 0.36;
+    max-width: 26vw;
+  }
+}
+
+/* 游戏图标：水平居中、略靠上；与按钮同属 idle，点击后一起卸载 */
+.intro-sequence-logo {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  width: min(44vw, 220px);
+  max-width: 88%;
+  height: auto;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.45));
+}
+
+@keyframes intro-enter-bob {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-11px);
+  }
+}
+
+.intro-sequence-enter {
+  position: absolute;
+  left: 50%;
+  top: 76%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--font-serif, ui-serif, Georgia, serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #3d2914;
+  background: linear-gradient(135deg, #fff9f0 0%, #f0d4a8 45%, #e8b876 100%);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.35),
+    0 0 0 1.5px rgba(255, 255, 255, 0.35) inset;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  animation: intro-enter-bob 2.4s ease-in-out infinite;
+}
+
+.intro-sequence-enter:hover:not(:disabled) {
+  animation: none;
+  transform: translate(-50%, -50%) translateY(-14px);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.4),
+    0 0 0 1.5px rgba(255, 255, 255, 0.45) inset;
+  filter: brightness(1.03);
+}
+
+.intro-sequence-enter:active:not(:disabled) {
+  animation: none;
+  transform: translate(-50%, -50%) translateY(-4px);
+}
+
+.intro-sequence-enter:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.intro-sequence-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.12) 0%,
+    transparent 35%,
+    transparent 55%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-sequence {
+    transition-duration: 0.35s;
+  }
+  .intro-sequence-float-img {
+    animation: none;
+  }
+  .intro-sequence-enter {
+    animation: none;
+  }
+}

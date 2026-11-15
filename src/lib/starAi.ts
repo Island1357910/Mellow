@@ -1,4 +1,5 @@
 import { realTimeContext } from './realTime.ts'
+import { attachAppImage, canGenerateAppImages, OPTIONAL_IMAGE_FIELD } from './appImages.ts'
 import { moduleAdapter, moduleAi, readJsonArray } from './ask.ts'
 import { uid } from './id.ts'
 import {
@@ -96,12 +97,12 @@ function postsValid(posts: FeedPost[], avoidAuthors: string[]): boolean {
   return true
 }
 
-function parsePosts(raw: unknown, chars: StarPerson[], player: string): FeedPost[] {
+function parsePosts(raw: unknown, chars: StarPerson[], player: string): Array<FeedPost & { imagePrompt?: unknown }> {
   if (!Array.isArray(raw)) return []
   const now = Date.now()
   return raw.flatMap((item, index) => {
     if (!item || typeof item !== 'object') return []
-    const row = item as { author?: unknown; text?: unknown; content?: unknown; body?: unknown; comments?: unknown; mine?: unknown }
+    const row = item as { author?: unknown; text?: unknown; content?: unknown; body?: unknown; comments?: unknown; mine?: unknown; imagePrompt?: unknown }
     const author = typeof row.author === 'string' ? row.author.trim() : ''
     const text = postText(row)
     if (!author || !text || isFixedStarNpc(author)) return []
@@ -132,7 +133,8 @@ function parsePosts(raw: unknown, chars: StarPerson[], player: string): FeedPost
       comments,
       charId: person?.id,
       mine: Boolean(row.mine),
-    } satisfies FeedPost]
+      imagePrompt: row.imagePrompt,
+    } satisfies FeedPost & { imagePrompt?: unknown }]
   })
 }
 
@@ -157,6 +159,7 @@ async function generatePosts(
   player: string,
   avoidAuthors: string[] = [],
 ): Promise<FeedPost[]> {
+  const withImage = await canGenerateAppImages('star')
   let last: Error | null = null
   for (let attempt = 0; attempt < GENERATE_ATTEMPTS; attempt++) {
     try {
@@ -166,9 +169,11 @@ async function generatePosts(
       const avoid = avoidAuthors.length
         ? `\n禁止使用的已有作者：${avoidAuthors.slice(0, 40).join('、')}`
         : ''
-      const raw = await starComplete(`${FEED_SYSTEM}\n${instruction}${avoid}${hint}`, user, maxTokens)
+      const raw = await starComplete(`${FEED_SYSTEM}\n${instruction}${avoid}${hint}${withImage ? `\n${OPTIONAL_IMAGE_FIELD}` : ''}`, user, maxTokens)
       const posts = parsePosts(readJsonArray(raw), chars, player)
-      if (posts.length && postsValid(posts, avoidAuthors)) return posts
+      if (posts.length && postsValid(posts, avoidAuthors)) {
+        return attachAppImage<FeedPost>('star', posts.map(({ imagePrompt, ...item }) => ({ item, imagePrompt: withImage ? imagePrompt : undefined })))
+      }
       last = new Error('没有写成帖子')
     } catch (reason) {
       last = reason instanceof Error ? reason : new Error('没有读出内容')

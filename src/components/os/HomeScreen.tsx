@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { APP_BY_ID, HOME_PAGE_CAP, type PhoneApp } from '../../data/apps.ts'
+import { APP_BY_ID, type PhoneApp } from '../../data/apps.ts'
 import { uid } from '../../lib/id.ts'
 import { chunkBoard, ejectTo, mergeCell, moveCell, placeCell, renameFolder, resolveBoard } from '../../lib/homeBoard.ts'
 import type { HomeCell } from '../../types/index.ts'
@@ -541,13 +541,13 @@ export function HomeScreen() {
           {phone ? <PageFill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
         </div>
       </section>
-      {appPages.map((cells, pageIndex) => (
+      {appPages.map(({ cells, start, capacity }, pageIndex) => (
         <section key={pageIndex} className="home-page relative z-10">
-          <div className="launcher-col launcher-apps">
+          <div className={pageIndex === 0 ? 'launcher-col launcher-apps' : 'launcher-col launcher-apps launcher-full-page'}>
             {pageIndex === 0 && phone ? <Page2Fill namespace={phone.namespace} decors={home.decors} onDecor={paintDecor} /> : null}
-            <div className={pageIndex === 0 ? 'launcher-board page2-board' : 'launcher-board'} style={pageIndex === 0 ? undefined : { marginTop: 0, alignContent: 'start' }}>
-              {Array.from({ length: HOME_PAGE_CAP }, (_, offset) => {
-                const index = pageIndex * HOME_PAGE_CAP + offset
+            <div className={pageIndex === 0 ? 'launcher-board page2-board' : 'launcher-board full-page-board'}>
+              {Array.from({ length: capacity }, (_, offset) => {
+                const index = start + offset
                 const cell = cells[offset]
                 if (!cell || cell.kind === 'gap') {
                   return <div key={`gap-${index}`} data-home-index={index} className={ghost?.over === index ? 'home-gap is-over' : 'home-gap'} />
@@ -557,6 +557,7 @@ export function HomeScreen() {
                     key={cell.id}
                     cell={cell}
                     index={index}
+                    compact={pageIndex > 0}
                     badge={cell.kind === 'app' && cell.id === 'messages' ? unread : 0}
                     merging={ghost?.merge === true && ghost.over === index}
                     onOpen={() => openCell(cell)}
@@ -792,6 +793,7 @@ function Page2Fill(props: { namespace: string; decors: DecorCard[]; onDecor: (id
 }
 
 function HomeSlot(props: {
+  compact: boolean
   cell: HomeCell
   index: number
   badge: number
@@ -834,7 +836,7 @@ function HomeSlot(props: {
             })}
           </span>
         ) : (
-          <AppGlyph id={cell.id} tint={tint} size={52} />
+          <AppGlyph id={cell.id} tint={tint} size={props.compact ? 40 : 52} />
         )}
         {props.badge > 0 ? (
           <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] text-white" style={{ background: 'var(--m-accent)', height: 16 }}>

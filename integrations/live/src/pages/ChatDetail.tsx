@@ -40,6 +40,7 @@ export default function ChatDetail({ anchorId }: { anchorId: string }) {
   const [extraSheet, setExtraSheet] = useState<ExtraSheet>(null);
   const [bgSheetOpen, setBgSheetOpen] = useState(false);
   const [callMode, setCallMode] = useState<CallMode>(null);
+  const activeCall = useRef<{ mode: 'voice' | 'video' } | null>(null);
   const [callStatus, setCallStatus] = useState<string | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -143,6 +144,9 @@ export default function ChatDetail({ anchorId }: { anchorId: string }) {
   };
 
   const startCall = async (mode: 'voice' | 'video') => {
+    if (activeCall.current) return;
+    const call = { mode };
+    activeCall.current = call;
     setToolsOpen(false);
     setCallMode(mode);
     setCallStatus('正在接通…');
@@ -156,11 +160,12 @@ export default function ChatDetail({ anchorId }: { anchorId: string }) {
       messages,
       scene
     );
-    setCallStatus(reply || `${anchor.stageName}正在通话中`);
+    if (activeCall.current === call) setCallStatus(reply || `${anchor.stageName}正在通话中`);
   };
 
   const endCall = async () => {
-    const mode = callMode;
+    const mode = activeCall.current?.mode;
+    activeCall.current = null;
     setCallMode(null);
     setCallStatus(undefined);
     if (!mode) return;
