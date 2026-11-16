@@ -20,11 +20,47 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Verify and stage the signed Android APK
+      - name: Reconstruct verified Android packages
         run: |
           set -euo pipefail
-          curl -fsSL --retry 3 https://github.com/Island1357910/Mellow/releases/download/android-v2.0.4/Mellow-2.0.4.apk -o downloads/Mellow-2.0.4.apk
+          base=downloads/Mellow-2.0.4.apk
+          curl -fsSL --retry 2 https://github.com/Island1357910/Mellow/releases/download/android-v2.0.4/Mellow-2.0.4.apk -o "$base" ||
+            curl -fsSL --retry 2 https://mymellow.top/downloads/Mellow-2.0.4.apk -o "$base"
+          node <<'NODE'
+          const fs = require('node:fs')
+          const crypto = require('node:crypto')
+          const base = fs.readFileSync('downloads/Mellow-2.0.4.apk')
+          const delta = fs.readFileSync('.release-transfer/delta.bin')
+          const manifest = JSON.parse(fs.readFileSync('.release-transfer/delta.json'))
+          const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
+          if (sha256(base) !== manifest.base) throw Error('Base APK digest mismatch')
+          const output = Buffer.concat(manifest.ops.map(([source, start, length]) => [base, delta][source].subarray(start, start + length)))
+          if (sha256(output) !== manifest.target) throw Error('Signed APK digest mismatch')
+          fs.writeFileSync('downloads/Mellow-2.0.5.apk', output)
+          NODE
+          (cd downloads && sha256sum -c Mellow-2.0.5.sha256.txt)
           (cd downloads && sha256sum -c Mellow-2.0.4.sha256.txt)
+          rm .release-transfer/delta.bin .release-transfer/delta.json
+      - name: Publish signed Android release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=android-v2.0.5
+          apk=Mellow-2.0.5.apk
+          expected="sha256:$(cut -d' ' -f1 "downloads/Mellow-2.0.5.sha256.txt")"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --target main --title '半糖 Mellow 2.0.5' --notes-file .release-transfer/notes.md
+          fi
+          actual=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name == "Mellow-2.0.5.apk" and .state == "uploaded") | .digest')
+          if [ "$actual" != "$expected" ]; then
+            gh release upload "$tag" "downloads/$apk" --clobber
+          fi
+          actual=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name == "Mellow-2.0.5.apk" and .state == "uploaded") | .digest')
+          test "$actual" = "$expected"
+          gh release upload "$tag" downloads/Mellow-2.0.5.sha256.txt --clobber
+          gh release edit "$tag" --draft=false --latest
+          rm .release-transfer/notes.md
       - name: Keep the Pages artifact within its size limit
         env:
           GH_TOKEN: ${{ github.token }}
