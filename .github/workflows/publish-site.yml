@@ -4,7 +4,7 @@ on:
     branches: [gh-pages]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
   actions: read
   pages: write
   id-token: write
@@ -40,27 +40,7 @@ jobs:
           NODE
           (cd downloads && sha256sum -c Mellow-2.0.5.sha256.txt)
           (cd downloads && sha256sum -c Mellow-2.0.4.sha256.txt)
-          rm .release-transfer/delta.bin .release-transfer/delta.json
-      - name: Publish signed Android release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=android-v2.0.5
-          apk=Mellow-2.0.5.apk
-          expected="sha256:$(cut -d' ' -f1 "downloads/Mellow-2.0.5.sha256.txt")"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --draft --target main --title '半糖 Mellow 2.0.5' --notes-file .release-transfer/notes.md
-          fi
-          actual=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name == "Mellow-2.0.5.apk" and .state == "uploaded") | .digest')
-          if [ "$actual" != "$expected" ]; then
-            gh release upload "$tag" "downloads/$apk" --clobber
-          fi
-          actual=$(gh release view "$tag" --json assets --jq '.assets[] | select(.name == "Mellow-2.0.5.apk" and .state == "uploaded") | .digest')
-          test "$actual" = "$expected"
-          gh release upload "$tag" downloads/Mellow-2.0.5.sha256.txt --clobber
-          gh release edit "$tag" --draft=false --latest
-          rm .release-transfer/notes.md
+          rm .release-transfer/delta.bin .release-transfer/delta.json .release-transfer/notes.md
       - name: Keep the Pages artifact within its size limit
         env:
           GH_TOKEN: ${{ github.token }}
