@@ -1,78 +1,42 @@
-name: Publish Mellow website
+name: Publish prepared site
+
 on:
   push:
     branches: [gh-pages]
   workflow_dispatch:
+
 permissions:
   contents: read
-  actions: read
   pages: write
   id-token: write
+
 concurrency:
   group: mellow-pages
   cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct verified Android packages
-        run: |
-          set -euo pipefail
-          base=downloads/Mellow-2.0.4.apk
-          curl -fsSL --retry 2 https://github.com/Island1357910/Mellow/releases/download/android-v2.0.4/Mellow-2.0.4.apk -o "$base" ||
-            curl -fsSL --retry 2 https://mymellow.top/downloads/Mellow-2.0.4.apk -o "$base"
-          node <<'NODE'
-          const fs = require('node:fs')
-          const crypto = require('node:crypto')
-          const base = fs.readFileSync('downloads/Mellow-2.0.4.apk')
-          const delta = fs.readFileSync('.release-transfer/delta.bin')
-          const manifest = JSON.parse(fs.readFileSync('.release-transfer/delta.json'))
-          const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
-          if (sha256(base) !== manifest.base) throw Error('Base APK digest mismatch')
-          const output = Buffer.concat(manifest.ops.map(([source, start, length]) => [base, delta][source].subarray(start, start + length)))
-          if (sha256(output) !== manifest.target) throw Error('Signed APK digest mismatch')
-          fs.writeFileSync('downloads/Mellow-2.0.5.apk', output)
-          NODE
-          (cd downloads && sha256sum -c Mellow-2.0.5.sha256.txt)
-          (cd downloads && sha256sum -c Mellow-2.0.4.sha256.txt)
-          rm .release-transfer/delta.bin .release-transfer/delta.json .release-transfer/notes.md
-      - name: Keep the Pages artifact within its size limit
+        with:
+          ref: gh-pages
+          path: site
+      - name: Drop the checkout metadata
+        run: rm -rf site/.git
+      - name: Include the signed Android package
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          size=$(du -sb --exclude=.git . | cut -f1)
-          while IFS= read -r path; do
-            [ "$size" -lt 970000000 ] && break
-            file=${path##*/}
-            version=${file#Mellow-}
-            version=${version%.apk}
-            expected="sha256:$(sha256sum "$path" | cut -d' ' -f1)"
-            actual=$(gh release view "android-v$version" --json isDraft,assets --jq "if .isDraft then empty else .assets[] | select(.name == \"$file\" and .state == \"uploaded\") | .digest end" 2>/dev/null || true)
-            if [ "$expected" = "$actual" ]; then
-              size=$((size - $(stat -c %s "$path")))
-              rm -- "$path"
-              echo "$version is available in GitHub Releases"
-            fi
-          done < <(find downloads -maxdepth 1 -type f -name 'Mellow-1.1.*.apk' ! -name 'Mellow-1.1.38.apk' ! -name 'Mellow-1.1.39.apk' | sort -V)
-          test "$size" -lt 970000000
+          version=$(node -p "require('./site/downloads/latest.json').version")
+          gh release download "android-v$version" --repo "$GITHUB_REPOSITORY" --pattern "Mellow-$version.apk" --dir site/downloads --clobber
+          (cd site/downloads && sha256sum -c "Mellow-$version.sha256.txt")
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
-      - name: Wait for the Pages artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for attempt in {1..24}; do
-            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages" --jq .total_count)
-            if [ "$count" = 1 ]; then exit 0; fi
-            sleep 5
-          done
-          exit 1
-      - uses: actions/deploy-pages@v4
-        id: deployment
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
