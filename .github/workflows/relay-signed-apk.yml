@@ -1,0 +1,40 @@
+name: Relay signed Mellow 3.0.5 APK
+
+on:
+  push:
+    branches: [codex/android-asset-relay-3.0.5]
+
+permissions:
+  contents: write
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore and verify the signed APK
+        run: |
+          set -euo pipefail
+          gh release download android-v3.0.4 --repo "$GITHUB_REPOSITORY" --pattern Mellow-3.0.4.apk --dir "$RUNNER_TEMP"
+          node apk-relay/restore.mjs "$RUNNER_TEMP/Mellow-3.0.4.apk" "$RUNNER_TEMP/Mellow-3.0.5.apk" apk-relay/manifest.json apk-relay/changes.bin
+          printf '%s  %s\n' 'f33a4943d898f28d2ae9ef447b28ca2033fe3b98f68d93204e727318aad4a86b' 'Mellow-3.0.5.apk' > "$RUNNER_TEMP/Mellow-3.0.5.sha256.txt"
+          (cd "$RUNNER_TEMP" && sha256sum -c Mellow-3.0.5.sha256.txt)
+      - name: Attach verified files to the release
+        run: |
+          set -euo pipefail
+          tag=android-v3.0.5
+          for asset in Mellow-3.0.5.apk Mellow-3.0.5.sha256.txt; do
+            digest=$(sha256sum "$RUNNER_TEMP/$asset" | cut -d ' ' -f 1)
+            existing_digest() {
+              gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq ".assets[] | select(.name == \"$asset\" and .state == \"uploaded\") | .digest"
+            }
+            actual=$(existing_digest)
+            if [ -z "$actual" ]; then
+              gh release upload "$tag" "$RUNNER_TEMP/$asset" --repo "$GITHUB_REPOSITORY" || true
+              actual=$(existing_digest)
+            fi
+            test "$actual" = "sha256:$digest"
+          done
