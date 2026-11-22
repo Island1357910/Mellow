@@ -8,8 +8,8 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const changes = readFileSync(changesPath)
 if (hash(previous) !== '3c73be4c4692a6e69e3a1adfdd1ad0fc1b7cd6d9f96e5d76bda23fd135aee1c1' ||
     hash(previous) !== manifest.base) throw new Error('Previous APK digest mismatch')
-if (manifest.bytes !== 167691375 ||
-    manifest.target !== 'f33a4943d898f28d2ae9ef447b28ca2033fe3b98f68d93204e727318aad4a86b') {
+if (manifest.bytes !== 167691468 ||
+    manifest.target !== '87cb8cde9dc4ee55873a0735313b3acb57db7559b580b2f309466113e4b0286d') {
   throw new Error('Unexpected signed target')
 }
 const result = Buffer.alloc(manifest.bytes)
