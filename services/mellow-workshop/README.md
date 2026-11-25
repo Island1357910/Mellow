@@ -26,7 +26,7 @@ MOD 只收作品配置文件和封面。配置文件为 UTF-8 JSON，最大 64 K
 
 作品草稿与发布版以 AES-256-GCM 加密入库，持久数据库必须配置稳定的 `WORKSHOP_CONTENT_KEY`。首次读取旧版本数据库时会转换已有作品正文。部署前先做数据库备份，旧备份可能仍含明文。访问密钥和数据库备份应分开存放，恢复时两者都需要。
 
-玩家领取作品后从书架进入小手机游玩。完整设定只由工坊服务解密并发往服务端配置的受信任游玩模型。已填写的创作者模型白名单仍须授权这个地址，留空时使用平台配置。工坊拦截明确的源文索取和回复中的原文重现，校验模型历史回复的签名。书架在客户端只持有作品引用和公开展示信息，游玩存档只含玩家输入、剧情回复和签名。首发公开试玩可使用自己的接口，接口仅收到公开试玩说明。工坊只通过公网 IPv4 连出，固定已校验的 IP，拒绝跳转和保留地址。
+玩家领取作品后从书架进入小手机游玩。短信、线下和番外分别使用玩家在对应模块绑定的模型 API，未绑定时使用玩家默认 API。每次请求将接口、密钥和模型交给工坊服务代发，不写入工坊数据库。完整设定由工坊服务解密并发送给所选模型服务商，不返回玩家客户端。创作者填写接口白名单后只允许所列地址；留空允许玩家自选公网 HTTPS 接口。工坊拦截明确的源文索取和回复中的原文重现，校验模型历史回复的签名。书架在客户端只持有作品引用和公开展示信息，游玩存档只含玩家输入、剧情回复和签名。首发公开试玩可使用自己的接口，接口仅收到公开试玩说明。工坊只通过公网 IPv4 连出，固定已校验的 IP，拒绝跳转和保留地址。
 
 ## API
 
@@ -41,7 +41,7 @@ MOD 只收作品配置文件和封面。配置文件为 UTF-8 JSON，最大 64 K
 - 审核阅读与测试：`GET /review/:id?revision=…`、`POST /review/:id/test` 只允许审核账号访问。完整设定只发往管理员在服务器配置的 `WORKSHOP_REVIEW_ENDPOINT`，密钥和模型名分别使用 `WORKSHOP_REVIEW_KEY` 和 `WORKSHOP_REVIEW_MODEL`。首发试玩可选公网 HTTPS 的 OpenAI 兼容接口，转交独立的公开试玩说明。
 - 主页和关注：`GET /profile`、`PUT /profile`（可附头像 Data URL，传 `null` 时移除）、`GET /creators/:id`、`GET /creators/:id/avatar`、`PUT /creators/:id/follow`（传 `following` 和 `reminders`）、`GET /following`。
 - 站内消息：`GET /activity`、`POST /activity/read`（传收到的最新消息 `time`）。
-- 游玩：`POST /play/:characterId/protected` 接收 `messages`、已启用的 `dlc` 和可选 `button: { id, index }`。回复为剧情文本和绑定账号及作品的 `receipt`。对话中每条助手回复须带上原签名。管理员通过 `WORKSHOP_PLAY_ENDPOINT`、`WORKSHOP_PLAY_KEY` 和 `WORKSHOP_PLAY_MODEL` 启用独立游玩服务。`POST /play/:characterId` 用于首发公开试玩。
+- 游玩：`POST /play/:characterId/protected` 接收玩家配置的 `endpoint`、`key`、`model`，以及 `messages`、已启用的 `dlc` 和可选 `button: { id, index }`。三个模型配置字段必须一起提供。回复为剧情文本和绑定账号及作品的 `receipt`。对话中每条助手回复须带上原签名。生成和回复防泄露检查均使用本轮玩家所选模型。旧客户端不传模型配置时仍兼容 `WORKSHOP_PLAY_ENDPOINT`、`WORKSHOP_PLAY_KEY` 和 `WORKSHOP_PLAY_MODEL`，新客户端不依赖这些环境变量。`POST /play/:characterId` 用于首发公开试玩。
 - 探活：`GET /health`。跨域浏览器请求只接受一个配置好的 HTTPS 前端来源。IP 和账号限流在单实例内生效。
 
 ## 部署到已有站点的 Vultr VPS

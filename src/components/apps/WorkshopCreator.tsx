@@ -186,7 +186,7 @@ export function WorkshopCreator({ category, work, busy, action, changed }: {
           <textarea required={key === 'persona'} maxLength={[24000, 16000, 4000][index]} disabled={busy}
             value={draft.content[key] ?? ''} onChange={event => setDraft({ ...draft, content: { ...draft.content, [key]: event.target.value } })} />
         </label>)}
-        <details><summary>游玩模型授权</summary><label>模型接口白名单<textarea disabled={busy} value={addresses} onChange={event => setAddresses(event.target.value)} placeholder="留空时使用小手机的受信任游玩服务" /></label></details>
+        <details><summary>游玩模型授权</summary><label>模型接口白名单<textarea disabled={busy} value={addresses} onChange={event => setAddresses(event.target.value)} placeholder="留空允许玩家使用自己的公网 HTTPS 接口；填写后仅允许所列接口" /></label><p>游玩时，作品设定会发送给玩家选用的模型服务商。</p></details>
         <p>用当前草稿在自己的小手机里试玩，无需保存或送审。使用小手机配置的模型；再次试玩会更新设定并保留对话。</p>
         <div className="workshop-row">
           {category === 'character' && <button type="button" disabled={busy || !phone || !draft.title.trim() || !draft.content.persona?.trim()} onClick={() => tryOnPhone('sms')}>短信试玩</button>}

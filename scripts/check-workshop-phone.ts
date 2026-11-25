@@ -20,6 +20,11 @@ const { useMellow } = await import('../src/store/useMellow.ts')
 const { describeMessage } = await import('../src/engine/prompt.ts')
 
 const { identities, settings, presets } = await storage.boot()
+for (const id of ['default', 'messages', 'offline', 'side']) {
+  await storage.saveApiProfile({ id: 'workshop-' + id, name: id, endpoint: 'https://' + id + '.example/v1', model: id + '-model', key: id + '-key', ready: true })
+}
+await storage.saveSettings({ ...await storage.getSettings(), activeApiId: 'workshop-default' })
+for (const mode of ['messages', 'offline', 'side'] as const) await storage.bindApiModule(mode, 'workshop-' + mode)
 const identity = identities[0]!
 const namespace = identity.namespace
 const publicWork = {
@@ -34,6 +39,7 @@ const dlc = {
 const library = [publicWork, dlc]
 const requests: { channel: string; dlc: string[]; messages: { role: string; content: string; receipt?: string }[] }[] = []
 const receipt = 'a'.repeat(64)
+let expectDefaultApi = false
 globalThis.fetch = async (url, init) => {
   const path = String(url)
   if (path === 'https://workshop.example/library') return Response.json(library)
@@ -45,7 +51,11 @@ globalThis.fetch = async (url, init) => {
   assert.equal(path, 'https://workshop.example/play/' + publicWork.id + '/protected')
   assert.equal(init?.credentials, 'include')
   const body = JSON.parse(String(init?.body))
-  assert.deepEqual(Object.keys(body).sort(), body.cast ? ['cast', 'channel', 'dlc', 'messages'] : ['channel', 'dlc', 'messages'])
+  assert.deepEqual(Object.keys(body).sort(), body.cast ? ['cast', 'channel', 'dlc', 'endpoint', 'key', 'messages', 'model'] : ['channel', 'dlc', 'endpoint', 'key', 'messages', 'model'])
+  const module = expectDefaultApi ? 'default' : body.channel === 'sms' ? 'messages' : body.channel
+  assert.equal(body.endpoint, 'https://' + module + '.example/v1/chat/completions')
+  assert.equal(body.key, module + '-key')
+  assert.equal(body.model, module + '-model')
   requests.push(body)
   return Response.json({ reply: '原应用里的可见回复', receipt })
 }
@@ -132,3 +142,10 @@ assert.match(describeMessage(packet), /¥0\.01.*送你100万/)
 await replyInChat(sms)
 assert.match(requests.at(-1)?.messages.at(-1)?.content ?? '', /¥0\.01.*送你100万/)
 console.log('Redpacket title and actual amount both reach imported workshop characters')
+await storage.bindApiModule('messages', '')
+expectDefaultApi = true
+await playInWorkshopPhone({ namespace, workId: publicWork.id, channel: 'sms', history })
+const beforeMissingConfig = requests.length
+await storage.saveSettings({ ...await storage.getSettings(), apiModuleBindings: { messages: 'missing-profile' } })
+await assert.rejects(playInWorkshopPhone({ namespace, workId: publicWork.id, channel: 'sms', history }), /绑定的 API 不可用/)
+assert.equal(requests.length, beforeMissingConfig, 'An invalid binding must never fall back to platform credentials')

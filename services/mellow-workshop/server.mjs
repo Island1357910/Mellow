@@ -662,7 +662,7 @@ app.get('/library', signedIn, (req, res) => {
     LEFT JOIN creator_profiles p ON p.user_id = w.author_id
     WHERE i.user_id = ? AND w.published IS NOT NULL ORDER BY i.installed_at DESC, w.id`, req.user.id)
   res.json(rows.map(row => ({ ...listWork(row), installedAt: row.installedAt, enabled: Boolean(row.enabled), mine: row.author_id === req.user.id,
-    ...(row.type === 'character' ? { protectedPlayReady: Boolean(playModel) } : {}),
+    ...(row.type === 'character' ? { protectedPlayReady: true } : {}),
   })))
 })
 app.post('/library/:id', signedIn, (req, res) => {
@@ -691,7 +691,7 @@ const phoneChannelRules = {
   offline: '本轮发生在半糖线下。根据已有对话继续面对面的场景，用纯文本写动作、环境和角色对白。不要替玩家做决定。',
   side: '本轮发生在半糖番外。沿着当前支线演出设定和玩法，用纯文本写可见剧情。不要替玩家决定行动。',
 }
-async function runModel(req, res, { address, key, model, messages, prompt, render }) {
+async function runModel(req, res, { address, key, model, messages, prompt, render, playerModel = false }) {
   if (inFlight.has(req.user.id) || inFlight.size >= 12) return error(res, 429, '模型调用繁忙，请稍后重试')
   inFlight.add(req.user.id)
   const controller = new AbortController()
@@ -705,7 +705,10 @@ async function runModel(req, res, { address, key, model, messages, prompt, rende
     if (!result) return error(res, 422, '未生成可显示的剧情。请换一个剧情行动。')
     res.json(result)
   } catch (failure) {
-    const message = controller.signal.aborted ? '工坊游玩服务响应超时，请稍后重试'
+    const message = playerModel && [401, 403].includes(failure.status) ? '你配置的模型 API 密钥或权限无效，请到设置中检查当前模块的接口和模型'
+      : playerModel && failure.status === 429 ? '你配置的模型 API 额度不足或请求过多，请检查额度或稍后重试'
+      : playerModel && failure.status === 404 ? '你配置的模型 API 地址或模型名称无效，请到设置中检查'
+      : controller.signal.aborted ? '工坊游玩服务响应超时，请稍后重试'
       : [401, 403].includes(failure.status) ? '工坊游玩服务的模型密钥或权限无效，请联系管理员检查服务配置'
       : failure.status === 429 ? '工坊游玩服务的模型额度不足或请求过多，请稍后重试'
       : failure.status === 404 ? '工坊游玩服务的模型地址或模型名称无效，请联系管理员检查服务配置'
@@ -751,15 +754,21 @@ app.post('/play/:id/protected', signedIn, limit(12, 60_000, req => req.user.id),
     return error(res, 400, '对话记录无法验证，请开启新的对话')
   }
   if (requestsSource(messages.at(-1).content)) return error(res, 422, '请继续剧情中的行动或对话')
-  if (!playModel) return error(res, 503, '小手机游玩模型尚未启用')
+  let selectedModel = playModel // Compatibility for installed clients predating player API routing.
+  const playerModel = req.body.endpoint !== undefined
+  if (playerModel) {
+    try { selectedModel = { address: endpoint(req.body.endpoint), key: req.body.key, model: req.body.model } }
+    catch { return error(res, 400, '请配置公网 HTTPS 模型接口，且不能带查询参数') }
+  }
+  if (!selectedModel) return error(res, 503, '请更新小手机，并在设置中配置自己的模型 API')
   const work = JSON.parse(publishedText(card))
   const additional = characters.map(row => ({ row, draft: JSON.parse(publishedText(row)) }))
   const mods = extensions.map(row => [row.id, JSON.parse(publishedText(row))])
-  const authorized = draft => !draft.endpoints.length || draft.endpoints.some(address => endpoint(address) === playModel.address)
+  const authorized = draft => !draft.endpoints.length || draft.endpoints.some(address => endpoint(address) === selectedModel.address)
   if ((!isLaunchExample(card) && !authorized(work)) ||
       additional.some(({ row, draft }) => !isLaunchExample(row) && !authorized(draft)) ||
       mods.some(([, draft]) => (draft.content.system_prompt_addon || draft.content.custom_buttons?.length) && !authorized(draft))) {
-    return error(res, 403, '该作品的创作者尚未授权小手机的游玩服务')
+    return error(res, 403, '该作品或扩展的创作者尚未授权当前模型接口，请切换到创作者允许的接口')
   }
   const { persona, world } = work.content
   const configs = new Map(mods.map(([id, draft]) => [id, draft.content]))
@@ -773,12 +782,12 @@ app.post('/play/:id/protected', signedIn, limit(12, 60_000, req => req.user.id),
   // Omit the labels of all unselected actions from model context.
   const prompt = [playGuard, persona, world, ...castRules, ...rules, action?.instruction, phoneChannelRules[channel]].filter(Boolean).join('\n\n')
   return runModel(req, res, {
-    ...playModel, prompt,
+    ...selectedModel, prompt, playerModel,
     messages: messages.filter(turn => turn.role !== 'user' || !requestsSource(turn.content)).map(({ role, content }) => ({ role, content })),
     render: async (value, signal) => {
       const reply = value.trim().slice(0, 8000)
       if (!reply || repeatsSource(reply, source)) return null
-      const verdict = await complete(playModel.address, playModel.key, playModel.model, [
+      const verdict = await complete(selectedModel.address, selectedModel.key, selectedModel.model, [
         { role: 'system', content: reviewGuard },
         { role: 'user', content: JSON.stringify({ protected: source, public: publicText, prior, reply }) },
       ], signal)

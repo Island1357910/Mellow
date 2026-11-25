@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {

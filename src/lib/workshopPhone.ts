@@ -1,6 +1,6 @@
 import type { Character, ChatMessage } from '../types/index.ts'
 import { storage } from '../storage/StorageService.ts'
-import { workshop, type PublicWork } from './workshop.ts'
+import { modelEndpoint, workshop, type PublicWork } from './workshop.ts'
 
 export type WorkshopPhoneChannel = 'sms' | 'offline' | 'side'
 const appliedWorksKey = 'workshop_applied_works'
@@ -30,6 +30,12 @@ export async function playInWorkshopPhone(input: {
   namespace: string; workId: string; channel: WorkshopPhoneChannel; history: Line[]; action?: string; cast?: string[]; signal?: AbortSignal
 }) {
   const { workId, channel, history, action, cast, signal } = input
+  const profile = await storage.readModuleApi(channel === 'sms' ? 'messages' : channel)
+  if (!profile?.ready || !profile.endpoint || !profile.model) throw new Error('请先在设置中保存当前模块的模型 API。')
+  const key = (await storage.readApiKey(profile.id)).trim()
+  if (!key) throw new Error('当前模块的模型 API 尚未填写密钥，请到设置中补充。')
+  const endpoint = modelEndpoint(profile.endpoint)
+  if (!endpoint.startsWith('https://')) throw new Error('工坊游玩需要公网 HTTPS 模型接口，请到设置中修改。')
   const messages = history.filter(row => !row.hidden && row.content.trim()).flatMap<Turn>(row => {
     if (row.role === 'user') return [{ role: 'user', content: row.content.slice(0, 8000) }]
     if (row.role === 'assistant' && row.workshopReply?.workId === workId && row.content.length <= 8000) {
@@ -49,7 +55,7 @@ export async function playInWorkshopPhone(input: {
   if (!work) throw new Error('此作品已下架或已从书架移除。')
   const dlc = library.filter(item => item.type === 'dlc' && item.enabled && !item.display.app && applied.includes(item.id)).slice(0, 4).map(item => item.id)
   const result = await workshop<{ reply: string; receipt: string }>(
-    '/play/' + encodeURIComponent(workId) + '/protected', 'POST', { channel, messages, dlc, cast }, signal,
+    '/play/' + encodeURIComponent(workId) + '/protected', 'POST', { endpoint, key, model: profile.model, channel, messages, dlc, cast }, signal,
   )
   return { text: result.reply, workshopReply: { workId, receipt: result.receipt } }
 }

@@ -47,7 +47,8 @@ export const validatePlay = ajv.compile(object({
   messages: turns,
 }, ['endpoint', 'key', 'model', 'dlc', 'messages']))
 
-export const validateProtectedPlay = ajv.compile(object({
+export const validateProtectedPlay = ajv.compile({ ...object({
+  endpoint: string(500, 1), key: { type: 'string', minLength: 1, maxLength: 1024, pattern: '^[!-~]+$' }, model: string(120, 1),
   channel: { enum: ['sms', 'offline', 'side'] },
   cast: { type: 'array', maxItems: 3, uniqueItems: true, items: string(36, 36) },
   dlc: { type: 'array', maxItems: 4, uniqueItems: true, items: string(36, 36) },
@@ -56,7 +57,7 @@ export const validateProtectedPlay = ajv.compile(object({
     object({ role: { const: 'user' }, content: string(8000, 1) }, ['role', 'content']),
     object({ role: { const: 'assistant' }, content: string(8000, 1), receipt: { type: 'string', pattern: '^[a-f0-9]{64}$' } }, ['role', 'content', 'receipt']),
   ] } },
-}, ['dlc', 'messages']))
+}, ['dlc', 'messages']), dependencies: { endpoint: ['key', 'model'], key: ['endpoint', 'model'], model: ['endpoint', 'key'] } })
 
 export function publicWork(row) {
   const { title, summary, endpoints, content, cover } = JSON.parse(row.published)
