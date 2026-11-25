@@ -6,10 +6,10 @@ const [previousPath, outputPath, manifestPath, changesPath] = process.argv.slice
 const previous = readFileSync(previousPath)
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const changes = readFileSync(changesPath)
-if (hash(previous) !== '3c44e8c91f132b1b5e10cffcebc4df24f0c42e30a74fc0b11f811f00539fa91e' ||
+if (hash(previous) !== '647acbf63685b371747e010c36893b8baa1331b79a5e7747d5eed56e5b7503a7' ||
     hash(previous) !== manifest.base) throw new Error('Previous APK digest mismatch')
 if (manifest.bytes !== 167691654 ||
-    manifest.target !== '647acbf63685b371747e010c36893b8baa1331b79a5e7747d5eed56e5b7503a7') {
+    manifest.target !== '343c2c2c7b3ede26c3242688e2899fc3024bc130da7bb73d317efdaafd07b932') {
   throw new Error('Unexpected signed target')
 }
 const result = Buffer.alloc(manifest.bytes)
