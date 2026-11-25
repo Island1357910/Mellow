@@ -149,3 +149,10 @@ export function modelEndpoint(base: string) {
   return base.replace(/\/+$/, '').replace(/(?:\/chat\/completions)?$/, '/chat/completions')
 }
 
+/** null means unrestricted; an empty intersection means incompatible explicit whitelists. */
+export function workshopEndpointPolicy(works: Pick<PublicWork, 'endpoints'>[]): string[] | null {
+  const restricted = works.filter(work => work.endpoints.length).map(work => work.endpoints.map(modelEndpoint))
+  if (!restricted.length) return null
+  return [...new Set(restricted[0])].filter(url => restricted.every(list => list.includes(url)))
+}
+

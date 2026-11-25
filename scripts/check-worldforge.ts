@@ -14,7 +14,6 @@ const character = {
 }
 const valid = { worldTitle: '雨城', worldSummary: '三年不能说出自己的名字。', worldEntries: [], characters: [character] }
 const worldOnly = { ...valid, worldSummary: '旧城区的人把这里叫作“雨城”。', characters: [] }
-await assert.rejects(forgeWorldFromDocument('雨'.repeat(39_900), '参考'.repeat(100)), /超过单次搭建/)
 validateForgeOutput(valid)
 validateForgeOutput(worldOnly)
 assert.throws(() => validateForgeOutput({ ...worldOnly, worldSummary: '' }), /没有生成任何世界设定或角色/)
@@ -92,6 +91,33 @@ try {
   } }) as unknown as AIAdapter
   assert.deepEqual((await forgeWithReferences('雨城的河道设定', '周渡守着旧渡口')).worldEntries, entries)
   assert.deepEqual((await reviseForgeResult(setting, '改为清晨开船', undefined, '周渡守着旧渡口')).worldEntries, entries)
+
+  const longSource = '【人物：夜班医生】在雨城医院值夜班。\n' + '雨城的街道在夜晚落雨。'.repeat(4200) + '\n【人物：席淮】在四万字之后经营城南旧书店。'
+  const longCalls: AIRequest[] = []
+  AIAdapter.fromStored = async () => ({ complete: async (request: AIRequest) => {
+    longCalls.push(request)
+    const system = request.messages[0]!.content
+    const input = request.messages.at(-1)!.content
+    assert.doesNotMatch(input, /后文已截/)
+    if (system.includes('只提取原文')) {
+      assert.doesNotMatch(input, /参考人物不要导入/)
+      return { content: JSON.stringify({ names: [...input.matchAll(/【人物：([^】]+)】/g)].map(match => match[1]) }) }
+    }
+    if (system.includes('只整理本段世界设定')) return { content: JSON.stringify(worldOnly) }
+    const names = JSON.parse(input.split('【本批人物名单】')[1]!) as string[]
+    return { content: JSON.stringify({ characters: names.map(name => ({ ...character, name, description: name === '席淮' ? '在四万字之后经营城南旧书店。' : character.description })) }) }
+  } }) as unknown as AIAdapter
+  for (const build of [() => forgeWorldFromProse(longSource), () => forgeWorldFromDocument(longSource, '参考人物不要导入'), () => forgeWithReferences(longSource, '参考人物不要导入')]) {
+    const long = await build()
+    assert.deepEqual(long.characters.map(item => item.draft.name), ['夜班医生', '席淮'])
+    assert.match(long.characters[1]!.draft.description, /四万字之后/)
+    assert.ok(long.worldSummary)
+  }
+  assert.ok(longCalls.some(call => call.messages.at(-1)!.content.includes('四万字之后')))
+  AIAdapter.fromStored = async () => ({ complete: async (request: AIRequest) => ({ content: JSON.stringify(
+    request.messages[0]!.content.includes('只提取原文') ? { names: ['夜班医生'] } : worldOnly,
+  ) }) }) as unknown as AIAdapter
+  await assert.rejects(forgeWorldFromProse(longSource), /全部角色/)
 
   const requests: AIRequest[] = []
   const longDescription = '席淮总把那本未寄出的信藏在抽屉里。'.repeat(300)

@@ -49,6 +49,7 @@ export function WorkshopApp({ onBack }: { onBack: () => void }) {
   const [reviewItem, setReviewItem] = useState<ReviewSummary>()
   const [after, setAfter] = useState('')
   const [active, setActive] = useState<PublicWork>()
+  const [manualPlay, setManualPlay] = useState<PublicWork>()
   const [detail, setDetail] = useState<PublicWork>()
   const [creator, setCreator] = useState<number>()
   const [activity, setActivity] = useState<WorkshopActivity>({ items: [], unread: 0 })
@@ -188,6 +189,7 @@ export function WorkshopApp({ onBack }: { onBack: () => void }) {
     return <>
       <small>已应用到「{phone.name}」</small>
       {item.type === 'character' ? <>
+        <button type="button" disabled={busy} onClick={() => setManualPlay(item)}>自选 API 游玩</button>
         {item.category === 'character' && <button type="button" className="workshop-primary" disabled={busy} onClick={() => void openOnPhone(item, 'sms')}>用在短信</button>}
         <button type="button" className={item.category === 'character' ? undefined : 'workshop-primary'} disabled={busy} onClick={() => void openOnPhone(item, 'offline')}>用在线下</button>
         <button type="button" disabled={busy} onClick={() => void openOnPhone(item, 'side')}>用在番外</button>
@@ -227,6 +229,7 @@ export function WorkshopApp({ onBack }: { onBack: () => void }) {
       refresh(value => value + 1)
     }} />
   if (active?.display.app === 'oracle') return <WorkshopOracle item={active} onBack={() => setActive(undefined)} />
+  if (manualPlay) return <WorkshopPlay key={manualPlay.id} item={manualPlay} user={user} library={library} fullPlay onBack={() => setManualPlay(undefined)} />
   if (active?.launchExample) return <WorkshopPlay key={active.id} item={active} user={user} library={[]} onBack={() => setActive(undefined)} />
   if (creator) return <CreatorPage id={creator} userId={user.id} onBack={() => { setCreator(undefined); refresh(value => value + 1) }} onOpen={item => {
     setCreator(undefined)

@@ -115,7 +115,7 @@ export function WorldForgeApp(props: {
     setRawName('手写设定')
     setResult(null)
     setApplied(false)
-    setNote('AI 正在根据你写的内容搭建世界…')
+    setNote(text.length > 12_000 ? '长文本正在分段读取，人物名单和角色卡会分批整理，请稍候…' : 'AI 正在根据你写的内容搭建世界…')
     runAiJob(jobKey(jobNs, 'worldforge'), async () => {
       try {
         const identity = await creationIdentity()

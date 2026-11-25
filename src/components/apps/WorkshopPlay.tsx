@@ -1,18 +1,18 @@
 import { useState, type FormEvent } from 'react'
-import { modelEndpoint, workshop, type PublicWork, type WorkshopUser } from '../../lib/workshop.ts'
+import { modelEndpoint, workshop, workshopEndpointPolicy, type PublicWork, type WorkshopUser } from '../../lib/workshop.ts'
 import { decryptSecret } from '../../storage/crypto.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { Screen } from '../ui/primitives.tsx'
 
-type Turn = { role: 'user' | 'assistant'; content: string }
+type Turn = { role: 'user' | 'assistant'; content: string; receipt?: string }
 
-export function WorkshopPlay({ item, library, user, onBack, reviewRevision }: {
-  item: PublicWork; library: PublicWork[]; user: WorkshopUser; onBack: () => void; reviewRevision?: number
+export function WorkshopPlay({ item, library, user, onBack, reviewRevision, fullPlay = false }: {
+  item: PublicWork; library: PublicWork[]; user: WorkshopUser; onBack: () => void; reviewRevision?: number; fullPlay?: boolean
 }) {
   const profiles = useMellow(state => state.apiProfiles)
   const identity = useMellow(state => state.activeIdentityId)
-  const localKey = ['mellow-workshop', user.id, identity, item.id].join(':')
+  const localKey = ['mellow-workshop', user.id, identity, item.id, ...(fullPlay ? ['full'] : [])].join(':')
   const [turns, setTurns] = useState<Turn[]>(() => {
     if (reviewRevision !== undefined) return []
     try { return JSON.parse(localStorage.getItem(localKey) ?? '[]') }
@@ -29,8 +29,9 @@ export function WorkshopPlay({ item, library, user, onBack, reviewRevision }: {
   const [busy, setBusy] = useState(false)
   const extensions = library.filter(work => work.type === 'dlc' && work.enabled)
   const active = extensions.filter(work => selected.includes(work.id))
-  const allowed = item.endpoints.filter(url => active.every(work => !work.display.usesModel || work.endpoints.includes(url)))
-  const freeEndpoint = Boolean(item.launchExample && !active.some(work => work.display.usesModel))
+  const policy = workshopEndpointPolicy([item, ...active.filter(work => work.display.usesModel)])
+  const allowed = policy ?? []
+  const freeEndpoint = policy === null
   const allowedDestination = (url: string) => /^https:\/\//i.test(url) && (freeEndpoint || allowed.includes(url))
   const matchingProfiles = profiles.filter(row => row.ready && row.hasKey && allowedDestination(modelEndpoint(row.endpoint)))
   const profile = matchingProfiles.find(row => row.id === configuration)
@@ -66,10 +67,10 @@ export function WorkshopPlay({ item, library, user, onBack, reviewRevision }: {
       const request = {
         endpoint: destination, key, model, dlc: selected, messages: context, button,
       }
-      const { reply } = reviewRevision === undefined
-        ? await workshop<{ reply: string }>('/play/' + item.id, 'POST', request)
-        : await workshop<{ reply: string }>('/review/' + item.id + '/test', 'POST', { revision: reviewRevision, simulation: request })
-      const next: Turn[] = [...pending, { role: 'assistant', content: reply }]
+      const { reply, receipt } = reviewRevision === undefined
+        ? await workshop<{ reply: string; receipt?: string }>('/play/' + item.id + (fullPlay ? '/protected' : ''), 'POST', request)
+        : await workshop<{ reply: string; receipt?: string }>('/review/' + item.id + '/test', 'POST', { revision: reviewRevision, simulation: request })
+      const next: Turn[] = [...pending, { role: 'assistant', content: reply, ...(receipt ? { receipt } : {}) }]
       saveHistory(next.slice(-160))
       if (!button) setMessage('')
     } catch (error) {
@@ -96,6 +97,7 @@ export function WorkshopPlay({ item, library, user, onBack, reviewRevision }: {
         {matchingProfiles.map(row => <option key={row.id} value={row.id}>{row.name} · {row.model}</option>)}
         <option value="manual">手动填写</option>
       </select></label>
+      {freeEndpoint && <p>创作者未限制接口和模型，可手动填写，也可使用已保存的 API。</p>}
       {!freeEndpoint && !allowed.length && <p>这些作品目前没有共同授权的接口。可以取消选用部分 DLC 后再试。</p>}
       {configuration === 'manual' && <>
         <label>模型请求地址{freeEndpoint ? <input type="url" maxLength={500} value={manualEndpoint} disabled={busy} onChange={event => setManualEndpoint(event.target.value)} placeholder="OpenAI 兼容的公网 HTTPS 接口" /> : <select value={manualEndpoint} disabled={busy} onChange={event => setManualEndpoint(event.target.value)}>
@@ -108,7 +110,7 @@ export function WorkshopPlay({ item, library, user, onBack, reviewRevision }: {
       {allowedDestination(destination) && <label className="workshop-destination">
         <span>{destination}</span>
         <span><input type="checkbox" checked={approvedDestination === destination} disabled={busy} onChange={event => approveDestination(event.target.checked ? destination : '')} />
-          我信任这个接口，允许半糖将我的密钥和本轮对话发给它。</span>
+          我信任这个接口，允许半糖将我的密钥、本轮对话{fullPlay ? '和作品设定' : ''}发给它。</span>
       </label>}
       {item.display.greeting && <article className="whitespace-pre-wrap break-words">{item.display.greeting}</article>}
       <div role="log" aria-label="聊天记录">

@@ -100,7 +100,6 @@ for (const row of db.prepare('SELECT w.id, w.type, w.published FROM works w LEFT
 }
 const listWork = row => ({
   ...publicWork({ ...row, published: publishedText(row) }),
-  endpoints: [],
   category: row.category ?? fallbackCategory(row.type),
   creatorId: row.author_id,
   creatorName: row.creatorName ?? '创作者 ' + row.author_id,
@@ -765,8 +764,8 @@ app.post('/play/:id/protected', signedIn, limit(12, 60_000, req => req.user.id),
   const additional = characters.map(row => ({ row, draft: JSON.parse(publishedText(row)) }))
   const mods = extensions.map(row => [row.id, JSON.parse(publishedText(row))])
   const authorized = draft => !draft.endpoints.length || draft.endpoints.some(address => endpoint(address) === selectedModel.address)
-  if ((!isLaunchExample(card) && !authorized(work)) ||
-      additional.some(({ row, draft }) => !isLaunchExample(row) && !authorized(draft)) ||
+  if (!authorized(work) ||
+      additional.some(({ draft }) => !authorized(draft)) ||
       mods.some(([, draft]) => (draft.content.system_prompt_addon || draft.content.custom_buttons?.length) && !authorized(draft))) {
     return error(res, 403, '该作品或扩展的创作者尚未授权当前模型接口，请切换到创作者允许的接口')
   }

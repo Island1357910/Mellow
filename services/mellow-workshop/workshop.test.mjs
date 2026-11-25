@@ -245,6 +245,7 @@ test('email, ownership, review, DLC enablement and routing boundaries', async t 
   const dns = t.mock.method(Resolver.prototype, 'resolve4', async () => ['1.1.1.1'])
   let expectedPrompt = playGuard + '\n\n' + secret
   let expectedAddress = address
+  let expectedModel = 'test-model'
   let expectedTurns = play.messages
   let modelReply = 'Reply test-key'
   let verdict = 'ALLOW'
@@ -261,7 +262,7 @@ test('email, ownership, review, DLC enablement and routing boundaries', async t 
     const request = new PassThrough()
     request.on('data', data => {
       const body = JSON.parse(data)
-      assert.equal(body.model, 'test-model')
+      assert.equal(body.model, expectedModel)
       const checking = body.messages[0].content === reviewGuard
       if (checking) {
         checks++
@@ -395,10 +396,15 @@ test('email, ownership, review, DLC enablement and routing boundaries', async t 
   const invalidKey = await (await request(protectedPath, 502, { method: 'POST', cookie: author, body: protectedBody })).json()
   assert.match(invalidKey.error, /你配置的模型 API 密钥或权限无效/)
   assert.doesNotMatch(JSON.stringify(invalidKey), /test-key|character-private-setting/)
+  await request('/mine/' + card.id, 200, { method: 'PUT', cookie: author, body: { revision: 1, draft: { ...draft, endpoints: [] } } })
+  providerFailure = 0
+  verdict = 'ALLOW'
+  modelReply = '另一个自定义模型的回复'
+  expectedAddress = other
+  expectedModel = 'a-user-typed-model-not-in-any-preset'
+  await request(protectedPath, 200, { method: 'POST', cookie: author, body: { ...protectedBody, endpoint: other, model: expectedModel } })
   dns.mock.restore()
   provider.mock.restore()
-
-  await request('/mine/' + card.id, 200, { method: 'PUT', cookie: author, body: { revision: 1, draft: { ...draft, endpoints: [] } } })
   await send({ ...play, dlc: [] })
   const previous = await (await request('/works/' + card.id, 200, { cookie: player })).json()
   assert.deepEqual(previous.endpoints, [])
