@@ -2,6 +2,10 @@ import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
 import { takeSmsMoney } from '../src/domain/chatMoney.ts'
+import { pendingGlance, rememberSearch, setGlancePermission } from '../src/domain/glance.ts'
+import { deliverSms, replyInChat } from '../src/domain/messaging.ts'
+import { purchaseMemory } from '../src/lib/deliveryMemory.ts'
+import { normalizeSettings } from '../src/lib/defaults.ts'
 import { readCharacterWallet, takeWalletActivity } from '../src/domain/characterWallet.ts'
 import { newSave, putSave, loadConfig, saveConfig, focusChars, buildStoryPrompt } from '../src/engine/story.ts'
 import { smsBridgeForStory, storyBridgeForSms } from '../src/lib/channelBridge.ts'
@@ -33,7 +37,12 @@ const [claimed] = await storage.listMessages(ns, received.chatId)
 assert.ok(claimed?.incomingMoney?.claimedAt)
 await storage.updateMessage(ns, { ...received, starred: true })
 assert.deepEqual((await storage.listMessages(ns, received.chatId))[0]?.incomingMoney, claimed?.incomingMoney)
-const a = { id: 'a', name: '甲', nickname: '', remark: '', description: '', personality: '', scenario: '', mesExample: '', systemPrompt: '', postHistoryInstructions: '', extensions: {} } as Character
+const a: Character = {
+  id: 'a', name: '甲', nickname: '', remark: '', avatar: '', description: '', personality: '', scenario: '',
+  firstMes: '', mesExample: '', creatorNotes: '', systemPrompt: '', postHistoryInstructions: '',
+  alternateGreetings: [], tags: [], creator: '', characterVersion: '', characterBook: null,
+  extensions: {}, rawCard: null, presetId: null, createdAt: 1, updatedAt: 1,
+}
 const b = { ...a, id: 'b', name: '乙' }
 assert.equal(readCharacterWallet(null, { ...a, description: '手头只有 12.50 元' }).balanceCents, 1250)
 assert.equal(readCharacterWallet(null, { ...a, description: '身无分文' }).balanceCents, 0)
@@ -125,6 +134,33 @@ try {
   await tickDeliveries(ns, [a])
   assert.equal(calls, 1, 'completed delivery does not react again')
 } finally { AIAdapter.prototype.complete = original }
+const receivedOrder = { ...order, id: 'already-discussed', createdAt: 1, arrivesAt: 2, told: false, reacted: false }
+await storage.setBag(ns, 'deliveries', [receivedOrder])
+await storage.putMessage(ns, { id: 'gift-user', chatId: 'dm-a', role: 'user', kind: 'text', content: '热茶是我给你买的。', createdAt: 100, status: 'sent' } as ChatMessage)
+await storage.putMessage(ns, { id: 'gift-reply', chatId: 'dm-a', role: 'assistant', charId: a.id, kind: 'text', content: '收到了，谢谢，很好喝。', createdAt: 101, status: 'sent' } as ChatMessage)
+let arrivalCalls = 0
+AIAdapter.prototype.complete = async () => { arrivalCalls++; return { content: '是你买的吗？' } }
+try {
+  await tickDeliveries(ns, [a])
+  assert.equal(arrivalCalls, 0, 'already discussed receipt never starts a delayed notification')
+  const synced = (await storage.getBag<Delivery[]>(ns, 'deliveries'))![0]!
+  assert.equal(synced.told, true)
+  assert.equal(synced.reacted, true)
+  assert.match(await purchaseMemory(ns, [a.id]), /玩家已告知是自己下单/)
+
+  const slowOrder = { ...receivedOrder, id: 'slow-notification', createdAt: 200, arrivesAt: 201 }
+  await storage.clearChat(ns, 'dm-a')
+  await storage.setBag(ns, 'deliveries', [slowOrder])
+  AIAdapter.prototype.complete = async () => {
+    await storage.putMessage(ns, { id: 'slow-user', chatId: 'dm-a', role: 'user', kind: 'text', content: '我给你买的热茶收到没？', createdAt: 210, status: 'sent' } as ChatMessage)
+    await storage.putMessage(ns, { id: 'slow-reply', chatId: 'dm-a', role: 'assistant', charId: a.id, kind: 'text', content: '收到了，刚喝了一口。', createdAt: 211, status: 'sent' } as ChatMessage)
+    return { content: '是你买的吗？' }
+  }
+  const countBefore = (await storage.listMessages(ns, 'dm-a')).length
+  await tickDeliveries(ns, [a])
+  assert.equal((await storage.listMessages(ns, 'dm-a')).length, countBefore + 2, 'stale generated notification is discarded after a concurrent receipt conversation')
+  assert.equal((await storage.getBag<Delivery[]>(ns, 'deliveries'))![0]!.reacted, true)
+} finally { AIAdapter.prototype.complete = original }
 const post = { id: 'cached-post', charId: a.id, author: '旧昵称', text: '今天做了华夫饼。', at: 10 }
 const comment = { id: 'comment-1', author: identity.name, text: '留一块给我？' }
 assert.equal(momentAuthor(post, [a, b])?.id, a.id)
@@ -150,4 +186,51 @@ try {
   modelReply = '给你留了。'
   assert.equal(await replyToMomentComment(post, a, comment), modelReply)
 } finally { AIAdapter.fromStored = fromStored }
-console.log('Channel and delivery checks passed: first-save recovery, participant isolation, chronological prompts, arrival fallback, concurrency and purchase preservation')
+
+assert.equal(normalizeSettings({}).phoneFontScale, 100)
+assert.equal(normalizeSettings({ phoneFontScale: 200 }).phoneFontScale, 130)
+assert.equal(normalizeSettings({ phoneFontScale: 115 }).phoneFontScale, 115)
+await storage.saveSettings({ ...await storage.getSettings(), phoneFontScale: 115 })
+assert.equal((await storage.getSettings()).phoneFontScale, 115)
+
+await storage.setBag(ns, 'diary', [{ id: 'entry', text: '蓝色自行车', at: 1 }])
+await rememberSearch(ns, identity.id, '深夜花店')
+await Promise.all([
+  setGlancePermission(ns, a.id, 'search', true),
+  setGlancePermission(ns, a.id, 'diary', true),
+  setGlancePermission(ns, b.id, 'search', true),
+])
+const input = { namespace: ns, identity, character: a, chat: chatA, presets: [], activePresetId: '', fourthWall: false }
+let searchPrompt = ''
+let fail = true
+AIAdapter.fromStored = async () => ({
+  complete: async (request: Parameters<AIAdapter['complete']>[0]) => {
+    searchPrompt = request.messages[0]!.content
+    if (fail) throw Error('model unavailable')
+    return { content: '嗯，知道了。' }
+  },
+}) as unknown as AIAdapter
+try {
+  assert.equal((await deliverSms({ ...input, text: '到家了吗？' })).role, 'system')
+  assert.ok(await pendingGlance(ns, a.id), 'failed replies do not consume a mention')
+  fail = false
+  const reply = await replyInChat(input)
+  assert.equal(reply.role, 'assistant', reply.content)
+  assert.match(searchPrompt, /蓝色自行车/)
+  assert.match(searchPrompt, /深夜花店/)
+  assert.match(reply.content, /蓝色自行车/, 'an omitted mention is added to the same reply')
+  assert.doesNotMatch(reply.content, /回针已提及/)
+  assert.equal(await pendingGlance(ns, a.id), null)
+  assert.doesNotMatch((await pendingGlance(ns, b.id))!.note, /蓝色自行车/)
+
+  await rememberSearch(ns, identity.id, '周末市集')
+  const next = await deliverSms({ ...input, text: '周末见。' })
+  assert.match(searchPrompt, /周末市集/)
+  assert.doesNotMatch(searchPrompt, /蓝色自行车/)
+  assert.match(next.content, /周末市集/)
+  assert.equal(await pendingGlance(ns, a.id), null)
+  await setGlancePermission(ns, a.id, 'diary', false)
+  await storage.setBag(ns, 'diary', [{ id: 'new-entry', text: '撤回后的日记', at: 2 }])
+  assert.equal(await pendingGlance(ns, a.id), null)
+} finally { AIAdapter.fromStored = fromStored }
+console.log('Channel and delivery checks passed: participant isolation, arrival fallback, concurrent purchases, persisted font size and immediate phone-permission mentions')

@@ -1,10 +1,15 @@
 import { importCharacterRegex } from '../engine/story.ts'
+import { pickPreset } from '../engine/prompt.ts'
 import { characterFromDraft } from '../domain/importing.ts'
 import { moduleAi, readJson } from './ask.ts'
 import { resolveImportJson } from './cardTextImport.ts'
+import { modePresetId } from './defaults.ts'
+import { directivePrompt } from './directives.ts'
 import { jiushiStoryBridgeForLetter } from './jiushiBridge.ts'
+import { jiushiWorldNs } from './jiushiPhone.ts'
+import { fillCharacterPrompt, renderPresetPrompt } from './presetPrompt.ts'
 import { parseCharacterCards, type CardDraft } from './sillytavern.ts'
-import { importCharacterWorld } from './worldbook.ts'
+import { migrateJiushiCardWorld, storyWorldText } from './worldbook.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Identity } from '../types/index.ts'
 import { uid } from './id.ts'
@@ -106,8 +111,7 @@ export async function importJiushiCardFile(file: File, identity: Identity): Prom
   if (isPng) avatar = await fileToDataUrl(file)
   const characters: Character[] = []
   for (const draft of drafts) {
-    const character = await characterFromDraft(identity.namespace, draft, avatar, { skipChat: true })
-    await importCharacterWorld(identity.namespace, character)
+    const character = await characterFromDraft(identity.namespace, draft, avatar, { skipChat: true, worldNamespace: jiushiWorldNs(identity.namespace) })
     await importCharacterRegex(identity.namespace, character)
     characters.push(character)
   }
@@ -170,30 +174,51 @@ export async function replyJiushiLetter(input: {
   config: JiushiConfig
   userText: string
 }): Promise<string> {
-  const letter = (await getJiushiLetter(input.namespace, input.character.id)) ?? {
+  const character = await storage.getCharacter(input.namespace, input.character.id) ?? input.character
+  const letter = (await getJiushiLetter(input.namespace, character.id)) ?? {
     id: uid('let'),
-    charId: input.character.id,
-    charName: input.character.name,
+    charId: character.id,
+    charName: character.name,
     lines: [],
     updatedAt: Date.now(),
   }
   const history = [...letter.lines, { role: 'user' as const, content: input.userText.trim(), at: Date.now() }]
     .slice(-16)
-    .map((item) => `${item.role === 'user' ? '来者' : input.character.name}：${item.content}`)
+    .map((item) => `${item.role === 'user' ? '来者' : character.name}：${item.content}`)
     .join('\n')
 
-  const storyBridge = await jiushiStoryBridgeForLetter(input.namespace, input.character)
+  const worldNs = jiushiWorldNs(input.namespace)
+  const userName = input.config.roleName.trim() || '无名旅人'
+  await migrateJiushiCardWorld(input.namespace, [character.id])
+  const [storyBridge, settings, presets, writing, world] = await Promise.all([
+    jiushiStoryBridgeForLetter(input.namespace, character),
+    storage.getSettings(),
+    storage.listPresets(),
+    directivePrompt(worldNs, [character.id]),
+    storyWorldText(worldNs, [character], history, { userName }),
+  ])
+  const preset = pickPreset(presets, modePresetId(settings, 'jiushi'), character.presetId, null)
+  const fill = (text: string) => fillCharacterPrompt(text, userName, character)
+  const system = [
+    fill('你是{{char}}。\n人物设定：{{description}}\n性格：{{personality}}\n处境：{{scenario}}'),
+    jiushiPromptBlock(input.config),
+    renderPresetPrompt(preset, userName, character),
+    character.systemPrompt.trim() && fill(character.systemPrompt),
+    world && `【世界书】\n${world}`,
+    character.postHistoryInstructions.trim() && fill(character.postHistoryInstructions),
+    writing.text && fill(writing.text),
+    writing.cot,
+    '当前是「传书」。用书信口吻回应，未指定长短时写一到两段。只返回 JSON 对象 {"letter":""}，信中不用 HTML、状态栏，也不代写来信者的行动或回信。',
+  ].filter(Boolean).join('\n\n')
   const raw = await askLine(
-    `你是${input.character.name}。${input.character.description.slice(0, 200)}
-${jiushiPromptBlock(input.config)}
-当前是「传书」：像古人写信，半文白，一段到两段，不要 HTML，不要状态栏，不要替对方写。只返回 JSON：{"letter":""}`,
+    system,
     [storyBridge, `此前传书：\n${history || '（尚无）'}`, `来者新笺：${input.userText.trim()}`].filter(Boolean).join('\n\n'),
     320,
   )
   const parsed = readJson(raw) as { letter?: unknown }
   const text = typeof parsed.letter === 'string' ? parsed.letter.trim() : ''
   if (!text) throw new Error('回信是空的')
-  await appendJiushiLetterLine(input.namespace, input.character, 'user', input.userText)
-  await appendJiushiLetterLine(input.namespace, input.character, 'assistant', text)
+  await appendJiushiLetterLine(input.namespace, character, 'user', input.userText)
+  await appendJiushiLetterLine(input.namespace, character, 'assistant', text)
   return text
 }

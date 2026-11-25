@@ -13,11 +13,18 @@ export async function listDirectives(): Promise<Directive[]> {
 }
 
 export async function draftDirective(wish: string): Promise<Directive> {
-  const raw = readJson(await moduleAi('create').askJson(
-    '按玩家需求撰写可直接交给叙事模型执行的写作指令。只输出 JSON 对象 {"title":"","text":""}。标题简短，正文使用明确的行为约束。', wish, 1500,
-  )) as Partial<Directive> | null
-  if (typeof raw?.title !== 'string' || !raw.title.trim() || typeof raw.text !== 'string' || !raw.text.trim()) throw new Error('没有生成完整指令')
-  return { id: uid('directive'), category: '自定义', title: raw.title.trim(), text: raw.text.trim() }
+  const instruction = wish.trim()
+  if (!instruction) throw new Error('请先填写想要的文风或互动规则。')
+  const output = await moduleAi('create').askJson(
+    '按玩家需求撰写写作指令。只输出 JSON 对象，字段为 title 和 text。标题简短，正文使用明确行为约束，换行用 JSON 转义。不要只输出思考过程。', instruction, 8192,
+  )
+  let raw: Partial<Directive> | null = null
+  try { raw = readJson(output) as Partial<Directive> | null } catch { /* Show the received text for manual editing. */ }
+  const title = typeof raw?.title === 'string' ? raw.title.trim() : ''
+  const text = typeof raw?.text === 'string' ? raw.text.trim() : raw ? '' : output.trim()
+  if (!title && !text) throw new Error('模型未返回可用指令，已有草稿已保留。')
+  return { id: uid('directive'), category: '自定义', title: title || instruction.slice(0, 30), text }
+
 }
 
 export async function saveCustomDirective(draft: Directive): Promise<void> {
@@ -25,7 +32,6 @@ export async function saveCustomDirective(draft: Directive): Promise<void> {
     [CUSTOM_KEY]: [draft, ...((bags[CUSTOM_KEY] as Directive[] | null) ?? []).filter(item => item.id !== draft.id)],
   }))
 }
-const MAX_CHARS = 9600
 
 export interface DirectivePicks {
   global: string[]
@@ -99,14 +105,7 @@ export function resolveDirectives(charIds: string[], picks: DirectivePicks, ever
   for (const id of charIds) push(picks.byChar[id] ?? [])
   push(picks.global)
   push(everyone)
-  const lines: string[] = []
-  let used = 0
-  for (const item of ordered) {
-    const line = `【${item.category}·${item.title}】${item.text}`
-    if (used + line.length > MAX_CHARS) break
-    lines.push(line)
-    used += line.length
-  }
+  const lines = ordered.map(item => `【${item.category}·${item.title}】${item.text}`)
   const scopes = [charIds.flatMap((id) => lookup(picks.byChar[id] ?? [], library)), lookup(picks.global, library), lookup(everyone, library)]
   let cot: Directive | null = null
   let decided = false

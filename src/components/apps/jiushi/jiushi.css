@@ -306,6 +306,32 @@
   font-family: var(--js-serif);
 }
 
+.jiushi-letter-head .jiushi-back {
+  flex: none;
+}
+
+.jiushi-letter-head .jiushi-screen-title h1,
+.jiushi-letter-head .jiushi-screen-title p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jiushi-phone .jiushi-letter-recipient.soft-select {
+  flex: 0 1 38%;
+  width: 38%;
+  min-width: 0;
+  max-width: 8rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+}
+
+.jiushi-letter-composer {
+  padding-bottom: 2rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+}
+
 .jiushi-toggle {
   width: 100%;
   border-radius: 16px;
@@ -321,16 +347,24 @@
   background: var(--js-cinnabar-soft);
 }
 
+.jiushi-msg-user,
+.jiushi-msg-theirs {
+  width: fit-content;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--js-body, var(--js-serif));
+  font-size: var(--js-reader-size, 14px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
 .jiushi-msg-user {
   margin-left: auto;
   max-width: 88%;
   border-radius: 16px 16px 4px 16px;
   border: 1px solid var(--js-gold-soft);
   background: linear-gradient(135deg, #f0e6d0, #e8dcc8);
-  padding: 0.55rem 0.75rem;
-  font-family: var(--js-serif);
-  font-size: 14px;
-  line-height: 1.65;
 }
 
 .jiushi-msg-theirs {
@@ -338,10 +372,6 @@
   border-radius: 16px 16px 16px 4px;
   border: 1px solid var(--js-border-light);
   background: rgba(255, 252, 245, 0.94);
-  padding: 0.55rem 0.75rem;
-  font-family: var(--js-serif);
-  font-size: 14px;
-  line-height: 1.65;
   box-shadow: 0 4px 14px rgba(44, 36, 25, 0.06);
 }
 

@@ -1,0 +1,12 @@
+{
+  "type": "dlc",
+  "category": "mod",
+  "title": "月相占卜室",
+  "summary": "在小手机里抽一张牌，或抽三张不同的牌，从「此刻、留意、下一步」三个方向整理思绪。安装并启用后可从工坊工具箱打开。",
+  "endpoints": [],
+  "content": {
+    "version": 1,
+    "app": "oracle",
+    "theme_color": "#745C99"
+  }
+}

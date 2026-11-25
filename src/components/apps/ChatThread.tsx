@@ -1,3 +1,4 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioLines, CheckSquare, ChevronLeft, Ellipsis, Image, Keyboard, Mail, MessageCircleReply, Mic, Music, PartyPopper, Pause, Phone, Play, Plus, SendHorizontal, Smile, Square, Trash2, VenetianMask, Wallet } from 'lucide-react'
@@ -515,9 +516,13 @@ export function ChatThread(props: { identity: Identity; chat: Chat; characters: 
         ) : null}
       </div>
       {sheet === 'redpacket' || sheet === 'transfer' ? (
-        <MoneySheet mode={sheet} group={chat.kind === 'group'} people={people} onClose={() => setSheet(null)} onSend={(content) => void send(content, sheet)} />
+        <MoneySheet mode={sheet} group={chat.kind === 'group'} people={people} onClose={() => setSheet(null)} onGift={() => setSheet('gift')} onSend={(content) => void send(content, sheet)} />
       ) : null}
-      {sheet === 'gift' ? <GiftSheet namespace={props.identity.namespace} people={people} onClose={() => setSheet(null)} onSend={async(content,cost,requestId)=>{await postPaidGiftMessage({namespace:props.identity.namespace,identity:props.identity,chat,text:content,cost,requestId});void reload().catch(()=>undefined)}} /> : null}
+      {sheet === 'gift' ? <GiftSheet namespace={props.identity.namespace} people={people.filter(person => !person.blocked)} group={chat.kind === 'group'}
+        onClose={() => setSheet(null)} onTransfer={() => setSheet('transfer')} onSend={async (content, cost, requestId, recipient) => {
+          await postPaidGiftMessage({ namespace: props.identity.namespace, identity: props.identity, chat, text: content, cost, requestId, recipient })
+          void reload().catch(() => undefined)
+        }} /> : null}
       {calling ? (
         <CallScreen
           title={title}
@@ -1312,6 +1317,6 @@ function Num(props: { label: string; value: number; min: number; max: number; on
 }
 
 function MiniFace(props: { name: string; avatar: string }) {
-  if (props.avatar.startsWith('data:')) return <img src={props.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+  if (isImageAvatar(props.avatar)) return <img src={props.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
   return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs" style={{ background: 'var(--m-secondary)' }}>{initialOf(props.name)}</span>
 }

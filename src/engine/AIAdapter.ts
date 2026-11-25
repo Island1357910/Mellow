@@ -1,6 +1,68 @@
 import type { AIMessage, AIRequest, AIResponse, ApiConfig, GenerationSettings } from '../types/index.ts'
 import { mergeThought, takeReasoning } from '../lib/reasoning.ts'
 import { apiErrorText } from '../lib/apiErrorText.ts'
+import { checkAbort, waitForAbort } from '../lib/abort.ts'
+
+async function readCompletionStream(response: Response, signal: AbortSignal): Promise<{ data: unknown; interrupted: boolean }> {
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('接口没有返回流式正文')
+  const decoder = new TextDecoder()
+  let line = ''
+  let content = ''
+  let reasoning = ''
+  let reason: string | undefined
+  let ended = false
+  let interrupted = false
+  let apiError: unknown
+  const consume = (raw: string) => {
+    if (!raw.startsWith('data:')) return
+    const value = raw.slice(5).trim()
+    if (value === '[DONE]') { ended = true; return }
+    if (!value) return
+    let event
+    try { event = JSON.parse(value) } catch { return }
+    if (event?.error) {
+      if (!content.trim()) apiError = event
+      else { reason = 'length'; interrupted = true }
+      ended = true
+      return
+    }
+    const choice = event?.choices?.[0]
+    const delta = choice?.delta ?? choice?.message
+    content += messageContent(delta?.content)
+    if (typeof delta?.reasoning_content === 'string') reasoning += delta.reasoning_content
+    else if (typeof delta?.reasoning === 'string') reasoning += delta.reasoning
+    const typedReasoning = apiReasoning({ choices: [{ message: { content: delta?.content } }] })
+    if (typedReasoning) reasoning = mergeThought(reasoning, typedReasoning)
+    if (typeof choice?.finish_reason === 'string') reason = choice.finish_reason
+  }
+  try {
+    while (!ended) {
+      const chunk = await waitForAbort(reader.read(), signal)
+      if (chunk.done) {
+        line += decoder.decode()
+        consume(line)
+        break
+      }
+      line += decoder.decode(chunk.value, { stream: true })
+      const lines = line.split('\n')
+      line = lines.pop() ?? ''
+      for (const raw of lines) {
+        consume(raw)
+        if (ended) break
+      }
+    }
+  } catch (error) {
+    if (!content.trim()) throw error
+    interrupted = !reason
+  } finally {
+    void reader.cancel().catch(() => {})
+  }
+  return {
+    data: apiError ?? { choices: [{ message: { content, reasoning_content: reasoning }, finish_reason: reason ?? (ended ? 'stop' : 'length') }] },
+    interrupted: interrupted || (!ended && !reason && Boolean(content.trim())),
+  }
+}
 
 /** 未指定 maxTokens 时的默认值，避免部分接口因缺参返回空内容 */
 const DEFAULT_MAX_TOKENS = 8192
@@ -71,15 +133,6 @@ function reasoningText(value: unknown): string {
   )
 }
 
-function joinContinuation(head: string, tail: string): string {
-  if (tail.startsWith(head)) return tail
-  if (head.endsWith(tail)) return head
-  for (let size = Math.min(head.length, tail.length); size >= 12; size--) {
-    if (head.slice(-size) === tail.slice(0, size)) return head + tail.slice(size)
-  }
-  return head + tail
-}
-
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
@@ -90,8 +143,16 @@ function joinUrl(endpoint: string, suffix: string): string {
   return `${base}${suffix}`
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise(resolve => {
+    const done = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done)
+  })
 }
 
 function invalidParam(message: string): boolean {
@@ -107,6 +168,8 @@ function explainParam(message: string): string {
 
 /** 把模型写成两个字符的 \\n 还原成真正换行。已经有换行时不动。 */
 function restoreBreaks(text: string): string {
+  // JSON string escapes belong to the payload; decoding them here corrupts generated instructions.
+  try { JSON.parse(text); return text } catch { /* Plain text may need escaped line breaks restored. */ }
   if (!text.includes('\\n') || text.includes('\n')) return text
   return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n')
 }
@@ -275,6 +338,7 @@ export class AIAdapter {
   }
 
   async complete(request: AIRequest): Promise<AIResponse> {
+    checkAbort(request.signal)
     if (!this.config.model.trim()) throw new AIError('还没选择模型。', 'config')
     if (!this.config.endpoint.trim()) throw new AIError('还没写接口地址。', 'config')
     if (!this.config.key.trim()) throw new AIError('还没保存 API Key。', 'config')
@@ -286,43 +350,32 @@ export class AIAdapter {
     let content = result.content
     let reasoning = result.reasoning?.trim() ?? ''
     let recovered = false
-    if (enabled) {
-      // At most two additional model generations. Never send hidden reasoning back to the provider.
-      for (let round = 0; round < 2 && (!content || result.reasoningOnly || result.truncated); round++) {
-        recovered = true
-        const task = content
-          ? '（应用的防截断续写任务，不是玩家新发言。）紧接上一条正文最后一个字符续写，只补未完成部分，不要重复开头、解释或重新输出全文。保持原有格式；JSON、HTML和代码应接着补全，直到完整结束。只输出正文，不输出思考过程。'
-          : '（应用的正文恢复任务，不是玩家新发言。）上一轮没有返回可显示的正文。请遵守原任务和原输出格式，直接给出完整正文，简短完成，不输出思考过程或解释，不替玩家发言。'
-        try {
-          result = await this.openai({ ...original,
-            maxTokens: Math.min(32768, budget * (round + 2)),
-            messages: [...request.messages, ...(content ? [{ role: 'assistant' as const, content }] : []), { role: 'user', content: task }],
-          }, Boolean(content))
-        } catch (error) {
-          if (content) return { content, reasoning, model: this.config.model, provider: 'openai', truncated: true, recovered: true }
-          throw error
-        }
-        if (!reasoning && result.reasoning?.trim()) reasoning = result.reasoning.trim()
-        const previous = content
-        if (result.content) content = content ? joinContinuation(content, result.content) : result.content
-        if (previous && content === previous) result.truncated = true
-        // Empty continuation is not evidence that the previous partial answer is complete.
-        if (!result.content && content) result.truncated = true
-      }
+    // Keep every visible partial answer. Only an empty body warrants one recovery call.
+    if (enabled && !content.trim() && !result.interrupted) {
+      recovered = true
+      result = await this.openai({ ...original,
+        maxTokens: Math.min(32768, budget * 2),
+        messages: [...request.messages, { role: 'user', content: '（应用的正文恢复任务，不是玩家新发言。）上一轮没有返回可显示的正文。遵守原任务和格式，简短给出正文，不输出思考过程，不替玩家发言。' }],
+      })
+      content = result.content
+      if (!reasoning && result.reasoning?.trim()) reasoning = result.reasoning.trim()
     }
+    checkAbort(request.signal)
     if (!content) throw new AIError(result.reasoningOnly
       ? '接口只返回了思考内容，没有可显示的正文。请在 API 设置中增加输出额度，或使用能返回正文的模型。'
       : '接口返回了空正文，未能恢复。请检查接口或更换模型后重试。', 'api')
-    return { content, reasoning, model: this.config.model, provider: 'openai', truncated: Boolean(result.truncated || result.reasoningOnly), recovered }
+    return { content, reasoning, model: this.config.model, provider: 'openai', truncated: Boolean(result.truncated || result.reasoningOnly), recovered, interrupted: result.interrupted }
   }
 
   private async completeWithRetry(request: AIRequest): Promise<CompletionResult> {
     let last: AIError | null = null
     for (let attempt = 0; attempt < COMPLETE_ATTEMPTS; attempt++) {
-      if (attempt > 0) await sleep(700 * attempt)
+      checkAbort(request.signal)
+      if (attempt > 0) await sleep(700 * attempt, request.signal)
       try {
         return await this.openai(request)
       } catch (error) {
+        checkAbort(request.signal)
         const aiError = error instanceof AIError ? error : AIAdapter.asNetworkError(error)
         last = aiError
         if (!AIAdapter.shouldRetry(aiError, attempt)) throw aiError
@@ -334,28 +387,27 @@ export class AIAdapter {
   static shouldRetry(error: AIError, attempt: number): boolean {
     if (attempt >= COMPLETE_ATTEMPTS - 1) return false
     if (error.code === 'config') return false
-    return error.code === 'network' || error.retryable
+    return error.retryable
   }
 
   static asNetworkError(error: unknown): AIError {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      return new AIError('等了太久，接口没有回来。', 'network', true)
+      return new AIError('等了太久，接口没有回来。', 'network')
     }
     const raw = error instanceof Error ? error.message : ''
     const msg = raw.toLowerCase()
     if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')) {
       return new AIError(
-        '请求中途断开（Failed to fetch）。若聊天正常，多半是整理/导入请求更大更慢，被网关限时切断；可改用 txt/json 或换更快的模型。',
+        '请求中途断开，未收到可显示的正文。请检查网络或模型接口后重试。',
         'network',
-        true,
       )
     }
     if (error instanceof TypeError) {
-      return new AIError('连不上接口。浏览器直接请求时，多半是跨域或地址不可达。', 'network', true)
+      return new AIError('连不上接口。浏览器直接请求时，多半是跨域或地址不可达。', 'network')
     }
     if (error instanceof Error) {
       if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('abort') || msg.includes('signal')) {
-        return new AIError('等了太久，接口没有回来。', 'network', true)
+        return new AIError('等了太久，接口没有回来。', 'network')
       }
     }
     return new AIError(raw || '请求失败了', 'api')
@@ -405,7 +457,7 @@ export class AIAdapter {
       rows.push({ model: this.config.model, messages: strict, max_tokens: typeof budget === 'number' ? Math.min(budget, 4096) : 4096 })
       rows.push({ model: this.config.model, messages: strict })
     }
-    return rows
+    return request.stream ? [{ ...normal, stream: true }, ...rows] : rows
   }
 
   private async openai(request: AIRequest, continuation = false): Promise<CompletionResult> {
@@ -413,64 +465,83 @@ export class AIAdapter {
     const payloads = this.payloads(request)
     let last = '请求失败了'
     for (let index = 0; index < payloads.length; index += 1) {
-      let response: Response
+      checkAbort(request.signal)
+      const controller = new AbortController()
+      const stop = () => controller.abort()
+      const timer = setTimeout(stop, timeoutMs)
+      request.signal?.addEventListener('abort', stop)
       try {
-        response = await fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
-          method: 'POST',
-          signal: AbortSignal.timeout(timeoutMs),
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
-          },
-          body: JSON.stringify(payloads[index]),
-        })
-      } catch (error) {
-        throw AIAdapter.asNetworkError(error)
-      }
+        let response: Response
+        try {
+          response = await waitForAbort(fetch(joinUrl(this.config.endpoint, '/chat/completions'), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              ...(this.config.key ? { Authorization: `Bearer ${this.config.key}` } : {}),
+            },
+            body: JSON.stringify(payloads[index]),
+          }), controller.signal)
+        } catch (error) {
+          throw AIAdapter.asNetworkError(error)
+        }
 
-      if (!response.ok) {
-        last = await readError(response)
-        if (apiErrorText(last) !== last) throw new AIError(apiErrorText(last), 'api', false, last)
-        const retryable = response.status === 429 || response.status >= 500
-        if (retryable) throw new AIError(last, 'network', retryable)
-        if (response.status === 400 && invalidParam(last) && index < payloads.length - 1) continue
-        const friendly = explainParam(last)
-        throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)
-      }
+        if (!response.ok) {
+          last = await waitForAbort(readError(response), controller.signal)
+          if (apiErrorText(last) !== last) throw new AIError(apiErrorText(last), 'api', false, last)
+          if (response.status === 429 || response.status >= 500) {
+            throw new AIError(last, 'network', response.status === 429)
+          }
+          if (response.status === 400 && (invalidParam(last) || (request.stream && index === 0 && /stream|流式/i.test(last))) && index < payloads.length - 1) continue
+          const friendly = explainParam(last)
+          throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)
+        }
 
-      let data: unknown
-      try { data = await response.json() } catch { throw new AIError('接口返回的数据不完整或不是 JSON，请重试或检查接口地址。', 'api') }
-      if (data && typeof data === 'object' && 'error' in data && data.error) {
-        const detail = errorDetail(data.error) || '接口返回了错误，未生成正文。'
-        throw new AIError(apiErrorText(detail), 'api', false, detail)
+        let data: unknown
+        let interrupted = false
+        try {
+          if (/text\/event-stream/i.test(response.headers.get('content-type') ?? '')) {
+            ({ data, interrupted } = await readCompletionStream(response, controller.signal))
+          } else data = await waitForAbort(response.json(), controller.signal)
+        } catch (error) {
+          if (controller.signal.aborted) throw AIAdapter.asNetworkError(error)
+          throw new AIError('接口返回的数据不完整或不是 JSON，请重试或检查接口地址。', 'api')
+        }
+        if (data && typeof data === 'object' && 'error' in data && data.error) {
+          const detail = errorDetail(data.error) || '接口返回了错误，未生成正文。'
+          throw new AIError(apiErrorText(detail), 'api', false, detail)
+        }
+        const feedback = data as { promptFeedback?: { blockReason?: string }; choices?: Array<{ finish_reason?: string }> } | null
+        const blocked = feedback?.promptFeedback?.blockReason
+        if ((blocked && blocked !== 'BLOCK_REASON_UNSPECIFIED') || feedback?.choices?.[0]?.finish_reason === 'content_filter') {
+          const detail = `content_filter${blocked ? `: ${blocked}` : ''}`
+          throw new AIError(apiErrorText(detail), 'api', false, detail)
+        }
+        const rawContent = extractContent(data)
+        const split = takeReasoning(rawContent)
+        const content = split.content
+        const reasoning = mergeThought(apiReasoning(data), split.reasoning)
+        const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null
+        const reason = meta?.choices?.[0]?.finish_reason ?? meta?.incomplete_details?.reason ?? meta?.stop_reason
+        const truncated = reason === 'length' || reason === 'max_tokens' || reason === 'max_output_tokens' || meta?.status === 'incomplete'
+        if (reason === 'content_filter') throw new AIError('接口未生成正文，请查看所选模型的内容限制。', 'api')
+        if (content) return {
+          content: (continuation ? rawContent.match(/^\s*/)?.[0] ?? '' : '') + content + (truncated ? rawContent.match(/\s*$/)?.[0] ?? '' : ''),
+          reasoning,
+          model: this.config.model, provider: 'openai', truncated, interrupted,
+        }
+        const root = data as { choices?: Array<{ message?: { reasoning_content?: unknown; reasoning?: unknown; content?: unknown } }>; content?: unknown; output?: unknown }
+        const message = root?.choices?.[0]?.message
+        const reasoningParts = [message?.content, root?.content, root?.output].some(value =>
+          Array.isArray(value) ? value.some(isReasoningPart) : isReasoningPart(value))
+        if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts || reasoning) {
+          return { content: '', reasoning, model: this.config.model, provider: 'openai', reasoningOnly: true, truncated }
+        }
+        return { content: '', reasoning, model: this.config.model, provider: 'openai', truncated }
+      } finally {
+        clearTimeout(timer)
+        request.signal?.removeEventListener('abort', stop)
       }
-      const feedback = data as { promptFeedback?: { blockReason?: string }; choices?: Array<{ finish_reason?: string }> } | null
-      const blocked = feedback?.promptFeedback?.blockReason
-      if ((blocked && blocked !== 'BLOCK_REASON_UNSPECIFIED') || feedback?.choices?.[0]?.finish_reason === 'content_filter') {
-        const detail = `content_filter${blocked ? `: ${blocked}` : ''}`
-        throw new AIError(apiErrorText(detail), 'api', false, detail)
-      }
-      const rawContent = extractContent(data)
-      const split = takeReasoning(rawContent)
-      const content = split.content
-      const reasoning = mergeThought(apiReasoning(data), split.reasoning)
-      const meta = data as { choices?: Array<{ finish_reason?: string }>; status?: string; incomplete_details?: { reason?: string }; stop_reason?: string } | null
-      const reason = meta?.choices?.[0]?.finish_reason ?? meta?.incomplete_details?.reason ?? meta?.stop_reason
-      const truncated = reason === 'length' || reason === 'max_tokens' || reason === 'max_output_tokens' || meta?.status === 'incomplete'
-      if (reason === 'content_filter') throw new AIError('接口未生成正文，请查看所选模型的内容限制。', 'api')
-      if (content) return {
-        content: (continuation ? rawContent.match(/^\s*/)?.[0] ?? '' : '') + content + (truncated ? rawContent.match(/\s*$/)?.[0] ?? '' : ''),
-        reasoning,
-        model: this.config.model, provider: 'openai', truncated,
-      }
-      const root = data as { choices?: Array<{ message?: { reasoning_content?: unknown; reasoning?: unknown; content?: unknown } }>; content?: unknown; output?: unknown }
-      const message = root?.choices?.[0]?.message
-      const reasoningParts = [message?.content, root?.content, root?.output].some(value =>
-        Array.isArray(value) ? value.some(isReasoningPart) : isReasoningPart(value))
-      if (rawContent || message?.reasoning_content || message?.reasoning || reasoningParts || reasoning) {
-        return { content: '', reasoning, model: this.config.model, provider: 'openai', reasoningOnly: true, truncated }
-      }
-      return { content: '', reasoning, model: this.config.model, provider: 'openai', truncated }
     }
     const friendly = explainParam(last)
     throw new AIError(friendly, 'api', false, friendly === last ? undefined : last)

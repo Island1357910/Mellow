@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto'
 import assert from 'node:assert/strict'
 import type { HttpOptions } from '@capacitor/core'
+import type { PhoneItem } from '../src/lib/phoneAlbum.ts'
+import type { Character } from '../src/types/index.ts'
 
 let nativeRequest: (options: HttpOptions) => Promise<unknown>
 Object.assign(globalThis, { Capacitor: {
@@ -8,6 +10,11 @@ Object.assign(globalThis, { Capacitor: {
   nativePromise: (_name: string, _method: string, options: HttpOptions) => nativeRequest(options),
 } })
 const { Capacitor } = await import('@capacitor/core')
+const { generatePhoneAlbum } = await import('../src/lib/phoneAlbum.ts')
+const { storage } = await import('../src/storage/StorageService.ts')
+const { addLiveSmsFriend } = await import('../src/domain/liveContact.ts')
+const { isImageAvatar } = await import('../src/lib/avatar.ts')
+const { listSaves } = await import('../src/engine/story.ts')
 const { buildImagePrompt, generateImage, imageEndpoint, listImageModels, saveImageApi } = await import('../src/lib/imageApi.ts')
 const { resolveImportJson } = await import('../src/lib/cardTextImport.ts')
 const { importChatBackground } = await import('../src/lib/wallpaper.ts')
@@ -207,6 +214,69 @@ try {
   assert.equal(illustrated[0]?.image, `data:image/jpeg;base64,${encoded}`)
   assert.equal(illustrated[1]?.image, undefined)
   assert.equal(requests, 2)
+  const anchor = { id: 'live-test-anchor', realName: '测试主播', stageName: '晚风',
+    background: '在直播间唱歌', personality: '温和', chatStyle: '自然接话',
+    appearance: '黑发、棕色眼睛', portraitUrl: 'characters/live-test.png' }
+  const friendNamespace = 'live-contact-regression'
+  let photoRequests = 0
+  globalThis.fetch = async url => {
+    photoRequests++
+    assert.equal(String(url), 'https://example.test/live-simulator/characters/live-test.png')
+    return new Response(Uint8Array.from([255, 216, 255, 217]), { headers: { 'Content-Type': 'image/jpeg' } })
+  }
+  const [friend, duplicate] = await Promise.all([
+    addLiveSmsFriend(friendNamespace, anchor, 'https://example.test/live-simulator/index.html?identity=test', '玩家'),
+    addLiveSmsFriend(friendNamespace, anchor, 'https://example.test/live-simulator/index.html?identity=test', '玩家'),
+  ])
+  assert.equal(friend.person.id, duplicate.person.id)
+  assert.equal(friend.chat.id, duplicate.chat.id)
+  assert.equal(photoRequests, 1)
+  assert.equal(friend.person.avatar, `data:image/jpeg;base64,${encoded}`)
+  assert.match(friend.person.description, /黑发、棕色眼睛/)
+  assert.match(friend.person.scenario, /短信好友/)
+  assert.equal((await listSaves(friendNamespace)).length, 0, 'adding an SMS friend must not start an offline save')
+  assert.equal((await storage.listChats(friendNamespace)).length, 1)
+  await storage.putCharacter(friendNamespace, { ...friend.person, avatar: 'https://old.example.test/photo.png' })
+  const repaired = await addLiveSmsFriend(friendNamespace, anchor, 'https://example.test/live-simulator/index.html', '玩家')
+  assert.equal(repaired.person.id, friend.person.id)
+  assert.equal(repaired.chat.id, friend.chat.id)
+  assert.equal(repaired.person.avatar, `data:image/jpeg;base64,${encoded}`)
+  assert.equal(isImageAvatar('https://example.test/photo.png'), true)
+  assert.equal(isImageAvatar('javascript:alert(1)'), false)
+  assert.equal(isImageAvatar('晚'), false)
+
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch') }
+  const remote = await addLiveSmsFriend(friendNamespace, { ...anchor, id: 'remote-anchor' }, 'https://example.test/live-simulator/index.html', '玩家')
+  assert.equal(remote.person.avatar, 'https://example.test/live-simulator/characters/live-test.png')
+  assert.equal(isImageAvatar(remote.person.avatar), true)
+  assert.equal(await canGenerateAppImages('huizhen'), true)
+  const albumNamespace = 'album-image-regression'
+  const character = { id: 'album-character', description: '性别：男，黑发，20岁', personality: '', extensions: {} } as Character
+  let albumCalls = 0
+  let shown: PhoneItem[] = []
+  globalThis.fetch = async (_url, init) => {
+    albumCalls++
+    if (albumCalls === 2) throw new TypeError('Failed to fetch')
+    const body = JSON.parse(String(init?.body))
+    assert.match(body.prompt, albumCalls === 1 ? /写实[\s\S]*书桌/ : /male sender/)
+    return Response.json({ data: [{ b64_json: encoded }] })
+  }
+  const input = { namespace: albumNamespace, character,
+    items: [{ title: '书桌', text: '窗边的书桌' }, { title: '自拍', text: '角色自拍', imagePrompt: 'selfie | 黑发男生的自拍' }],
+    active: () => true, onUpdate: (items: PhoneItem[]) => { shown = items } }
+  assert.match(await generatePhoneAlbum(input), /补全照片/)
+  const cached = await storage.getBag<PhoneItem[]>(albumNamespace, 'phone_live_v2_album-character_album')
+  assert.equal(cached?.[0]?.image, `data:image/jpeg;base64,${encoded}`)
+  assert.equal(cached?.[1]?.image, undefined)
+  assert.deepEqual(shown, cached)
+  assert.equal(await generatePhoneAlbum({ ...input, items: cached! }), '')
+  assert.equal(albumCalls, 3, 'retry generates only the missing photo')
+  assert.equal(shown[1]?.image, `data:image/jpeg;base64,${encoded}`)
+  await generatePhoneAlbum({ ...input, active: () => false })
+  assert.equal(albumCalls, 3, 'leaving the album stops further photo requests')
+  setAppImagesEnabled('huizhen', false)
+  assert.match(await generatePhoneAlbum(input), /开启/)
+  assert.equal(albumCalls, 3, 'disabled albums do not request images')
 } finally {
   Object.assign(globalThis, { localStorage: savedStorage, Image: savedImage, FileReader: savedReader })
   globalThis.fetch = originalFetch

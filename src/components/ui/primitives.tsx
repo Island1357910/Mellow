@@ -11,10 +11,12 @@ export function Screen(props: {
   subtitle?: string
   onBack?: () => void
   right?: ReactNode
+  footer?: ReactNode
+  className?: string
   children: ReactNode
 }) {
   return (
-    <div className="app-screen flex h-full min-h-0 flex-col">
+    <div className={`app-screen flex h-full min-h-0 flex-col ${props.className ?? ''}`}>
       <header className="app-screen-header flex items-center gap-3 px-4 pb-4 pt-12">
         {props.onBack ? (
           <button
@@ -39,6 +41,7 @@ export function Screen(props: {
         <div className="flex shrink-0 items-center">{props.right}</div>
       </header>
       <div className="app-screen-body scroll min-h-0 flex-1 px-4 pb-16" style={props.allowHorizontalScroll ? { touchAction: 'pan-x pan-y' } : undefined}>{props.children}</div>
+      {props.footer}
     </div>
   )
 }
@@ -159,9 +162,10 @@ export function SoftCard(props: { children: ReactNode; className?: string }) {
 /** 挂到 document.body，避免手机壳 transform 影响 fixed 居中 */
 export function ModalPortal(props: { children: ReactNode; onClose: () => void }) {
   const selected = useMellow(themeOf)
+  const fontScale = useMellow(state => state.settings.phoneFontScale)
   const theme = effectiveTheme(selected)
   return createPortal(
-    <div className="modal-overlay modal-portal" data-theme-pack={themePack(theme.id)} style={themeStyle(theme)} onClick={props.onClose}>
+    <div className="modal-overlay modal-portal" data-theme-pack={themePack(theme.id)} style={{ ...themeStyle(theme), '--m-font-scale': fontScale / 100 } as React.CSSProperties} onClick={props.onClose}>
       {props.children}
     </div>,
     document.body,

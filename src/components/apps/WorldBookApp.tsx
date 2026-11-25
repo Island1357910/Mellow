@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { BookOpen } from 'lucide-react'
 import { candyStyle } from '../../lib/candy.ts'
-import { blankEntry, CHARACTER_PROFILE_FIELDS, importCharacterWorld, isGlobalWorldEntry, readWorld, saveCharacterProfile, updateWorld, worldEntriesFromCharacter, type CharacterProfile, type WorldEntry } from '../../lib/worldbook.ts'
+import { blankEntry, CHARACTER_PROFILE_FIELDS, importCharacterWorld, isGlobalWorldEntry, migrateJiushiCardWorld, readWorld, saveCharacterProfile, updateWorld, worldEntriesFromCharacter, type CharacterProfile, type WorldEntry } from '../../lib/worldbook.ts'
+import { isJiushiCharacter } from '../../lib/jiushi.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import type { Character } from '../../types/index.ts'
@@ -66,7 +67,10 @@ export function WorldBookApp(props: {
   useEffect(() => {
     if (!phone || !worldNamespace) return
     let stop = false
-    void Promise.all([readWorld(worldNamespace), storage.listCharacters(phone.namespace)]).then(([saved, people]) => {
+    void storage.listCharacters(phone.namespace).then(async all => {
+      const people = all.filter(person => isJiushiCharacter(person) === Boolean(props.ancient))
+      if (props.ancient) await migrateJiushiCardWorld(phone.namespace, people.map(person => person.id))
+      const saved = await readWorld(worldNamespace)
       if (stop) return
       setRows(saved)
       setPeople(people)
@@ -79,7 +83,7 @@ export function WorldBookApp(props: {
     return () => {
       stop = true
     }
-  }, [phone, worldNamespace, props.defaultScope, scoped])
+  }, [phone, worldNamespace, props.defaultScope, props.ancient, scoped])
 
   const cardSources = selected ? worldEntriesFromCharacter(selected) : []
   const globalRows = (rows ?? []).filter(isGlobalWorldEntry)
@@ -125,10 +129,10 @@ export function WorldBookApp(props: {
   const saveProfile = async () => {
     if (!profile || !phone) return
     const saved = await commit(async () => {
-      const { character, value } = await saveCharacterProfile(phone.namespace, profile.id, profile.values)
+      const { character, value } = await saveCharacterProfile(phone.namespace, profile.id, profile.values, worldNamespace)
       setPeople((current) => current.map((person) => person.id === character.id ? character : person))
       props.onCharacterSaved?.(character)
-      return worldNamespace === phone.namespace ? value : readWorld(worldNamespace)
+      return value
     })
     if (saved) {
       setProfile(null)

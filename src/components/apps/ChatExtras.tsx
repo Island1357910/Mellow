@@ -1,8 +1,10 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
+import { phoneFontSize } from '../../lib/phoneFont.ts'
 import { uid } from '../../lib/id.ts'
 import { motion } from 'framer-motion'
 import { Gift, Mic, MicOff, PhoneOff, SendHorizontal, Truck, Volume2, Wallet, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { GIFT_COUNTS, REAL_GIFTS, VIRTUAL_GIFTS, type GiftItem } from '../../data/gifts.ts'
+import { GIFT_COUNTS, VIRTUAL_GIFTS } from '../../data/gifts.ts'
 import { createCallSession, finishCallSession, playCallVoice, runCallTurn, type CallSession, type CallTurn } from '../../domain/callSession.ts'
 import { parseCard } from '../../engine/prompt.ts'
 import { initialOf } from '../../lib/format.ts'
@@ -16,7 +18,7 @@ function Face(props: { person: Character | undefined; size?: number }) {
   const size = props.size ?? 32
   const avatar = props.person?.avatar ?? ''
   const name = props.person?.nickname || props.person?.name || '群'
-  if (avatar.startsWith('data:')) return <img src={avatar} alt="" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
+  if (isImageAvatar(avatar)) return <img src={avatar} alt="" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
   return <span className="grid shrink-0 place-items-center rounded-full text-xs" style={{ width: size, height: size, background: 'var(--m-secondary)' }}>{avatar || initialOf(name)}</span>
 }
 
@@ -49,7 +51,7 @@ function Recipients(props: { people: Character[]; value: string; onChange: (id: 
         const person = props.people.find((item) => item.id === option.id)
         const on = props.value === option.id
         return (
-          <button key={option.id} type="button" className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs transition-colors" style={{ background: on ? '#F8D0DC' : 'rgba(255,255,255,0.85)', boxShadow: on ? 'inset 0 0 0 1.5px #F3A8BA' : 'none' }} onClick={() => props.onChange(option.id)}>
+          <button key={option.id} type="button" aria-pressed={on} className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs transition-colors" style={{ background: on ? '#F8D0DC' : 'rgba(255,255,255,0.85)', boxShadow: on ? 'inset 0 0 0 1.5px #F3A8BA' : 'none' }} onClick={() => props.onChange(option.id)}>
             {person ? <Face person={person} size={22} /> : <span className="grid h-[22px] w-[22px] place-items-center rounded-full bg-[#F8E6C0] text-[10px]">全</span>}
             {option.label}
           </button>
@@ -61,7 +63,14 @@ function Recipients(props: { people: Character[]; value: string; onChange: (id: 
 
 const QUICK_AMOUNTS = ['5.20', '8.88', '13.14', '52', '66', '520']
 
-export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boolean; people: Character[]; onClose: () => void; onSend: (content: string) => void }) {
+function PaymentTabs({ gift, onSwitch }: { gift: boolean; onSwitch: () => void }) {
+  return <nav aria-label="转账与送礼" className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-white/85 p-1">
+    <button type="button" aria-pressed={!gift} className={!gift ? 'chip chip-solid' : 'chip'} onClick={gift ? onSwitch : undefined}>转账</button>
+    <button type="button" aria-pressed={gift} className={gift ? 'chip chip-lilac' : 'chip'} onClick={gift ? undefined : onSwitch}>线上送礼</button>
+  </nav>
+}
+
+export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boolean; people: Character[]; onClose: () => void; onSend: (content: string) => void; onGift: () => void }) {
   const red = props.mode === 'redpacket'
   const [amount, setAmount] = useState(red ? '8.88' : '52')
   const [note, setNote] = useState('')
@@ -69,17 +78,19 @@ export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boole
   const [lucky, setLucky] = useState(true)
   const [to, setTo] = useState(props.people[0]?.id ?? '')
   const value = Number(amount)
-  const valid = Number.isFinite(value) && value > 0 && value <= 200000
+  const valid = /^\d+(?:\.\d{1,2})?$/.test(amount) && Number.isFinite(value) && value >= 0.01 && value <= 200000
   const target = props.people.find((item) => item.id === to)
   const send = () => {
     if (!valid) return
     const money = value.toFixed(2).replace(/\.00$/, '')
-    if (red) props.onSend(`[红包] ${money}｜${note.trim() || '恭喜发财，大吉大利'}｜${props.group ? `${count} 个 · ${lucky ? '拼手气' : '普通'}红包` : ''}`)
-    else props.onSend(`[转账] ${money}｜${note.trim()}｜给 ${target?.nickname || target?.name || '对方'}`)
+    const title = note.replace(/｜/g, '丨').trim()
+    if (red) props.onSend(`[红包] ${money}｜${title || '恭喜发财，大吉大利'}｜${props.group ? `${count} 个 · ${lucky ? '拼手气' : '普通'}红包` : ''}`)
+    else props.onSend(`[转账] ${money}｜${title}｜给 ${target?.nickname || target?.name || '对方'}`)
     props.onClose()
   }
   return (
     <Sheet title={red ? '发红包' : '转账'} tint={red ? '#F58C8C' : '#F2B48A'} onClose={props.onClose}>
+      {!red && <PaymentTabs gift={false} onSwitch={props.onGift} />}
       <div className="relative overflow-hidden rounded-[24px] p-4 text-white shadow-[0_12px_24px_rgba(240,140,110,0.25)]" style={{ background: red ? 'linear-gradient(140deg,#F27B7B,#F3A8BA)' : 'linear-gradient(140deg,#F2A66E,#F0C56A)' }}>
         <span className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15" />
         <p className="flex items-center gap-1.5 text-xs opacity-90">{red ? <Gift size={13} /> : <Wallet size={13} />}{red ? (props.group ? '群红包' : '红包') : `转给 ${target?.nickname || target?.name || '对方'}`}</p>
@@ -91,7 +102,7 @@ export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boole
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {QUICK_AMOUNTS.map((item) => (
-          <button key={item} type="button" className={amount === item ? 'chip chip-pink' : 'chip'} style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setAmount(item)}>¥{item}</button>
+          <button key={item} type="button" className={amount === item ? 'chip chip-pink' : 'chip'} style={{ fontSize: phoneFontSize(12), padding: '4px 12px' }} onClick={() => setAmount(item)}>¥{item}</button>
         ))}
       </div>
       <section className="menu-card mt-3 space-y-3">
@@ -119,8 +130,9 @@ export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boole
           </>
         ) : null}
         <label className="block text-xs" style={dim}>
-          {red ? '祝福语' : '转账说明'}
-          <input value={note} maxLength={30} onChange={(event) => setNote(event.target.value)} placeholder={red ? '恭喜发财，大吉大利' : '比如：今天的奶茶钱'} className="soft-input mt-1" />
+          {red ? '红包标题（可自由填写）' : '转账说明'}
+          <input value={note} maxLength={60} onChange={(event) => setNote(event.target.value)} placeholder={red ? '比如：送你 100 万！' : '比如：今天的奶茶钱'} className="soft-input mt-1" />
+          {red && <span className="mt-1 block">标题与实际金额独立，可以只装 ¥0.01，写个大大的惊喜。</span>}
         </label>
       </section>
       <button type="button" disabled={!valid} className="mt-4 w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(240,120,110,0.3)] disabled:opacity-50" style={{ background: red ? '#F27B7B' : '#F2A66E' }} onClick={send}>
@@ -130,12 +142,12 @@ export function MoneySheet(props: { mode: 'redpacket' | 'transfer'; group: boole
   )
 }
 
-export function GiftSheet(props: { namespace: string; people: Character[]; onClose: () => void; onSend: (content: string, cost: number, requestId: string) => Promise<void> }) {
-  const purchaseId=useRef(uid('gift_purchase')),sending=useRef(false)
-  const [pending,setPending]=useState(false)
-  const [tab, setTab] = useState<'virtual' | 'real'>('virtual')
+export function GiftSheet(props: { namespace: string; people: Character[]; group: boolean; onClose: () => void; onTransfer: () => void; onSend: (content: string, cost: number, requestId: string, recipient: string) => Promise<void> }) {
+  const [purchaseId] = useState(() => uid('gift_purchase'))
+  const sending = useRef(false)
+  const [pending, setPending] = useState(false)
   const [to, setTo] = useState(props.people[0]?.id ?? 'all')
-  const [pick, setPick] = useState<GiftItem>(VIRTUAL_GIFTS[1] ?? VIRTUAL_GIFTS[0]!)
+  const [pick, setPick] = useState(VIRTUAL_GIFTS[1]!)
   const [count, setCount] = useState<number>(1)
   const [note, setNote] = useState('')
   const [coins, setCoins] = useState<number | null>(null)
@@ -144,93 +156,66 @@ export function GiftSheet(props: { namespace: string; people: Character[]; onClo
     let alive = true
     void readCoins(props.namespace).then((value) => {
       if (alive) setCoins(value)
-    })
+    }).catch(() => { if (alive) setWarn('暂时无法读取糖币余额。') })
     return () => {
       alive = false
     }
   }, [props.namespace])
   const target = props.people.find((item) => item.id === to)
-  const who = to === 'all' ? '全体群友' : target?.nickname || target?.name || '对方'
-  const real = tab === 'real'
-  const total = real ? pick.price : pick.price * count * (to === 'all' ? Math.max(1, props.people.length) : 1)
-  const switchTab = (next: 'virtual' | 'real') => {
-    setTab(next)
-    setPick(next === 'real' ? REAL_GIFTS[0]! : VIRTUAL_GIFTS[1]!)
-    setCount(1)
-    setWarn('')
-    if (next === 'real' && to === 'all') setTo(props.people[0]?.id ?? 'all')
-  }
+  const all = props.group && to === 'all'
+  const validRecipient = all ? props.people.length > 0 : Boolean(target)
+  const who = all ? '全体群友' : target?.nickname || target?.name || '对方'
+  const total = pick.price * count * (all ? props.people.length : 1)
   const send = async () => {
-    if(coins===null||sending.current)return
-    sending.current=true;setPending(true);setWarn('')
-    try{
-      await props.onSend(real ? `[实物] ${pick.icon}｜${pick.name}｜送给 ${who}｜${note.trim()}` : `[礼物] ${pick.icon}｜${pick.name} ×${count}｜送给 ${who}｜${note.trim()}`,total,purchaseId.current)
+    if (coins === null || coins < total || !validRecipient || sending.current) return
+    sending.current = true
+    setPending(true)
+    setWarn('')
+    try {
+      const blessing = note.trim().replace(/｜/g, '丨')
+      const recipientName = who.replace(/｜/g, '丨')
+      await props.onSend(`[礼物] ${pick.icon}｜${pick.name} ×${count}｜送给 ${recipientName}｜${blessing}`, total, purchaseId, to)
       props.onClose()
-    }catch(e){setWarn(e instanceof Error?e.message:'礼物没有送出，请重试')}
-    finally{sending.current=false;setPending(false)}
+    } catch (error) {
+      setWarn(error instanceof Error ? error.message : '礼物没有送出，请重试')
+    } finally {
+      sending.current = false
+      setPending(false)
+    }
   }
-  const list = real ? REAL_GIFTS : VIRTUAL_GIFTS
   return (
-    <Sheet title={props.people.length>1?'群礼物':'送一份礼物'} tint="#C9B6E8" onClose={props.onClose}>
+    <Sheet title="送一份礼物" tint="#C9B6E8" onClose={() => { if (!sending.current) props.onClose() }}>
+      <PaymentTabs gift onSwitch={() => { if (!sending.current) props.onTransfer() }} />
       <div className="flex items-center justify-between rounded-[20px] bg-[linear-gradient(120deg,#EFE6FF,#FFE3EE)] px-3 py-2.5">
         <span className="text-xs" style={dim}>我的糖币</span>
         <span className="text-lg font-semibold tabular-nums text-[#7a5fb0]">🍬 {coins ?? '…'}</span>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-1 rounded-full bg-white/85 p-1">
-        {(['virtual', 'real'] as const).map((id) => (
-          <button key={id} type="button" className="rounded-full py-1.5 text-xs transition-colors" style={{ background: tab === id ? '#C9B6E8' : 'transparent', color: tab === id ? '#fff' : 'var(--m-text-secondary)', fontWeight: tab === id ? 600 : 400 }} onClick={() => switchTab(id)}>
-            {id === 'virtual' ? '虚拟礼物' : '实物礼物'}
-          </button>
-        ))}
-      </div>
       <div className="mt-3">
         <p className="mb-1.5 text-xs" style={dim}>送给</p>
-        <Recipients people={props.people} value={to} onChange={setTo} allowAll={!real} />
+        <Recipients people={props.people} value={to} onChange={setTo} allowAll={props.group} />
       </div>
-      {real ? (
-        <ul className="mt-3 space-y-2">
-          {list.map((item) => {
-            const on = pick.id === item.id
-            return (
-              <li key={item.id}>
-                <button type="button" className="flex w-full items-center gap-3 rounded-[20px] bg-white/90 p-2.5 text-left transition-shadow" style={{ boxShadow: on ? 'inset 0 0 0 1.5px #C9B6E8' : '0 4px 12px rgba(120,80,100,0.05)' }} onClick={() => setPick(item)}>
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-[#F6F1FF] text-2xl">{item.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm">{item.name}</span>
-                    <span className="flex items-center gap-1 text-[11px]" style={dim}><Truck size={11} />{item.note}</span>
-                  </span>
-                  <span className="text-sm font-semibold text-[#7a5fb0]">🍬{item.price}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      ) : (
-        <>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {list.map((item) => {
-              const on = pick.id === item.id
-              return (
-                <motion.button key={item.id} type="button" whileTap={{ scale: 0.92 }} className="flex flex-col items-center rounded-[20px] bg-white/90 py-2.5" style={{ boxShadow: on ? 'inset 0 0 0 1.5px #C9B6E8' : '0 4px 12px rgba(120,80,100,0.05)', background: on ? '#F6F1FF' : undefined }} onClick={() => setPick(item)}>
-                  <motion.span className="text-3xl" animate={on ? { y: [0, -4, 0] } : { y: 0 }} transition={{ repeat: on ? Infinity : 0, duration: 1.2 }}>{item.icon}</motion.span>
-                  <span className="mt-1 text-xs">{item.name}</span>
-                  <span className="text-[10px] text-[#7a5fb0]">🍬{item.price}</span>
-                </motion.button>
-              )
-            })}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs" style={dim}>数量</span>
-            {GIFT_COUNTS.map((item) => (
-              <button key={item} type="button" className={count === item ? 'chip chip-lilac' : 'chip'} style={{ fontSize: 12, padding: '3px 12px' }} onClick={() => setCount(item)}>×{item}</button>
-            ))}
-          </div>
-        </>
-      )}
-      <input value={note} maxLength={30} onChange={(event) => setNote(event.target.value)} placeholder={real ? '写张贺卡，随礼物一起送到' : '说点什么（可不填）'} className="soft-input mt-3" />
-      {warn ? <p className="mt-2 text-center text-xs text-[#b0505c]">{warn}</p> : null}
-      <button type="button" disabled={coins === null||pending} className="mt-3 w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.35)]" style={{ background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void send()}>
-        {real ? `购买并送给 ${who} · 🍬${total}` : `赠送 ${pick.name} ×${count} · 🍬${total}`}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {VIRTUAL_GIFTS.map((item) => {
+          const on = pick.id === item.id
+          return (
+            <motion.button key={item.id} type="button" aria-pressed={on} whileTap={{ scale: 0.92 }} className="flex flex-col items-center rounded-[20px] bg-white/90 py-2.5" style={{ boxShadow: on ? 'inset 0 0 0 1.5px #C9B6E8' : '0 4px 12px rgba(120,80,100,0.05)', background: on ? '#F6F1FF' : undefined }} onClick={() => setPick(item)}>
+              <motion.span className="text-3xl" animate={on ? { y: [0, -4, 0] } : { y: 0 }} transition={{ repeat: on ? Infinity : 0, duration: 1.2 }}>{item.icon}</motion.span>
+              <span className="mt-1 text-xs">{item.name}</span>
+              <span className="text-[10px] text-[#7a5fb0]">🍬{item.price}</span>
+            </motion.button>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs" style={dim}>数量</span>
+        {GIFT_COUNTS.map((item) => (
+          <button key={item} type="button" aria-pressed={count === item} className={count === item ? 'chip chip-lilac' : 'chip'} style={{ fontSize: phoneFontSize(12), padding: '3px 12px' }} onClick={() => setCount(item)}>×{item}</button>
+        ))}
+      </div>
+      <input value={note} maxLength={30} onChange={(event) => setNote(event.target.value)} placeholder="说点什么（可不填）" className="soft-input mt-3" />
+      {warn || (coins !== null && coins < total) ? <p role="status" className="mt-2 text-center text-xs text-[#b0505c]">{warn || '糖币不足。'}</p> : null}
+      <button type="button" disabled={coins === null || coins < total || pending || !validRecipient} className="mt-3 w-full rounded-full py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(160,130,210,0.35)] disabled:opacity-50" style={{ background: 'linear-gradient(120deg,#B9A3E3,#F3A8BA)' }} onClick={() => void send()}>
+        {pending ? '赠送中…' : `立即赠送 ${pick.name} ×${count} · 🍬${total}`}
       </button>
     </Sheet>
   )
@@ -493,7 +478,7 @@ export function CardBubble(props: { message: ChatMessage }) {
           </span>
         </span>
         {third ? <span className="block px-3 pt-2 text-xs leading-5">“{third}”</span> : null}
-        <span className="flex items-center gap-1 px-3 pb-2 pt-1.5 text-[10px] text-[#7a5fb0]">{real ? <Truck size={11} /> : <Gift size={11} />}{real ? '实物礼物 · 已下单，正在配送' : '群礼物'}</span>
+        <span className="flex items-center gap-1 px-3 pb-2 pt-1.5 text-[10px] text-[#7a5fb0]">{real ? <Truck size={11} /> : <Gift size={11} />}{real ? '实物礼物 · 已下单，正在配送' : '虚拟礼物 · 已送达'}</span>
       </span>
     )
   }
@@ -504,8 +489,8 @@ export function CardBubble(props: { message: ChatMessage }) {
       <span className="flex items-center gap-3 px-3 py-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/25">{red ? <Gift size={18} /> : <Wallet size={18} />}</span>
         <span className="min-w-0">
-          <span className="block text-sm font-semibold">¥ {head}</span>
-          <span className="block truncate text-[11px] opacity-90">{red ? first || '恭喜发财，大吉大利' : first || '转账'}</span>
+          <span className="block break-words text-sm font-semibold">{red ? first || '恭喜发财，大吉大利' : `¥ ${head}`}</span>
+          <span className="block truncate text-[11px] opacity-90">{red ? `实际金额 ¥ ${head}` : first || '转账'}</span>
         </span>
       </span>
       <span className="bg-white/90 px-3 py-1 text-[10px] text-[#b06a5a]">

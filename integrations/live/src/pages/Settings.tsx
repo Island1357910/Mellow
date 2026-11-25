@@ -26,6 +26,7 @@ import {
 } from '../utils/saveManager';
 import type { AppIconKey } from '../data/appearance';
 import type { FontPresetId, HomeTextColorId, IconStyleId, WallpaperId, AiInteractionMode } from '../types';
+import { embedded, host } from '../utils/mellowHost';
 import {
   MAX_FONT_IMPORT_BYTES,
   MAX_IMAGE_IMPORT_BYTES,
@@ -34,7 +35,7 @@ import {
 } from '../utils/fileImport';
 
 const SETTINGS_TABS = ['外观', '桌面', '资源', '角色', '存档'] as const;
-type SettingsTab = (typeof SETTINGS_TABS)[number];
+type SettingsTab = (typeof SETTINGS_TABS)[number] | '模型';
 
 export default function Settings() {
   const back = useNavStore((s) => s.back);
@@ -190,7 +191,7 @@ export default function Settings() {
       <StatusBar />
       <ScreenHeader title="设置" onBack={back} />
       <CategoryTabs
-        categories={[...SETTINGS_TABS]}
+        categories={embedded ? ['模型', ...SETTINGS_TABS] : [...SETTINGS_TABS]}
         active={tab}
         onChange={(next) => setTab(next as SettingsTab)}
         activeClassName="bg-pink-400 text-white shadow-sm"
@@ -198,6 +199,7 @@ export default function Settings() {
       />
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4">
+        {tab === '模型' && <LiveModelSettings />}
         {tab === '外观' && (
           <>
             <Section title="壁纸">
@@ -724,6 +726,49 @@ export default function Settings() {
       )}
     </div>
   );
+}
+
+function LiveModelSettings() {
+  const [settings, setSettings] = useState<Awaited<ReturnType<NonNullable<ReturnType<typeof host>>['apiSettings']>>>();
+  const [pending, setPending] = useState(false);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void host()?.apiSettings?.().then(value => { if (active) setSettings(value); })
+        .catch(() => { if (active) setStatus('读取模型设置失败'); });
+    };
+    refresh();
+    window.addEventListener('mellow-live-host', refresh);
+    return () => { active = false; window.removeEventListener('mellow-live-host', refresh); };
+  }, []);
+
+  return <Section title="直播间模型">
+    <select aria-label="直播间模型" className="w-full rounded-xl border border-blue-100 bg-white p-3 text-sm" value={settings?.selected ?? ''} disabled={!settings || pending} onChange={async event => {
+      const bridge = host();
+      if (!bridge) return;
+      const id = event.target.value;
+      setPending(true);
+      setStatus('');
+      try {
+        await bridge.setApi(id);
+        setSettings(await bridge.apiSettings());
+        setStatus('已保存');
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : '保存失败');
+      } finally {
+        setPending(false);
+      }
+    }}>
+      <option value="">使用小手机默认模型{settings?.defaultModel ? `（${settings.defaultModel}）` : ''}</option>
+      {settings?.selected && !settings.profiles.some(profile => profile.id === settings.selected) && <option value={settings.selected}>原绑定不可用，请重新选择</option>}
+      {settings?.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}
+    </select>
+    {settings && !settings.profiles.length && <p className="mt-2 text-xs text-slate-500">请在小手机的连接设置里先保存一组 API 和模型。</p>}
+    <button type="button" className="mt-3 rounded-full border border-blue-100 px-3 py-2 text-xs" onClick={() => host()?.open('settings')}>打开小手机设置</button>
+    {status && <p role="status" className="mt-2 text-xs text-slate-500">{status}</p>}
+  </Section>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

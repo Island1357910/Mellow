@@ -683,11 +683,11 @@ class StorageService {
     )
   }
 
-  async commitPaidChatMessage(namespace: string, chatId: string, message: ChatMessage, cost: number, bagId: string, change: (saved: unknown) => unknown): Promise<void> {
+  async commitPaidChatMessage(namespace: string, chatId: string, message: ChatMessage, cost: number, bagId: string, change: (saved: unknown) => unknown): Promise<boolean> {
     if (!Number.isFinite(cost) || cost < 0) throw Error('礼物金额无效')
     const db = this.ns(namespace)
-    await db.transaction('rw', db.appData, db.messages, db.chats, () => db.messages.get(message.id).then(existing => {
-      if (existing) return
+    return db.transaction('rw', db.appData, db.messages, db.chats, () => db.messages.get(message.id).then(existing => {
+      if (existing) return false
       return db.chats.get(chatId).then(chat => {
         if (!chat || chat.blocked) throw Error('这个会话暂时不能送礼')
         return db.appData.bulkGet(['coins', bagId]).then(([coinsRow, bagRow]) => {
@@ -698,6 +698,7 @@ class StorageService {
           return db.appData.bulkPut([{ id: 'coins', value: coins - cost }, { id: bagId, value: next }])
             .then(() => db.messages.put(message))
             .then(() => db.chats.put({ ...chat, lastMessage: messagePreview(message.content, message.kind), lastMessageAt: message.createdAt, updatedAt: Math.max(Date.now(), (chat.updatedAt || 0) + 1) }))
+            .then(() => true)
         })
       })
     }))

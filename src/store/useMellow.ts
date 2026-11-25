@@ -12,6 +12,14 @@ import { create } from 'zustand'
 interface OpenChatRequest {
   chatId: string
   identityId: string
+  phoneIdentityId?: string
+  token: string
+}
+
+interface OpenStoryRequest {
+  saveId: string
+  identityId: string
+  mode: 'offline' | 'side'
   token: string
 }
 
@@ -32,6 +40,7 @@ interface MellowState {
   immersiveApp: 'offline' | 'jiushi' | null
   dataRevision: number
   openChatRequest: OpenChatRequest | null
+  openStoryRequest: OpenStoryRequest | null
   identities: Identity[]
   activeIdentityId: string
   settings: AppSettings
@@ -69,7 +78,9 @@ interface MellowState {
   pushNotice: (input: Omit<Notice, 'id' | 'createdAt'>) => Promise<void>
   dismissNotice: (id: string) => void
   requestOpenChat: (request: Omit<OpenChatRequest, 'token'>) => void
-  consumeOpenChat: () => void
+  consumeOpenChat: (token: string) => void
+  requestOpenStory: (request: Omit<OpenStoryRequest, 'token'>) => void
+  consumeOpenStory: (token: string) => void
   touchData: () => void
 }
 
@@ -112,6 +123,7 @@ export const useMellow = create<MellowState>((set, get) => ({
   immersiveApp: null,
   dataRevision: 0,
   openChatRequest: null,
+  openStoryRequest: null,
   identities: [],
   activeIdentityId: '',
   settings: defaultSettings(''),
@@ -327,7 +339,16 @@ export const useMellow = create<MellowState>((set, get) => ({
     get().openApp('messages')
   },
 
-  consumeOpenChat: () => set({ openChatRequest: null }),
+  consumeOpenChat: (token) => {
+    if (get().openChatRequest?.token === token) set({ openChatRequest: null })
+  },
+  requestOpenStory: (request) => {
+    set({ openStoryRequest: { ...request, token: uid('open') }, locked: false })
+    get().openApp(request.mode)
+  },
+  consumeOpenStory: (token) => {
+    if (get().openStoryRequest?.token === token) set({ openStoryRequest: null })
+  },
   touchData: () => set((current) => ({ dataRevision: current.dataRevision + 1 })),
 }))
 

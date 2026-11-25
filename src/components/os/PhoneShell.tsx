@@ -53,6 +53,7 @@ import { SecretLock } from './SecretLock.tsx'
 const JiushiApp = lazy(() => import('../apps/JiushiApp.tsx').then(module => ({ default: module.JiushiApp })))
 const TableApp = lazy(() => import('../apps/TableApp.tsx').then(module => ({ default: module.TableApp })))
 const StageApp = lazy(() => import('../apps/StageApp.tsx').then(module => ({ default: module.StageApp })))
+const WorkshopApp = lazy(() => import('../apps/WorkshopApp.tsx').then(module => ({ default: module.WorkshopApp })))
 
 export function PhoneShell() {
   const boot = useMellow((state) => state.boot)
@@ -206,7 +207,7 @@ export function PhoneShell() {
         data-font={fontReady ? 'custom' : undefined}
         data-effect={theme.effect}
         data-wallpaper={theme.wallpaper ? 'custom' : undefined}
-        style={{ ...themeStyle(theme), ...(fontReady ? { '--m-font': 'MellowCustom, sans-serif' } : {}) }}
+        style={{ ...themeStyle(theme), '--m-font-scale': settings.phoneFontScale / 100, ...(fontReady ? { '--m-font': 'MellowCustom, sans-serif' } : {}) } as React.CSSProperties}
         onDragOver={(event) => {
           event.preventDefault()
           setDragging(true)
@@ -349,6 +350,8 @@ function AppHost(props: { id: string; onBack: () => void }) {
       return <TableApp onBack={props.onBack} />
     case 'bazaar':
       return <BazaarApp onBack={props.onBack} />
+    case 'workshop':
+      return <WorkshopApp onBack={props.onBack} />
     case 'stage':
       return <StageApp onBack={props.onBack} />
     case 'live':

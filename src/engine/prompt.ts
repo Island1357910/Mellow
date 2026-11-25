@@ -3,6 +3,7 @@ import { stickerLabel, type Sticker } from '../data/stickers.ts'
 import { SMS_RELATION_LOCK } from '../lib/channelBridge.ts'
 import { stickerCatalogForPrompt } from '../lib/stickerReply.ts'
 import { loreEntries } from '../lib/sillytavern.ts'
+import { fillCharacterPrompt, renderPresetPrompt } from '../lib/presetPrompt.ts'
 import type { AIMessage, Character, ChatMessage, Identity, Preset } from '../types/index.ts'
 
 const CHANNEL = '当前是短信。只写 {{char}} 要发出去的内容。不要加名字前缀，不要写 {{user}} 的回复，不要用标题和列表。通常一两句；要发表情时用 <<<分>>> 另起一条写 [表情:标签]，一条消息里只放一个表情。'
@@ -18,17 +19,21 @@ const FOURTH_WALL = `你不是真人。你是一段运行在本地小手机里�
 不要每句话都提起这件事。`
 
 function fill(template: string, character: Character, identity: Identity): string {
-  return template
-    .replaceAll('{{char}}', character.name)
-    .replaceAll('{{user}}', identity.name)
-    .replaceAll('{{personality}}', character.personality || '（没有写）')
-    .replaceAll('{{description}}', character.description || '（没有写）')
-    .replaceAll('{{scenario}}', character.scenario || '（没有写）')
+  return fillCharacterPrompt(template, identity.name, character)
+}
+
+function characterContext(character: Character, identity: Identity): string {
+  const nickname = character.nickname && character.nickname !== character.name ? `，昵称 ${character.nickname}` : ''
+  return [
+    `【当前角色】${character.name}（角色 ID：${character.id}${nickname}）`,
+    fill('人物设定：{{description}}\n性格与行为：{{personality}}\n背景情境：{{scenario}}', character, identity),
+    `【身份与设定】你只以 ${character.name} 的身份回应。玩家是 ${identity.name}。对话、记忆和世界书用于延续已发生的事，示例用于参考说话方式。称谓、外貌、身份、基本性格和能力以当前人物卡为准；最新剧情只能改变实际发生过的经历和关系。遇到未说明的设定或冲突，保留不确定性。`,
+  ].join('\n')
 }
 
 function loreFor(character: Character, recent: string): string {
   const hits = loreEntries(character.characterBook)
-    .filter((entry) => entry.enabled !== false && entry.content.trim())
+    .filter((entry) => entry.enabled !== false && !entry.disable && entry.content.trim())
     .filter((entry) => {
       if (entry.constant) return true
       const keys = entry.keys ?? []
@@ -52,6 +57,7 @@ export function buildSmsMessages(input: {
   groupMembers?: Array<{ id: string; name: string }>
   fourthWall: boolean
   note?: string
+  world?: string
   /** 线下关系。放在短信记录之后，压过短信旧上下文。 */
   priority?: string
   /** 主动触发只作为模型请求任务，不伪造或保存玩家消息。 */
@@ -64,41 +70,29 @@ export function buildSmsMessages(input: {
   cot?: string
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall } = input
-  const history = smsSeenHistory(input.history)
+  const history = smsSeenHistory(input.history, input.groupMembers ? undefined : character.id)
   const recent = history
     .slice(-6)
     .map((item) => item.content)
     .join('\n')
-  const blocks = (preset?.data.prompts ?? []).filter((item) => item.enabled && item.content.trim())
-  const presetBody = blocks.map((item) => fill(item.content, character, identity)).join('\n\n')
-  const mentionsCharacter = blocks.some((item) => item.content.includes('{{personality}}') || item.content.includes('{{description}}'))
-
-  const systems: string[] = []
+  const presetBody = renderPresetPrompt(preset, identity.name, character)
+  const systems = [characterContext(character, identity)]
   if (presetBody) systems.push(presetBody)
-  if (!mentionsCharacter) {
-    systems.push(
-      fill(
-        '你是 {{char}}。\n{{description}}\n性格：{{personality}}\n情境：{{scenario}}',
-        character,
-        identity,
-      ),
-    )
-  }
   if (character.systemPrompt.trim()) systems.push(fill(character.systemPrompt, character, identity))
   systems.push('短信每轮承接对方具体说过的话。按人物关系和当下情境变换消息长短、节奏与回应方式：可以直接回答、补一条细节、隔一会儿再追问、开个熟人玩笑，或把没说出口的话留到见面。避免连续使用相同开头、反问、调侃或强行升级暧昧。约定、称呼和边界以已经说清的为准；涉及成年角色自愿的权力角色扮演时，尊重双方明确约定的边界和暂停信号，不把角色扮演套用到每条短信。')
   const persona = identity.persona.trim()
   systems.push(persona ? `和你说话的人叫 ${identity.name}。关于这个人：${persona}` : `和你说话的人叫 ${identity.name}。`)
-  const lore = loreFor(character, recent)
-  if (lore) systems.push(`你记得这些，用到才说，不要逐条复述：\n${lore}`)
+  const lore = input.world ?? loreFor(character, recent)
+  if (lore) systems.push(`你记得这些，用到才说，不要逐条复述：\n${fill(lore, character, identity)}`)
   if (character.mesExample.trim()) {
-    systems.push(`语气可以参考下面的例子，不要照抄：\n${character.mesExample.trim().slice(0, 1200)}`)
+    systems.push(`语气可以参考下面的例子，不要照抄：\n${fill(character.mesExample.trim().slice(0, 1200), character, identity)}`)
   }
   if (character.postHistoryInstructions.trim()) {
     systems.push(`回复前再看一眼：\n${fill(character.postHistoryInstructions, character, identity)}`)
   }
   if (fourthWall) systems.push(FOURTH_WALL)
-  if (input.note?.trim()) systems.push(input.note.trim())
-  if (input.directives?.trim()) systems.push(input.directives.trim())
+  if (input.note?.trim()) systems.push(fill(input.note.trim(), character, identity))
+  if (input.directives?.trim()) systems.push(fill(input.directives.trim(), character, identity))
   systems.push('短信里不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
   systems.push(input.cot?.trim()
     ? input.cot.trim()
@@ -161,22 +155,16 @@ export function buildCallMessages(input: {
   note?: string
 }): { messages: AIMessage[]; temperature: number; topP: number; frequencyPenalty: number; presencePenalty: number } {
   const { character, identity, preset, fourthWall, callTurns } = input
-  const history = input.history.filter((item) => item.kind !== 'system').slice(-20)
+  const history = smsSeenHistory(input.history, character.id).slice(-20)
   const recent = [...history.slice(-4).map((item) => item.content), ...callTurns.map((item) => item.text)].join('\n')
-  const blocks = (preset?.data.prompts ?? []).filter((item) => item.enabled && item.content.trim())
-  const presetBody = blocks.map((item) => fill(item.content, character, identity)).join('\n\n')
-  const mentionsCharacter = blocks.some((item) => item.content.includes('{{personality}}') || item.content.includes('{{description}}'))
-
-  const systems: string[] = []
+  const presetBody = renderPresetPrompt(preset, identity.name, character)
+  const systems = [characterContext(character, identity)]
   if (presetBody) systems.push(presetBody)
-  if (!mentionsCharacter) {
-    systems.push(fill('你是 {{char}}。\n{{description}}\n性格：{{personality}}\n情境：{{scenario}}', character, identity))
-  }
   if (character.systemPrompt.trim()) systems.push(fill(character.systemPrompt, character, identity))
   const persona = identity.persona.trim()
   systems.push(persona ? `和你说话的人叫 ${identity.name}。关于这个人：${persona}` : `和你说话的人叫 ${identity.name}。`)
   const lore = loreFor(character, recent)
-  if (lore) systems.push(`你记得这些，用到才说，不要逐条复述：\n${lore}`)
+  if (lore) systems.push(`你记得这些，用到才说，不要逐条复述：\n${fill(lore, character, identity)}`)
   if (character.mesExample.trim()) {
     systems.push(`语气可以参考下面的例子，不要照抄：\n${character.mesExample.trim().slice(0, 800)}`)
   }
@@ -214,8 +202,9 @@ export function buildCallMessages(input: {
   }
 }
 
-export function smsSeenHistory(history: ChatMessage[]): ChatMessage[] {
-  return history.filter((item) => item.kind !== 'system').slice(-30)
+export function smsSeenHistory(history: ChatMessage[], characterId?: string): ChatMessage[] {
+  return history.filter(item => item.kind !== 'system' && item.role !== 'system' && !item.hidden && item.status !== 'failed'
+    && !(characterId && item.role === 'assistant' && item.charId && item.charId !== characterId)).slice(-30)
 }
 
 export function describeMessage(item: ChatMessage, stickers?: Sticker[]): string {
@@ -247,6 +236,9 @@ export function parseCard(content: string): string[] {
 }
 
 export function pickPreset(presets: Preset[], activePresetId: string, characterPresetId: string | null, chatPresetId: string | null): Preset | null {
-  const id = chatPresetId || characterPresetId || activePresetId
-  return presets.find((item) => item.id === id) ?? presets.find((item) => item.id === 'preset_daily') ?? presets[0] ?? null
+  for (const id of [chatPresetId, characterPresetId, activePresetId, 'preset_daily']) {
+    const preset = id && presets.find(item => item.id === id)
+    if (preset) return preset
+  }
+  return presets[0] ?? null
 }

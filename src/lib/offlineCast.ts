@@ -85,7 +85,7 @@ function peopleByIds(chars: Character[], ids: string[]): Character[] {
 }
 
 /** 在场人物以这一次 AI 确认为准。只有接口失败或没返回能用的名单时，才退回姓名判断。 */
-export async function offlineFocus(chars: Character[], save: StorySave, extra = ''): Promise<Character[]> {
+export async function offlineFocus(chars: Character[], save: StorySave, extra = '', signal?: AbortSignal): Promise<Character[]> {
   const fallback = () => focusChars(chars, save, extra)
   if (!chars.length) return []
   const prior = focusChars(chars, priorSave(save))
@@ -103,6 +103,8 @@ export async function offlineFocus(chars: Character[], save: StorySave, extra = 
       ].join('\n'),
       `上一场在场：${prior.map((person) => person.id).join('、') || '没有'}\n可选角色：\n${roster}\n最近场面（结尾才是现在）：\n${recent || '还没有正文'}`,
       360,
+      undefined,
+      signal,
     )
     const ids = castIdsFromModel(raw, chars)
     if (!ids) return fallback()

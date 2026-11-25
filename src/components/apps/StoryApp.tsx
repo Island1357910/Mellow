@@ -1,7 +1,9 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
+import { phoneFontSize } from '../../lib/phoneFont.ts'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BookOpen, ChevronLeft, Copy, Ellipsis, Pencil, Plus, RotateCcw, SendHorizontal, Trash2, Upload } from 'lucide-react'
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
+import { BookOpen, ChevronLeft, Copy, Ellipsis, Pencil, Plus, RotateCcw, SendHorizontal, Square, Trash2, Upload } from 'lucide-react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { isAiJobRunning, jobKey, runAiJob, stopAiJob } from '../../engine/aiJobs.ts'
 import { runStoryGeneration } from '../../domain/storyRunner.ts'
 import { ReplyAssist } from './ReplyAssist.tsx'
 import { pickPreset } from '../../engine/prompt.ts'
@@ -11,10 +13,12 @@ import {
   deleteSave,
   DEFAULT_READING,
   displayRules,
+  editStoryLine,
   focusChars,
   frameDoc,
   FONT_STACK,
   hasHtml,
+  storyDisplayParts,
   line,
   unwrapHtmlFence,
   listSaves,
@@ -82,20 +86,26 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
       const all = await storage.listCharacters(phone.namespace)
       const people = props.mode === 'jiushi' ? all.filter(isJiushiCharacter) : all.filter(c => !isJiushiCharacter(c))
       const [nextConfig, rows] = await Promise.all([loadConfig(namespace), listSaves(namespace)])
-      let current: StorySave | null = null
+      const request = useMellow.getState().openStoryRequest
+      const target = request?.mode === props.mode && request.identityId === phone.id ? request : null
+      let current = target ? await loadSave(namespace, target.saveId) : null
       if (props.mode === 'offline') {
-        current = nextConfig.activeSaveId ? await loadSave(namespace, nextConfig.activeSaveId) : null
+        if (!current && nextConfig.activeSaveId) current = await loadSave(namespace, nextConfig.activeSaveId)
         if (!current && rows[0]) current = await loadSave(namespace, rows[0].id)
         if (!current) current = await putSave(namespace, newSave('存档 1'))
+      }
+      if (current) {
         nextConfig.activeSaveId = current.id
         await saveConfig(namespace, nextConfig)
       }
+      const nextSaves = await listSaves(namespace)
       if (!alive) return
       setChars(people)
       setConfig(nextConfig)
-      setSaves(await listSaves(namespace))
+      setSaves(nextSaves)
       setSave(current)
       setReady(true)
+      if (target) useMellow.getState().consumeOpenStory(target.token)
     })()
     return () => {
       alive = false
@@ -128,7 +138,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
     patchConfig({ activeSaveId: id })
   }
   const lead = save?.charId ? chars.find((item) => item.id === save.charId) : undefined
-  const presetMode = props.mode === 'jiushi' || props.mode === 'side' ? 'side' : 'offline'
+  const presetMode = props.mode
   const preset = pickPreset(presets, modePresetId(settings, presetMode), props.mode === 'side' || props.mode === 'jiushi' ? lead?.presetId ?? null : null, null)
 
   if (!save) {
@@ -210,7 +220,7 @@ export function StoryApp(props: { mode: StoryMode; onBack: () => void }) {
 
 function Face(props: { person: Character | undefined; size: number }) {
   const avatar = props.person?.avatar ?? ''
-  if (avatar.startsWith('data:')) return <img src={avatar} alt="" className="shrink-0 rounded-full object-cover" style={{ width: props.size, height: props.size }} />
+  if (isImageAvatar(avatar)) return <img src={avatar} alt="" className="shrink-0 rounded-full object-cover" style={{ width: props.size, height: props.size }} />
   return <span className="grid shrink-0 place-items-center rounded-full bg-white text-xs" style={{ width: props.size, height: props.size }}>{avatar || initialOf(props.person?.name ?? '?')}</span>
 }
 
@@ -240,7 +250,8 @@ function StoryView(props: {
   const sending = useRef(false)
   const dataRevision = useMellow((state) => state.dataRevision)
   const [error, setError] = useState('')
-  const [note, setNote] = useState('')
+  const [interruptedReply, setInterruptedReply] = useState(false)
+  const [replySaved, setReplySaved] = useState(false)
   const [menu, setMenu] = useState(false)
   const [worldBookOpen, setWorldBookOpen] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
@@ -248,6 +259,7 @@ function StoryView(props: {
   const hold = useRef(0)
   const skipClick = useRef(false)
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const boxRef = useRef<HTMLTextAreaElement | null>(null)
   const reading = config.reading
@@ -279,12 +291,15 @@ function StoryView(props: {
     if (follow) el.scrollTop = el.scrollHeight
   }, [draft])
 
-  const run = async (base: StorySave, nudge?: string) => {
-    if (aiBusy) return
+  const run = async (base: StorySave, nudge?: string, replaceLineId?: string) => {
+    if (savingEdit || isAiJobRunning(storyJobKey)) return
     setError('')
-    setNote('')
+    setInterruptedReply(false)
+    setReplySaved(false)
+    const controller = new AbortController()
     const started = runAiJob(storyJobKey, async () => {
       try {
+        await storage.setBag(props.namespace, `story_error_${base.id}`, '').catch(() => {})
         await runStoryGeneration({
           namespace: props.namespace,
           saveId: base.id,
@@ -293,31 +308,38 @@ function StoryView(props: {
           presetId: props.presetId,
           presets: props.presets,
           nudge,
+          replaceLineId,
+          signal: controller.signal,
+          onReplySaved: (interrupted) => {
+            setReplySaved(true)
+            setInterruptedReply(interrupted)
+            useMellow.getState().touchData()
+          },
         })
       } catch (reason) {
-        await storage.setBag(props.namespace, `story_error_${base.id}`, errorText(reason))
+        if (controller.signal.aborted) return
+        const message = errorText(reason)
+        setError(message)
+        await storage.setBag(props.namespace, `story_error_${base.id}`, message).catch(() => {})
       }
-    })
-    if (!started) setError('上一段还在写')
+    }, controller)
+    if (started) useMellow.getState().touchData()
+    else setError('上一段还在写')
   }
 
   useEffect(() => {
-    if (!aiBusy) {
-      void storage.getBag<string>(props.namespace, `story_error_${props.save.id}`).then((message) => {
-        if (message) {
-          setError(message)
-          void storage.setBag(props.namespace, `story_error_${props.save.id}`, '')
-        }
-      })
-      setNote('')
-      return
-    }
-    setNote('正在写…')
-  }, [aiBusy, props.namespace, props.save.id, dataRevision])
+    if (aiBusy) return
+    let active = true
+    void storage.getBag<string>(props.namespace, `story_error_${props.save.id}`).then((message) => {
+      if (!active || !message || isAiJobRunning(storyJobKey)) return
+      setError(message)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [aiBusy, props.namespace, props.save.id, dataRevision, storyJobKey])
 
   const send = async (value = draft, clearDraft = true) => {
     const text = value.trim()
-    if (!text || busy || sending.current) return
+    if (!text || savingEdit || isAiJobRunning(storyJobKey) || sending.current) return
     sending.current = true
     try {
       if (props.mode === 'offline') touchImmersive('offline')
@@ -328,16 +350,14 @@ function StoryView(props: {
     } finally { sending.current = false }
   }
   const lastLine = save.lines.at(-1)
+  const retryLast = !draft.trim() && lastLine?.role === 'user'
   const assistTurn = !busy && lastLine?.role === 'assistant' ? lastLine.id : ''
   const assistContext = save.lines.slice(-6).map(item => `${item.role === 'user' ? userName : '剧情'}：${item.content.slice(-1400)}`).join('\n')
 
   const reroll = async (lineId: string) => {
-    if (busy) return
-    const index = save.lines.findIndex((item) => item.id === lineId)
-    if (index < 0 || save.lines[index]?.role !== 'assistant') return
+    if (busy || savingEdit || sending.current) return
     setPicked(null)
-    const base = await props.onSave({ ...save, lines: save.lines.slice(0, index) })
-    await run(base)
+    await run(save, undefined, lineId)
   }
   const continueLine = async (lineId: string) => {
     if (busy) return
@@ -348,19 +368,33 @@ function StoryView(props: {
     await run(save, base?.role === 'assistant' ? '从上一段剧情自然续写，不要重复已经写过的内容。' : undefined)
   }
   const clearLines = async () => {
+    if (isAiJobRunning(storyJobKey)) return
     if (!window.confirm('清空这段聊天记录？摘也会保留，如需一并清空请在设置里操作。')) return
     setPicked(null)
     await props.onSave({ ...save, lines: [] })
   }
   const remove = async (id: string) => {
+    if (isAiJobRunning(storyJobKey) || savingEdit) return
+    const index = save.lines.findIndex(item => item.id === id)
+    if (index < 0) return
     setPicked(null)
-    await props.onSave({ ...save, lines: save.lines.filter((item) => item.id !== id) })
+    await props.onSave({ ...save, lines: save.lines.filter(item => item.id !== id), summaries: save.summaries.filter(summary => summary.upTo <= index) })
   }
   const commitEdit = async () => {
-    if (!editing) return
-    await props.onSave({ ...save, lines: save.lines.map((item) => (item.id === editing.id ? { ...item, content: editing.text } : item)) })
-    setEditing(null)
-    setPicked(null)
+    if (!editing?.text.trim() || savingEdit || sending.current || isAiJobRunning(storyJobKey)) return
+    setSavingEdit(true)
+    try {
+      const current = await loadSave(props.namespace, save.id)
+      if (!current) throw new Error('找不到当前剧情存档。')
+      const updated = editStoryLine(current, editing.id, editing.text)
+      if (updated !== current) await props.onSave(updated)
+      setEditing(null)
+      setPicked(null)
+    } catch (reason) {
+      setError(errorText(reason))
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   const backdrop = reading.backgroundImage ? `center / cover no-repeat url("${reading.backgroundImage}")` : reading.background || undefined
@@ -368,12 +402,10 @@ function StoryView(props: {
     ? ({} as CSSProperties)
     : ({ '--candy': props.theme.candy[0], '--candy-2': props.theme.candy[1], '--candy-3': props.theme.candy[2] } as CSSProperties)
   const subtitle = busy
-    ? '正在写…'
-    : note || (props.mode === 'offline'
+    ? (replySaved ? '正在整理剧情…' : '正在写…')
+    : (props.mode === 'offline'
       ? (present.length ? `在场：${present.map((item) => item.nickname || item.name).join('、')}` : '想找谁，直接说')
-      : props.mode === 'jiushi'
-        ? `${save.name} · ${userName}`
-        : `${save.name} · ${userName}`)
+      : `${save.name} · ${userName}`)
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
 
   return (
@@ -422,10 +454,10 @@ function StoryView(props: {
             <article key={item.id} className={mine ? sc('msg', 'is-mine flex flex-col items-end') : sc('msg', 'is-theirs flex flex-col items-start')}>
               {isEditing ? (
                 <div className="w-full rounded-[22px] bg-white/95 p-3 shadow-[0_8px_18px_rgba(120,80,100,0.08)]">
-                  <textarea value={editing.text} rows={6} onChange={(event) => setEditing({ id: item.id, text: event.target.value })} className="soft-input composer-input resize-none text-sm leading-6" />
+                  <textarea autoFocus aria-label="编辑剧情消息" value={editing.text} rows={6} disabled={savingEdit} onChange={(event) => setEditing({ id: item.id, text: event.target.value })} className="soft-input composer-input resize-none text-sm leading-6" />
                   <div className="mt-2 flex justify-end gap-2">
-                    <button type="button" className="chip" onClick={() => setEditing(null)}>取消</button>
-                    <button type="button" className="chip chip-solid" onClick={() => void commitEdit()}>保存</button>
+                    <button type="button" className="chip" disabled={savingEdit} onClick={() => setEditing(null)}>取消</button>
+                    <button type="button" className="chip chip-solid" disabled={busy || savingEdit || !editing.text.trim()} onClick={() => void commitEdit()}>{savingEdit ? '保存中…' : '保存'}</button>
                   </div>
                 </div>
               ) : (
@@ -455,47 +487,72 @@ function StoryView(props: {
                     setPicked(isPicked ? null : item.id)
                   }}
                 >
-                  <LineBody mode={props.mode} line={item} rules={rules} config={config} mine={mine} theme={props.theme} userName={userName} />
+                  <LineBody mode={props.mode} line={item} rules={rules} config={config} plain={Boolean(save.workshopWorkId || item.workshopReply)} mine={mine} theme={props.theme} userName={userName} />
                 </button>
               )}
+              {props.mode === 'jiushi' && !isEditing ? (
+                <button
+                  type="button"
+                  className="chip mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-xs"
+                  aria-expanded={isPicked}
+                  onClick={() => setPicked(isPicked ? null : item.id)}
+                >
+                  <Ellipsis size={13} />消息操作
+                </button>
+              ) : null}
               <AnimatePresence>
                 {isPicked && !isEditing ? (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-1.5 flex flex-wrap gap-1.5">
-                    <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setEditing({ id: item.id, text: item.content })}><Pencil size={11} />编辑</button>
-                    <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void navigator.clipboard?.writeText(item.content)}><Copy size={11} />复制</button>
-                    {item.role === 'assistant' && props.mode !== 'jiushi' ? (
-                      <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setThought(item.reasoning ?? '')}>思维链</button>
+                    <button type="button" className="chip" disabled={busy || savingEdit} style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => setEditing({ id: item.id, text: item.content })}><Pencil size={11} />编辑</button>
+                    <button type="button" className="chip" style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => void navigator.clipboard?.writeText(item.content)}><Copy size={11} />复制</button>
+                    {item.role === 'assistant' ? (
+                      <button type="button" className="chip" style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => setThought(item.reasoning ?? '')}>思维链</button>
                     ) : null}
                     {item.role === 'assistant' ? (
                       <>
-                        <button type="button" className="chip chip-mint" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void reroll(item.id)}><RotateCcw size={11} />重说</button>
-                        <button type="button" className="chip chip-lilac" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void continueLine(item.id)}>续写</button>
+                        <button type="button" className="chip chip-mint" disabled={busy || savingEdit} style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => void reroll(item.id)}><RotateCcw size={11} />重说</button>
+                        <button type="button" className="chip chip-lilac" disabled={busy || savingEdit} style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => void continueLine(item.id)}>续写</button>
                       </>
                     ) : null}
-                    <button type="button" className="chip chip-danger" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => void remove(item.id)}><Trash2 size={11} />删除</button>
+                    <button type="button" className="chip chip-danger" disabled={busy || savingEdit} style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => void remove(item.id)}><Trash2 size={11} />删除</button>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
             </article>
           )
         })}
-        {busy ? (
+        {busy && !replySaved ? (
           <div className="flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-2 text-xs" style={{ width: 'fit-content', color: 'var(--m-text-secondary)' }}>
             {[0, 1, 2].map((dot) => <motion.span key={dot} className="h-1.5 w-1.5 rounded-full" style={{ background: props.theme.deep }} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: dot * 0.18 }} />)}
             正在写下一段
           </div>
         ) : null}
-        {error ? <PillNote tone="peach" inline>{error}</PillNote> : null}
       </div>
 
       {thought !== null ? <ThoughtSheet text={thought} onClose={() => setThought(null)} /> : null}
+      {error && !busy ? (
+        <div className={sc('error', 'mx-3 mb-1 flex min-w-0 shrink-0 items-start gap-2 rounded-2xl bg-white/95 px-3 py-2 text-xs leading-5 text-[#854935]')}>
+          <div role="alert" className="max-h-20 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere]">{error}</div>
+        </div>
+      ) : null}
+      {interruptedReply && !busy && <p className="mx-3 mb-1 text-xs" role="status">连接中断，已保存收到的正文。</p>}
       <ReplyAssist namespace={props.identity.namespace} mode={props.mode} turnId={assistTurn}
         context={assistContext} draft={draft} disabled={busy} onRewrite={setDraft} onSend={text => send(text, false)} />
       <form
         className={sc('composer', 'conversation-composer flex shrink-0 items-end gap-1.5 px-3 pb-14 pt-1')}
         onSubmit={(event) => {
           event.preventDefault()
-          void send().catch(reason => setError(errorText(reason)))
+          if (isAiJobRunning(storyJobKey)) {
+            stopAiJob(storyJobKey)
+            return
+          }
+          if (retryLast && !sending.current) {
+            void run(save)
+            return
+          }
+          void send().catch(reason => {
+            setError(errorText(reason))
+          })
         }}
       >
         <div className="flex min-h-11 min-w-0 flex-1 items-center rounded-[22px] bg-white/92 px-3 py-1.5 ring-1 ring-black/5">
@@ -509,8 +566,8 @@ function StoryView(props: {
             className={sc('composer-input', 'composer-input readable max-h-24 min-w-0 flex-1 bg-transparent py-1 text-sm leading-6 outline-none')}
           />
         </div>
-        <button type="submit" aria-label="发送" disabled={busy || !draft.trim()} className={sc('send', 'grid h-11 w-11 shrink-0 place-items-center rounded-full shadow-[0_4px_10px_rgba(243,168,186,0.35)] disabled:opacity-55')} style={{ background: 'var(--m-primary)' }}>
-          <SendHorizontal size={17} />
+        <button type="submit" aria-label={busy ? '停止生成' : retryLast ? '重试生成' : '发送'} title={busy ? '停止生成' : retryLast ? '重试上一条消息' : '发送'} disabled={!busy && (savingEdit || (!draft.trim() && !retryLast))} className={sc('send', 'grid h-11 w-11 shrink-0 place-items-center rounded-full shadow-[0_4px_10px_rgba(243,168,186,0.35)] disabled:opacity-55')} style={{ background: 'var(--m-primary)' }}>
+          {busy ? <Square size={14} fill="currentColor" /> : <SendHorizontal size={17} />}
         </button>
       </form>
 
@@ -553,23 +610,29 @@ function Prose(props: { text: string; quote: string }) {
   )
 }
 
-function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<typeof displayRules>; config: StoryConfig; mine: boolean; theme: (typeof THEME)[StoryMode]; userName: string }) {
+function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<typeof displayRules>; config: StoryConfig; plain: boolean; mine: boolean; theme: (typeof THEME)[StoryMode]; userName: string }) {
   const reading = props.config.reading
-  const content = props.line.role === 'assistant' ? stripReasoning(props.line.content) : props.line.content
-  const rendered = unwrapHtmlFence(applyRegex(content, props.rules, 'display', props.line.role))
-  const prose = props.line.role === 'assistant' ? stripReasoning(rendered) : rendered
-  const shown = props.line.role === 'assistant' && props.mode !== 'jiushi' ? normalizeStoryParagraphs(prose) : prose
-  const text = { fontFamily: FONT_STACK[reading.font], fontSize: reading.fontSize, lineHeight: reading.lineHeight }
-  const html = props.config.renderHtml && hasHtml(shown)
+  const assistant = props.line.role === 'assistant'
+  const text = { fontFamily: FONT_STACK[reading.font], fontSize: phoneFontSize(reading.fontSize), lineHeight: reading.lineHeight }
   const sc = (part: string, extra = '') => storyCssClass(props.mode, part, extra)
-  const inner = html ? <HtmlFrame mode={props.mode} html={shown} reading={reading} color="#3a3a3a" /> : <p className={sc('prose', 'whitespace-pre-wrap')} style={text}><Prose text={shown} quote={reading.quoteColor} /></p>
-  if (html) {
+  const formatProse = (value: string) => {
+    if (!assistant) return value.trim()
+    const prose = stripReasoning(value)
+    return props.mode === 'jiushi' ? prose : normalizeStoryParagraphs(prose)
+  }
+  const parts = !props.plain && props.config.renderHtml ? storyDisplayParts(props.line.content, props.rules, props.line.role) : null
+  if (parts?.some(part => part.card || hasHtml(part.text))) {
     return (
-      <span className={sc('bubble', `block overflow-hidden p-0 shadow-none ${props.mine ? 'is-mine' : 'is-theirs'}`)} style={{ background: 'transparent' }}>
-        {inner}
+      <span className={sc('bubble', `grid grid-cols-1 gap-2 overflow-hidden p-0 shadow-none ${props.mine ? 'is-mine' : 'is-theirs'}`)} style={{ background: 'transparent' }}>
+        {parts.map((part, index) => part.card || hasHtml(part.text)
+          ? <HtmlFrame key={index} mode={props.mode} html={part.text.trim()} reading={reading} color="#3a3a3a" />
+          : <span key={index} className={sc('prose', 'whitespace-pre-wrap rounded-[20px] px-3.5 py-2')} style={{ ...text, background: props.mine ? '#FBE0E8' : reading.paper }}><Prose text={formatProse(part.text)} quote={reading.quoteColor} /></span>)}
       </span>
     )
   }
+  const content = assistant ? stripReasoning(props.line.content) : props.line.content
+  const rendered = unwrapHtmlFence(parts ? parts[0]?.text ?? '' : applyRegex(content, props.rules, 'display', props.line.role))
+  const inner = <p className={sc('prose', 'whitespace-pre-wrap')} style={text}><Prose text={formatProse(rendered)} quote={reading.quoteColor} /></p>
   if (props.mine) {
     return (
       <span className={sc('bubble', 'is-mine block rounded-[20px] rounded-br-[6px] px-3.5 py-2 shadow-[0_6px_14px_rgba(243,168,186,0.2)]')} style={{ background: '#FBE0E8' }}>
@@ -587,18 +650,22 @@ function LineBody(props: { mode: StoryMode; line: StoryLine; rules: ReturnType<t
 
 function HtmlFrame(props: { mode: StoryMode; html: string; reading: ReadingStyle; color: string }) {
   const id = useId()
+  const frame = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(48)
   const doc = useMemo(() => frameDoc(id, props.html, props.reading, props.color), [id, props.html, props.reading, props.color])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { mellowFrame?: string; h?: number } | null
-      if (data && data.mellowFrame === id && typeof data.h === 'number') setHeight(Math.max(24, Math.ceil(data.h)))
+      if (event.source === frame.current?.contentWindow && data?.mellowFrame === id && typeof data.h === 'number' && Number.isFinite(data.h)) {
+        setHeight(Math.max(24, Math.ceil(data.h)))
+      }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [id])
   return (
     <iframe
+      ref={frame}
       title="渲染内容"
       sandbox="allow-scripts"
       srcDoc={doc}
@@ -704,7 +771,7 @@ function SideLobby(props: {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs" style={{ color: 'var(--m-text-secondary)' }}>世界书（可多选）</p>
-                <label className="chip chip-sky" style={{ fontSize: 11, padding: '3px 10px' }}>
+                <label className="chip chip-sky" style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }}>
                   <Upload size={11} />导入
                   <input type="file" accept="application/json,.json" className="hidden" onChange={(event) => void importBook(event.target.files?.[0])} />
                 </label>
@@ -713,13 +780,13 @@ function SideLobby(props: {
                 {withBooks.map((person) => {
                   const on = bookIds.includes(person.id)
                   return (
-                    <button key={person.id} type="button" className={on ? 'chip chip-lilac' : 'chip'} style={{ fontSize: 12 }} onClick={() => setBookIds((current) => (on ? current.filter((id) => id !== person.id) : [...current, person.id]))}>
+                    <button key={person.id} type="button" className={on ? 'chip chip-lilac' : 'chip'} style={{ fontSize: phoneFontSize(12) }} onClick={() => setBookIds((current) => (on ? current.filter((id) => id !== person.id) : [...current, person.id]))}>
                       📘 {person.characterBook?.name || `${person.name} 的世界书`}
                     </button>
                   )
                 })}
                 {books.map((book, index) => (
-                  <button key={`${book.name}-${index}`} type="button" className="chip chip-sky" style={{ fontSize: 12 }} onClick={() => setBooks((current) => current.filter((_, at) => at !== index))}>📗 {book.name} ×</button>
+                  <button key={`${book.name}-${index}`} type="button" className="chip chip-sky" style={{ fontSize: phoneFontSize(12) }} onClick={() => setBooks((current) => current.filter((_, at) => at !== index))}>📗 {book.name} ×</button>
                 ))}
                 {withBooks.length === 0 && books.length === 0 ? <span className="text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>角色卡里没有世界书，可以导入 SillyTavern 世界书 JSON</span> : null}
               </div>

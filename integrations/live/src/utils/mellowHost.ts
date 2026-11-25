@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useToastStore } from '../stores/useToastStore';
+import type { AnchorProfile } from '../types';
 
 type Host = {
   playerName: string;
@@ -7,8 +8,10 @@ type Host = {
   open(app: MellowApp): void;
   balance(): Promise<number>;
   spend(amount: number): Promise<number>;
+  apiSettings(): Promise<{ selected: string; defaultModel: string; profiles: { id: string; name: string; model: string }[] }>;
+  setApi(id: string): Promise<void>;
   ai(payload: { messages: { role: 'system' | 'user' | 'assistant'; content: string }[]; temperature?: number; max_tokens?: number }): Promise<string>;
-  connect(anchor: { id: string; realName: string; stageName: string; background: string; personality: string; chatStyle: string; portraitUrl?: string }, mode: 'sms' | 'offline'): Promise<void>;
+  connect(anchor: AnchorProfile, mode?: 'sms'): Promise<void>;
 };
 export type MellowApp = 'messages' | 'star' | 'duotao' | 'flash' | 'chengfeng' | 'settings' | 'music';
 export const embedded = new URLSearchParams(window.location.search).has('identity');

@@ -1,3 +1,4 @@
+import { phoneFontSize } from '../../lib/phoneFont.ts'
 import { advancePetalDrops, PETAL_DROPS, PETAL_DURATION, PETAL_TARGET, type PetalDrop } from '../../domain/petalGame.ts'
 import { EarningsPanel } from './EarningsPanel.tsx'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -239,7 +240,7 @@ function Lobby(props: { best: Record<string, number>; coins: number; onPick: (id
                     <span className="text-[10px]" style={{ color: `var(--m-detail-ink, ${game.deep})` }}>最好 {score}</span>
                   </span>
                 </span>
-                <span className="chip chip-pink shrink-0" style={{ fontSize: 12, padding: '5px 12px' }}>开始</span>
+                <span className="chip chip-pink shrink-0" style={{ fontSize: phoneFontSize(12), padding: '5px 12px' }}>开始</span>
               </button>
             </li>
           )

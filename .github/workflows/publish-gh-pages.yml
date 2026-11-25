@@ -1,6 +1,8 @@
 name: Publish prepared site
 
 on:
+  push:
+    branches: [gh-pages]
   workflow_dispatch:
 
 permissions:
@@ -9,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-publish
+  group: mellow-pages
   cancel-in-progress: false
 
 jobs:
@@ -25,6 +27,14 @@ jobs:
           path: site
       - name: Drop the checkout metadata
         run: rm -rf site/.git
+      - name: Include the signed Android package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./site/downloads/latest.json').version")
+          gh release download "android-v$version" --repo "$GITHUB_REPOSITORY" --pattern "Mellow-$version.apk" --dir site/downloads --clobber
+          (cd site/downloads && sha256sum -c "Mellow-$version.sha256.txt")
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

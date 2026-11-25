@@ -1,3 +1,4 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
 import { Ellipsis } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createGroupChat, ensureDirectChat } from '../../domain/messaging.ts'
@@ -31,7 +32,9 @@ export function MessagesApp(props: { onBack: () => void }) {
   const refreshInbox = useMellow((state) => state.refreshInbox)
   const setAppOverride = useMellow((state) => state.setAppOverride)
   const phone = identities.find((item) => item.id === activeIdentityId)
-  const resolvedId = phone ? resolveIdentityId(phone, 'messages', identities) : ''
+  const [pinnedPhone, setPinnedPhone] = useState<string | null>(null)
+  const workshopRequest = openChatRequest?.phoneIdentityId === phone?.id ? openChatRequest : null
+  const resolvedId = phone ? (workshopRequest || pinnedPhone === phone.id ? phone.id : resolveIdentityId(phone, 'messages', identities)) : ''
   const identity = identities.find((item) => item.id === resolvedId) ?? phone
   const [tab, setTab] = useState<Tab>('messages')
   const [chars, setChars] = useState<Character[]>([])
@@ -57,6 +60,10 @@ export function MessagesApp(props: { onBack: () => void }) {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('沈予安')
+  useEffect(() => {
+    if (workshopRequest && workshopRequest.token === handled) useMellow.getState().consumeOpenChat(workshopRequest.token)
+    if (pinnedPhone && pinnedPhone !== activeIdentityId) setPinnedPhone(null)
+  }, [handled, workshopRequest, pinnedPhone, activeIdentityId])
 
   const finishImport = async (
     run: (onProgress: (msg: string) => void) => Promise<{ characters: { name: string }[]; via: 'ai' | 'local' | 'raw' }>,
@@ -137,6 +144,7 @@ export function MessagesApp(props: { onBack: () => void }) {
   }, [])
 
   if (openChatRequest && identity && openChatRequest.identityId === identity.id && handled !== openChatRequest.token) {
+    if (workshopRequest && phone) setPinnedPhone(phone.id)
     setHandled(openChatRequest.token)
     setOpenId(openChatRequest.chatId)
     setTab('messages')
@@ -223,7 +231,7 @@ export function MessagesApp(props: { onBack: () => void }) {
                 <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); setPasteOpen(true); setTab('messages') }}>粘贴导入</button>
                 <button type="button" className="block w-full px-3 py-2 text-left" onClick={() => { setMenu(false); setAdding(true); setTab('messages') }}>手写</button>
                 {identities.length > 1 ? identities.map((item) => (
-                  <button key={item.id} type="button" className="block w-full truncate px-3 py-2 text-left" onClick={() => { setMenu(false); void setAppOverride('messages', item.id === phone.id ? null : item.id) }}>
+                  <button key={item.id} type="button" className="block w-full truncate px-3 py-2 text-left" onClick={() => { setMenu(false); setPinnedPhone(null); void setAppOverride('messages', item.id) }}>
                     {item.id === phone.id ? '这台手机 · ' : ''}{item.name}
                   </button>
                 )) : null}
@@ -494,7 +502,7 @@ function MessageList(props: {
 function RosterFace(props: { chat: Chat; members: Character[] }) {
   if (props.chat.kind === 'dm') {
     const person = props.members[0]
-    if (person?.avatar.startsWith('data:')) return <img src={person.avatar} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+    if (person && isImageAvatar(person.avatar)) return <img src={person.avatar} alt="" className="h-12 w-12 rounded-2xl object-cover" />
     return <span className="grid h-12 w-12 place-items-center rounded-2xl text-sm" style={{ background: 'var(--m-secondary)' }}>{initialOf(person?.name ?? props.chat.title)}</span>
   }
   if (props.chat.groupAvatar?.startsWith('data:')) return <img src={props.chat.groupAvatar} alt="" className="h-12 w-12 rounded-2xl object-cover" />

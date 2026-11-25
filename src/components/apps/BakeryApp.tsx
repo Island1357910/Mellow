@@ -1,5 +1,6 @@
 import type { SyntheticEvent } from 'react'
 import { moduleAdapter } from '../../lib/ask.ts'
+import { APP_VERSION } from '../../lib/buildInfo.ts'
 import type { AIMessage } from '../../types/index.ts'
 import { applyEmbeddedTheme } from '../../theme/embeddedTheme.ts'
 
@@ -35,7 +36,7 @@ function connectBakery(event: SyntheticEvent<HTMLIFrameElement>) {
 export function BakeryApp({ onBack }: { onBack: () => void }) {
   return (
     <div className="bakery-host embedded-host h-full min-h-0">
-      <iframe title="千味面包房" className="embedded-frame" src={`${import.meta.env.BASE_URL}bakery/index.html?mellow=1`} allow="autoplay" onLoad={connectBakery} />
+      <iframe title="千味面包房" className="embedded-frame" src={`${import.meta.env.BASE_URL}bakery/index.html?mellow=1&v=${APP_VERSION}`} allow="autoplay" onLoad={connectBakery} />
       <button type="button" className="bakery-back" aria-label="返回短信" onClick={onBack}>‹</button>
     </div>
   )

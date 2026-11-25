@@ -16,7 +16,7 @@ export async function moduleAdapter(moduleId?: ApiModuleId, expected?: Pick<ApiP
     if (response.truncated) {
       try {
         const { useMellow } = await import('../store/useMellow.ts')
-        await useMellow.getState().pushNotice({ kind: 'toast', title: '回复尚未完整', body: '已保留收到的正文，自动补全未完成。可以继续生成，或到 API 设置增加输出额度。', appId: moduleId ?? 'settings', identityId: settings.activeIdentityId, priority: 3 })
+        await useMellow.getState().pushNotice({ kind: 'toast', title: '回复尚未完整', body: '已直接显示收到的内容，不会自动追加调用。需要时可手动继续生成。', appId: moduleId ?? 'settings', identityId: settings.activeIdentityId, priority: 3 })
       } catch { /* A notification failure must not discard the preserved answer. */ }
     }
     return response
@@ -29,8 +29,8 @@ export function moduleAi(moduleId: ApiModuleId) {
   return {
     askLine: (system: string, user: string, maxTokens = 180, timeoutMs = 120_000, temperature = 0.9) =>
       askLine(system, user, maxTokens, timeoutMs, temperature, moduleId),
-    askJson: (system: string, user: string, maxTokens = 8192, timeoutMs = 180_000) =>
-      askLine(system, user, maxTokens, timeoutMs, 0.2, moduleId),
+    askJson: (system: string, user: string, maxTokens = 8192, timeoutMs = 180_000, signal?: AbortSignal) =>
+      askLine(system, user, maxTokens, timeoutMs, 0.2, moduleId, signal),
     ensureAiReady: async () => { await moduleAdapter(moduleId) },
   }
 }
@@ -42,6 +42,7 @@ export async function askLine(
   timeoutMs = 120_000,
   temperature = 0.9,
   moduleId?: ApiModuleId,
+  signal?: AbortSignal,
 ): Promise<string> {
   const adapter = await moduleAdapter(moduleId)
   const result = await adapter.complete({
@@ -52,6 +53,7 @@ export async function askLine(
     temperature,
     maxTokens,
     timeoutMs,
+    signal,
   })
   return result.content.trim()
 }

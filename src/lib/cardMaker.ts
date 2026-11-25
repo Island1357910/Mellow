@@ -96,17 +96,10 @@ export async function makeCard(input: { wish: string; depth: string; world: Worl
     creatorNotes: source.creatorNotes,
   })}\n\n` : ''
   const user = `${creationIdentityContext(input.identity)}${original}详略：${input.depth}\n原料：${input.wish.trim()}${book}`
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const repair = attempt ? '\n上次结果不是完整的角色卡 JSON。请重新输出整个对象，正确转义字符串里的换行和双引号，先保证角色核心设定写足、对象完整闭合，再补附带世界书。不要缩短用户要求的设定篇幅。' : ''
-    const raw = await askLine(SYSTEM, user + repair, 16384, 180_000, attempt ? 0.3 : 0.8)
-    let card: MadeCard | null = null
-    try {
-      card = readCard(readJson(raw))
-    } catch {
-      // Retry malformed or empty model output with the same source material.
-    }
-    if (card && (card.description || card.personality)) return card
-  }
-  if (source || input.draft) throw new Error('模型两次都没有返回完整角色卡。原草稿仍在，可以重试。')
+  const raw = await askLine(SYSTEM, user, 16384, 180_000, 0.8)
+  let card: MadeCard | null = null
+  try { card = readCard(readJson(raw)) } catch { /* Preserve the existing draft on unreadable output. */ }
+  if (card) return card
+  if (source || input.draft) throw new Error('模型未返回可读取的角色卡。原草稿仍在，可以重试。')
   return localCard(input.wish, input.depth)
 }

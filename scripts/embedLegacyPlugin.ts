@@ -13,13 +13,12 @@ function sameOriginTag(tag: string) {
   return tag.replace(/ crossorigin(?:="[^"]*"|='[^']*'|=[^\s>]+)?/gi, '')
 }
 
-/** 直播间和面包房跑在 iframe 里。旧 WebView 既不吃可选链，也会丢掉整段 @layer。 */
+/** 内嵌页共用经典脚本入口，避免旧 WebView 的模块能力探测影响启动。 */
 export function embedLegacyPlugins(): Plugin[] {
   return [
     ...legacy({
       targets: ['Chrome >= 60'],
       modernTargets: ['Chrome >= 64'],
-      modernPolyfills: true,
     }) as Plugin[],
     {
       name: 'embed-legacy-css',
@@ -41,9 +40,19 @@ export function embedLegacyPlugins(): Plugin[] {
           this.emitFile({ type: 'asset', fileName: 'compat.css', source: compatible.css })
         },
       },
-      transformIndexHtml(html) {
-        const marked = html.includes('__mellowEmbedCss') ? html : html.replace('</head>', `${boot}</head>`)
-        return marked.replace(/<(?:script|link)\b[^>]*>/gi, sameOriginTag)
+      transformIndexHtml: {
+        order: 'post',
+        handler(html, { bundle }) {
+          if (!bundle) return html
+          // Vite emits the stylesheet with its modern bundle. Only the classic scripts are needed in the page.
+          return html
+            .replace(/^[ \t]*<script type="module"[^>]*>[\s\S]*?<\/script>\s*$/gm, '')
+            .replace(/^[ \t]*<script nomodule>[^<]*<\/script>\s*$/gm, '')
+            .replace(/^[ \t]*<link rel="modulepreload"[^>]*>\s*$/gm, '')
+            .replace(/<script nomodule(?=\s[^>]*\bid="vite-legacy-(?:polyfill|entry)")/g, '<script')
+            .replace('</head>', `${boot}</head>`)
+            .replace(/<(?:script|link)\b[^>]*>/gi, sameOriginTag)
+        },
       },
     },
   ]

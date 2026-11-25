@@ -30,30 +30,37 @@ try {
   assert(payloads.every(body => !JSON.stringify(body).includes('private analysis')))
   assert(payloads.every(body => JSON.stringify(body).includes(messages[0].content)))
 
-  replies([{ content: '{"text":"半', finish: 'length' }, { content: '糖"}' }])
-  const json = await adapter.complete({ messages })
-  assert.deepEqual(JSON.parse(json.content), { text: '半糖' })
-  assert.equal(json.truncated, false)
-  assert.match(JSON.stringify(payloads[1]), /不重复|不要重复/)
+  for (const content of ['半段正文', '{"text":"半', '<p>正文</p><status>未完成']) {
+    replies([{ content, finish: 'length' }])
+    const partial = await adapter.complete({ messages })
+    assert.equal(partial.content, content)
+    assert.equal(partial.truncated, true)
+    assert.equal(partial.recovered, false)
+    assert.equal(payloads.length, 1, 'visible partial content must never trigger automatic continuation')
+  }
+  let streamReads = 0
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(JSON.parse(String(init?.body)).stream, true)
+    return new Response(new ReadableStream({
+      pull(controller) {
+        if (streamReads++ === 0) {
+          controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"已收到的正文。"}}]}\n\n'))
+        } else controller.error(new TypeError('Failed to fetch'))
+      },
+    }), { headers: { 'Content-Type': 'text/event-stream' } })
+  }
+  const interrupted = await adapter.complete({ messages, stream: true })
+  assert.equal(interrupted.content, '已收到的正文。')
+  assert.equal(interrupted.truncated, true)
+  assert.equal(interrupted.interrupted, true)
+  replies(['unsupported stream', { content: '非流式兼容。' }])
+  assert.equal((await adapter.complete({ messages, stream: true })).content, '非流式兼容。')
+  assert.equal(payloads[0].stream, true)
+  assert.equal(payloads[1].stream, false)
 
-  replies([{ content: '{"text":"hello', finish: 'length' }, { content: ' world"}' }])
-  assert.deepEqual(JSON.parse((await adapter.complete({ messages })).content), { text: 'hello world' })
-  replies([{ content: 'Hello ', finish: 'length' }, { content: 'world.' }])
-  assert.equal((await adapter.complete({ messages })).content, 'Hello world.')
-  const head = '这是一段不能重复的完整开头，后面还有一半'
-  replies([{ content: head, finish: 'length' }, { content: head + '结尾。' }])
-  assert.equal((await adapter.complete({ messages })).content, head + '结尾。')
-  replies([{ content: head, finish: 'length' }, { content: head.slice(-14) + '结尾。' }])
-  assert.equal((await adapter.complete({ messages })).content, head + '结尾。')
-
-  replies([{ content: '保留的半段', finish: 'length' }, new TypeError('Failed to fetch')])
-  const partial = await adapter.complete({ messages })
-  assert.equal(partial.content, '保留的半段')
-  assert.equal(partial.truncated, true)
-
-  replies(Array.from({ length: 3 }, () => ({ reasoning_content: 'hidden', finish: 'length' })))
+  replies(Array.from({ length: 2 }, () => ({ reasoning_content: 'hidden', finish: 'length' })))
   await assert.rejects(adapter.complete({ messages }), /没有可显示的正文/)
-  assert.equal(payloads.length, 3, 'recovery is bounded')
+  assert.equal(payloads.length, 2, 'empty recovery is limited to one additional generation')
   replies([{ content: '半段', finish: 'length' }])
   const disabled = await adapter.complete({ messages, maxTokens: 512, antiTruncation: false })
   assert.equal(payloads[0].max_tokens, 512)
@@ -77,9 +84,12 @@ try {
   assert.equal(payloads[2].max_completion_tokens, 8192)
   assert.equal('max_tokens' in payloads[2], false, 'the two alternative budget parameters must not be sent together')
   assert.deepEqual(payloads[2].messages, messages, 'switching budget fields preserves the complete context')
+  replies([new TypeError('Failed to fetch'), { content: '不应重发' }])
+  await assert.rejects(adapter.complete({ messages }), /请求中途断开/)
+  assert.equal(payloads.length, 1, 'a disconnected request may already have reached the provider')
   assert.equal(JSON.stringify(messages), before)
   assert.deepEqual(normalizeSettings({}).generation, { antiTruncation: true, maxOutputTokens: 8192, timeoutSeconds: 180 })
   assert.deepEqual(normalizeSettings({ generation: { antiTruncation: false, maxOutputTokens: -1, timeoutSeconds: Infinity } }).generation,
     { antiTruncation: false, maxOutputTokens: 1024, timeoutSeconds: 600 })
 } finally { globalThis.fetch = originalFetch }
-console.log('Generation checks passed: reasoning-only recovery, budgets, JSON continuation, overlap, partial preservation, bounded retries, disabling and full-context compatibility')
+console.log('Generation checks passed: reasoning-only recovery, budgets, single-call partial preservation, one empty-body recovery, disabling and full-context compatibility')

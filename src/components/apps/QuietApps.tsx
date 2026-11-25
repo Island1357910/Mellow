@@ -1,3 +1,4 @@
+import { phoneFontSize } from '../../lib/phoneFont.ts'
 import { useState } from 'react'
 import { AppGlyph } from '../os/AppGlyph.tsx'
 import { Sparkles } from 'lucide-react'
@@ -52,11 +53,11 @@ export function MarketApp(props: { onBack: () => void }) {
         <span className="mt-0.5 line-clamp-2 block text-xs leading-[18px]" style={{ color: 'var(--m-text-secondary)' }}>{item.description}</span>
       </span>
       {item.status === 'ready' ? (
-        <button type="button" className={installed.has(item.id) ? 'chip chip-mint shrink-0' : 'chip chip-pink shrink-0'} style={{ fontSize: 12, padding: '5px 14px' }} onClick={() => toggle(item.id)}>
+        <button type="button" className={installed.has(item.id) ? 'chip chip-mint shrink-0' : 'chip chip-pink shrink-0'} style={{ fontSize: phoneFontSize(12), padding: '5px 14px' }} onClick={() => toggle(item.id)}>
           {installed.has(item.id) ? '已装上' : '装上'}
         </button>
       ) : (
-        <span className="chip chip-butter shrink-0 cursor-default" style={{ fontSize: 12, padding: '5px 12px' }}>即将上架</span>
+        <span className="chip chip-butter shrink-0 cursor-default" style={{ fontSize: phoneFontSize(12), padding: '5px 12px' }}>即将上架</span>
       )}
     </li>
   )

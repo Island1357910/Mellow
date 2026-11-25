@@ -6,10 +6,11 @@ import { shouldReplyAsVoice } from '../src/domain/voiceReply.ts'
 import { storage } from '../src/storage/StorageService.ts'
 import { writeCharacter } from '../src/domain/importing.ts'
 import { replyInChat } from '../src/domain/messaging.ts'
-import { buildSmsMessages, describeMessage } from '../src/engine/prompt.ts'
+import { buildCallMessages, buildSmsMessages, describeMessage } from '../src/engine/prompt.ts'
 import type { ChatMessage } from '../src/types/index.ts'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
 import { useMellow } from '../src/store/useMellow.ts'
+import { writeWorld } from '../src/lib/worldbook.ts'
 
 for (const prefix of ['（语音消息）', '(语音消息)', '[语音]', '【语音消息】：', '（语音消息）[语音]']) {
   assert.deepEqual(buildSmsReplySegments(prefix + '我在。<<<分>>>' + prefix + '慢慢说。', { min: 1, max: 3 }), [{ kind: 'text', content: '我在。' }, { kind: 'text', content: '慢慢说。' }])
@@ -120,14 +121,52 @@ assert.match(built.messages[0]!.content, /未经公开且不属于你的事情�
 assert.equal(describeMessage(groupHistory[1]!), '我在家。')
 const dmBuilt = buildSmsMessages({ character, identity, preset: null, history: groupHistory.slice(1), fourthWall: false })
 assert.equal(dmBuilt.messages[1]!.content, '我在家。')
+const partialPreset = { ...snapshot.presets[0]!, data: { ...snapshot.presets[0]!.data, prompts: [
+  { identifier: 'partial', name: '仅写性格', role: 'system' as const, content: '{{personality}}', enabled: true },
+] } }
+const currentCard = { ...character, name: '角$&色', description: '{{char}} 是修钟师', scenario: '与 {{user}} 约在钟楼' }
+const roleInput = { character: currentCard, identity, preset: partialPreset, fourthWall: false, history: [
+  ...groupHistory,
+  { ...groupHistory[1]!, id: 'hidden', hidden: true, content: '已撤回的错误设定' },
+] }
+for (const { messages } of [buildSmsMessages(roleInput), buildCallMessages({ ...roleInput, callTurns: [] })]) {
+  assert.ok(messages[0]!.content.includes('角$&色 是修钟师'))
+  assert.ok(messages[0]!.content.includes(`与 ${identity.name} 约在钟楼`))
+  assert.ok(messages.every(message => !/去了海边。|已撤回/.test(message.content)))
+}
 const before = new Set((await storage.listMessages(identity.namespace, chat.id)).map(item => item.id))
 await storage.saveApiProfile({ name: 'sms-test', endpoint: 'https://example.test/v1', model: 'test', key: 'test-only', ready: true })
+await writeWorld(identity.namespace, [
+  { id: 'imported', title: '卡片', cardImport: true, charId: character.id, content: '导入设定'.repeat(600) + '卡片末尾史实', keys: '', enabled: true, updatedAt: 1 },
+  { id: 'later', title: '后置世界设定', worldForge: '测试世界', content: '另一条启用的世界设定。', keys: '', enabled: true, updatedAt: 1 },
+  { id: 'keyword-miss', title: '无关条目', content: '不应发送的未触发词条。', keys: '本轮并未出现的词语', enabled: true, updatedAt: 1 },
+  { id: 'manual', title: '手写提示', charId: character.id, content: '提到旧表时，{{char}}要想起钟楼。', keys: '', enabled: true, updatedAt: 1 },
+  { id: 'manual-off', title: '已关闭提示', charId: character.id, content: '不应收到这条关闭的世界提示。', keys: '', enabled: true, updatedAt: 1 },
+])
 const complete = AIAdapter.prototype.complete
-AIAdapter.prototype.complete = async () => ({ content: '<think source="model">hidden reasoning 【改昵称：错误昵称】</think>' + sample + '\n【发图：anime | 一幅插画】', model: 'test' })
+const smsPreset = { ...partialPreset, id: 'test-sms-preset', data: { ...partialPreset.data, prompts: [
+  { identifier: 'long', name: '长指令', role: 'system' as const, content: '保持自然口语。'.repeat(350), enabled: true },
+  { identifier: 'last', name: '尾段', role: 'system' as const, content: '短信预设末尾：{{char}}用熟悉的称呼回复{{user}}。', enabled: true },
+] } }
+const savedSettings = await storage.getSettings()
+await storage.savePreset(smsPreset)
+await storage.saveSettings({ ...savedSettings, modePresets: { ...savedSettings.modePresets, sms: smsPreset.id } })
+await storage.patchChat(identity.namespace, chat.id, { voiceEnabled: true, presetId: '已删除的预设', smsWorldOff: ['manual-off'] })
+let smsSystem = ''
+AIAdapter.prototype.complete = async request => {
+  smsSystem ||= request.messages[0]?.content ?? ''
+  return { content: '<think source="model">hidden reasoning 【改昵称：错误昵称】</think>' + sample + '\n【发图：anime | 一幅插画】', model: 'test' }
+}
 useMellow.setState({ viewingChatId: chat.id })
 Math.random = () => 0
 try {
-  await replyInChat({ namespace: identity.namespace, identity, character, chat: { ...chat, voiceEnabled: true }, presets: snapshot.presets, activePresetId: snapshot.presets[0]!.id, fourthWall: false, voiceReady: true })
+  await replyInChat({ namespace: identity.namespace, identity, character, chat, presets: snapshot.presets, activePresetId: 'preset_daily', fourthWall: false, voiceReady: true })
+  assert(smsSystem.includes(`短信预设末尾：${character.name}用熟悉的称呼回复${identity.name}。`))
+  assert(smsSystem.includes(`提到旧表时，${character.name}要想起钟楼。`))
+  assert(smsSystem.includes('卡片末尾史实'))
+  assert(smsSystem.includes('另一条启用的世界设定。'))
+  assert(!smsSystem.includes('不应收到这条关闭的世界提示'))
+  assert(!smsSystem.includes('不应发送的未触发词条。'))
   const saved = (await storage.listMessages(identity.namespace, chat.id)).filter(item => !before.has(item.id))
   assert.equal((await storage.getChat(identity.namespace, chat.id))?.backgroundImage, newBackground, 'delivering a reply with a stale chat must preserve the new background')
   assert.equal(saved.filter(item => item.kind === 'sticker').length, 2)

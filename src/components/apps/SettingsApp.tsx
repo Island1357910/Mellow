@@ -5,7 +5,7 @@ import { AppearanceEditor } from './AppearanceEditor.tsx'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronRight, Download, ImagePlus, Palette, Plug, Shield, Sparkles, Upload, UserRound } from 'lucide-react'
-import { PRESET_GROUPS, presetFromUnknown } from '../../data/officialPresets.ts'
+import { OFFICIAL_PRESETS, PRESET_GROUPS, presetFromUnknown } from '../../data/officialPresets.ts'
 import { modePresetId } from '../../lib/defaults.ts'
 import { downloadJson } from '../../lib/download.ts'
 import { checkImportSize, readFileText } from '../../lib/fileSnapshot.ts'
@@ -132,12 +132,31 @@ const TABS: Array<{ id: TabId; label: string; tint: string; icon: ReactNode; pan
 function ThemeCard() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false), [deleteError, setDeleteError] = useState('')
+  const [savingFontSize, setSavingFontSize] = useState(false)
+  const [fontSizeError, setFontSizeError] = useState('')
   const settings = useMellow((state) => state.settings)
   const themes = useMellow((state) => state.themes)
   const patchSettings = useMellow((state) => state.patchSettings)
   const reloadLibraries = useMellow((state) => state.reloadLibraries)
   return (
       <SoftCard>
+        <fieldset className="mb-4">
+          <legend className="mb-2 text-sm font-medium">小手机字号</legend>
+          <div className="flex flex-wrap gap-2">
+            {([[90, '小'], [100, '标准'], [115, '大'], [130, '特大']] as const).map(([size, label]) => (
+              <button key={size} type="button" className={settings.phoneFontScale === size ? 'chip chip-solid' : 'chip'}
+                aria-pressed={settings.phoneFontScale === size} disabled={savingFontSize}
+                onClick={() => {
+                  setSavingFontSize(true)
+                  setFontSizeError('')
+                  void patchSettings({ phoneFontScale: size }).catch(() => setFontSizeError('字号未能保存，请重试。')).finally(() => setSavingFontSize(false))
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {fontSizeError && <p role="status" className="mt-2 text-xs">{fontSizeError}</p>}
+        </fieldset>
         <SectionTitle tone="lilac">主题</SectionTitle><p className="mb-3 text-xs">10 月 31 日全天使用「不寂寞万圣夜」，次日恢复原主题，平日也可手动选择。</p>
         <div className="grid grid-cols-4 gap-3">
           {themes.map((theme) => (
@@ -283,6 +302,8 @@ function PresetCard() {
   const reloadLibraries = useMellow((state) => state.reloadLibraries)
   const [detailId, setDetailId] = useState<string | null>(null)
   const detailPreset = detailId ? presets.find((item) => item.id === detailId) : null
+  const customPresets = presets.filter(preset => !OFFICIAL_PRESETS.some(official => official.id === preset.id))
+  const fallback = presets.find(preset => preset.id === settings.activePresetId)
   const choose = (mode: PresetMode, id: string) => {
     void patchSettings({ modePresets: { ...settings.modePresets, [mode]: id } })
   }
@@ -291,17 +312,19 @@ function PresetCard() {
         <SectionTitle tone="pink">各处用哪一套</SectionTitle>
         <div className="min-w-0 space-y-3">
           {PRESET_GROUPS.map((group) => {
-            const current = modePresetId(settings, group.id)
-            const picked = presets.find((item) => item.id === current)
+            const current = settings.modePresets[group.id] ?? modePresetId(settings, group.id)
+            const picked = presets.find((item) => item.id === modePresetId(settings, group.id))
             return (
               <label key={group.id} className="block min-w-0 text-xs" style={{ color: 'var(--m-text-secondary)' }}>
                 <span className="block">{group.label}</span>
                 <span className="preset-hint">{group.hint}</span>
                 <select value={current} onChange={(event) => choose(group.id, event.target.value)} className="soft-select mt-1 w-full min-w-0 text-sm">
+                  <option value="">跟随兜底{fallback ? `（${fallback.name}）` : ''}</option>
                   {group.ids.map((id) => {
                     const preset = presets.find((item) => item.id === id)
                     return <option key={id} value={id}>{preset?.name ?? id}</option>
                   })}
+                  {customPresets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
                 </select>
                 {picked ? (
                   <button type="button" className="preset-desc mt-1 text-left underline decoration-black/15 underline-offset-2" onClick={() => setDetailId(picked.id)}>
@@ -314,7 +337,7 @@ function PresetCard() {
         </div>
         <div className="mt-4 min-w-0">
         <SectionTitle tone="pink">兜底预设</SectionTitle>
-        <p className="preset-hint mb-2">点一条查看完整说明和提示词，在详情里设为兜底。</p>
+        <p className="preset-hint mb-2">导入后可在上面为各场景选用。选择「跟随兜底」的场景会使用这里设定的预设。</p>
         <div className="min-w-0 space-y-1">
           {presets.map((preset) => (
             <button

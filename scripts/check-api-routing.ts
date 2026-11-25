@@ -53,6 +53,12 @@ try {
   }))
   assert(calls.some(call => call.id === 'api-two' && call.key === 'api-two-test-key'))
   assert(calls.every(call => call.key === `${call.id}-test-key` && call.model === `${call.id}-model`), 'profile, model and decrypted key must match')
+  await storage.bindApiModule('live', 'api-three')
+  await moduleAi('live').askLine('测试直播间', '使用直播间单独配置的模型')
+  assert.deepEqual(calls.at(-1), { id: 'api-three', key: 'api-three-test-key', model: 'api-three-model' })
+  assert.equal((await storage.readModuleApi('messages'))?.id, 'api-two')
+  await storage.bindApiModule('live', '')
+  assert.equal((await storage.readModuleApi('live'))?.id, 'api-one')
   for (const mode of ['offline', 'side', 'jiushi'] as const) {
     await storage.bindApiModule(mode, 'api-two')
     await generate([{ role: 'user', content: '继续' }], null, 20, mode)

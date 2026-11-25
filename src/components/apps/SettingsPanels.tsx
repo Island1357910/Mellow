@@ -23,6 +23,7 @@ import { decryptSecret, encryptSecret } from '../../storage/crypto.ts'
 import { storage } from '../../storage/StorageService.ts'
 import { useMellow } from '../../store/useMellow.ts'
 import { PasswordSetup } from '../os/SecretLock.tsx'
+import { AppGlyph } from '../os/AppGlyph.tsx'
 import type { MinimaxVoice } from '../../types/index.ts'
 import { Field, PillNote, SectionTitle, SoftCard, Toggle } from '../ui/primitives.tsx'
 
@@ -203,10 +204,10 @@ export function ApiPanel() {
         </div>
         {status ? <PillNote tone="mint" inline>{status}</PillNote> : null}
         <SectionTitle tone="sky">回复完整性</SectionTitle>
-        <Toggle label="防截断与空正文恢复" hint="默认开启。正文被截断或只返回思考时，最多额外请求两次自动补全；可能增加耗时与 API 用量。" on={settings.generation.antiTruncation} onChange={antiTruncation => void patchSettings({ generation: { ...settings.generation, antiTruncation } })}/>
+        <Toggle label="空正文恢复" hint="默认开启。仅在没有可显示正文时额外恢复一次；已有内容直接显示，不因截断或缺字段自动补写。" on={settings.generation.antiTruncation} onChange={antiTruncation => void patchSettings({ generation: { ...settings.generation, antiTruncation } })}/>
         <label className="block text-xs">输出额度（含模型思考）<NumericInput aria-label="输出额度（含模型思考）" className="soft-input mt-1" value={settings.generation.maxOutputTokens} min={1024} max={32768} step={1024} onValueChange={maxOutputTokens => void patchSettings({ generation: { ...settings.generation, maxOutputTokens } })}/></label>
         <label className="block text-xs">请求等待时间（秒）<NumericInput aria-label="请求等待时间（秒）" className="soft-input mt-1" value={settings.generation.timeoutSeconds} min={30} max={600} step={30} onValueChange={timeoutSeconds => void patchSettings({ generation: { ...settings.generation, timeoutSeconds } })}/></label>
-        <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>建议 8192 tokens、180 秒。开启防截断时为短回复也预留思考额度，恢复时按需增加至 32768。实际长度与等待时间仍受接口限制。</p>
+        <p className="text-xs leading-5" style={{ color: 'var(--m-text-secondary)' }}>建议 8192 tokens、180 秒。开启空正文恢复时预留输出额度；已有正文不自动补写，需要时可手动继续生成。</p>
         <SectionTitle tone="sky">应用模块分配</SectionTitle>
         <div className="space-y-3">
           {API_MODULES.map(module => (
@@ -554,6 +555,7 @@ export function IconPanel() {
       <div className="space-y-2">
         {PHONE_APPS.map((app) => (
           <div key={app.id} className="flex items-center gap-2">
+            <AppGlyph id={app.id} tint={app.tint} size={34} />
             <span className="w-14 truncate text-xs">{app.name}</span>
             <input aria-label={app.name+'图标'} value={settings.appIcons[app.id]?.startsWith('data:') ? '' : settings.appIcons[app.id] ?? ''} onChange={(event) => setIcon(app.id, event.target.value)} placeholder="表情" className="soft-input w-16 px-2 py-1 text-center" />
             <label className="chip chip-lilac px-2.5 py-1 text-[11px]">

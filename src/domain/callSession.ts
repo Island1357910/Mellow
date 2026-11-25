@@ -47,7 +47,7 @@ export async function runCallTurn(input: {
   const text = input.userText.trim()
   if (!text) return { assistant: null, error: '请输入内容' }
   if (callLocks.has(input.chat.id)) return { assistant: null, error: 'BUSY' }
-  if (input.chat.blocked || input.character.blocked) {
+  if (input.chat.blocked) {
     return { assistant: null, error: '已经拉黑，对方不会接。' }
   }
 
@@ -56,6 +56,12 @@ export async function runCallTurn(input: {
   callLocks.add(input.chat.id)
 
   try {
+    const current = await storage.getCharacter(input.namespace, input.character.id)
+    if (current) input = { ...input, character: current }
+    if (input.character.blocked) {
+      input.session.turns.pop()
+      return { assistant: null, error: '已经拉黑，对方不会接。' }
+    }
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
     const built = buildCallMessages({
       note: [

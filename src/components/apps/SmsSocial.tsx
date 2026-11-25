@@ -1,3 +1,4 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
 import { Camera, ChevronLeft, ChevronRight, Ellipsis, Heart, MessageCircle, Plus, Settings2 } from 'lucide-react'
 import { deleteCharacterConfirmText } from '../../domain/characterCleanup.ts'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
@@ -12,6 +13,7 @@ import type { Character, Chat, ContactFolder } from '../../types/index.ts'
 import { PillNote } from '../ui/primitives.tsx'
 import { chatTitle } from '../../lib/chats.ts'
 import { uid } from '../../lib/id.ts'
+import { importChatBackground } from '../../lib/wallpaper.ts'
 
 export interface Profile {
   nickname: string
@@ -50,22 +52,28 @@ function formatOnline(ms: number): string {
   return `${hours} 小时 ${minutes % 60} 分`
 }
 
-function pickImage(onData: (value: string) => void) {
+function chooseImage(onFile: (file: File) => void) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*'
   input.onchange = () => {
     const file = input.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onData(String(reader.result ?? ''))
-    reader.readAsDataURL(file)
+    onFile(file)
   }
   input.click()
 }
 
+function pickImage(onData: (value: string) => void) {
+  chooseImage(file => {
+    const reader = new FileReader()
+    reader.onload = () => onData(String(reader.result ?? ''))
+    reader.readAsDataURL(file)
+  })
+}
+
 function Face(props: { value: string; className: string }) {
-  if (props.value.startsWith('data:')) return <img src={props.value} alt="" className={props.className} />
+  if (isImageAvatar(props.value)) return <img src={props.value} alt="" className={props.className} />
   return <span className={`social-face grid place-items-center ${props.className}`} style={{ background: 'var(--m-secondary)' }}>{props.value || '·'}</span>
 }
 
@@ -597,7 +605,7 @@ export function PeopleTab(props: {
                     <input type="checkbox" checked={picked.includes(char.id)} onChange={() => toggle(char.id)} />
                   ) : null}
                   <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => props.onTalk(char)}>
-                    <Face value={char.avatar.startsWith('data:') ? char.avatar : initialOf(char.name)} className="h-9 w-9 overflow-hidden rounded-full text-xs" />
+                    <Face value={isImageAvatar(char.avatar) ? char.avatar : initialOf(char.name)} className="h-9 w-9 overflow-hidden rounded-full text-xs" />
                     <span className="min-w-0">
                       <span className="block truncate text-sm">{char.remark || char.name}</span>
                       {char.remark ? <span className="block truncate text-[11px]" style={{ color: 'var(--m-text-secondary)' }}>{char.name}</span> : null}
@@ -634,19 +642,43 @@ export function MeTab(props: {
 }) {
   const [editing, setEditing] = useState(false)
   const [profile, setProfile] = useState(props.profile)
+  const [pending, setPending] = useState<'save' | 'image'>()
+  const [error, setError] = useState('')
   const shown = props.profile.avatar || props.avatar
   const mine = props.moments.filter((item) => item.mine || item.author === props.profile.nickname)
   const unread = props.chats.filter((chat) => chat.unread > 0)
+  function pickProfileImage(field: 'avatar' | 'cover') {
+    chooseImage(file => {
+      setPending('image')
+      setError('')
+      const size = field === 'avatar' ? { maxBytes: 512 * 1024, maxEdge: 384 } : undefined
+      void importChatBackground(file, size)
+        .then(image => setProfile(current => ({ ...current, [field]: image })))
+        .catch(failure => setError(failure.message)).finally(() => setPending(undefined))
+    })
+  }
+  async function saveProfile() {
+    if (pending) return
+    setPending('save')
+    setError('')
+    try {
+      await props.onSave(profile)
+      setEditing(false)
+    } catch {
+      setError('资料保存失败，请检查设备可用空间后重试。')
+    } finally { setPending(undefined) }
+  }
   if (editing) {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <button type="button" className="chip" onClick={() => setEditing(false)}>返回</button>
-          <button type="button" className="chip chip-solid" onClick={() => void props.onSave(profile).then(() => setEditing(false))}>保存</button>
+          <button type="button" className="chip" disabled={Boolean(pending)} onClick={() => setEditing(false)}>返回</button>
+          <button type="button" className="chip chip-solid" disabled={Boolean(pending)} onClick={() => void saveProfile()}>{pending === 'save' ? '保存中…' : pending === 'image' ? '处理图片中…' : '保存'}</button>
         </div>
+        {error && <p role="alert">{error}</p>}
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" className="chip chip-lilac" onClick={() => pickImage((avatar) => setProfile({ ...profile, avatar }))}>更换头像</button>
-          <button type="button" className="chip chip-sky" onClick={() => pickImage((cover) => setProfile({ ...profile, cover }))}>更换主页背景</button>
+          <button type="button" className="chip chip-lilac" disabled={Boolean(pending)} onClick={() => pickProfileImage('avatar')}>更换头像</button>
+          <button type="button" className="chip chip-sky" disabled={Boolean(pending)} onClick={() => pickProfileImage('cover')}>更换主页背景</button>
         </div>
         <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>昵称<input value={profile.nickname} onChange={(event) => setProfile({ ...profile, nickname: event.target.value })} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-sm" /></label>
         <label className="block text-xs" style={{ color: 'var(--m-text-secondary)' }}>签名<input value={profile.signature} onChange={(event) => setProfile({ ...profile, signature: event.target.value })} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-sm" /></label>
@@ -673,7 +705,7 @@ export function MeTab(props: {
             <p className="truncate text-lg">{props.profile.nickname || '还没写名字'}</p>
             <p className="truncate text-xs" style={{ color: 'var(--m-text-secondary)' }}>{props.profile.signature || '写一条签名'}</p>
           </div>
-          <button type="button" aria-label="编辑资料" className="mt-2 grid h-8 w-8 place-items-center rounded-full bg-black/5" onClick={() => { setProfile(props.profile); setEditing(true) }}>
+          <button type="button" aria-label="编辑资料" className="mt-2 grid h-8 w-8 place-items-center rounded-full bg-black/5" onClick={() => { setError(''); setProfile(props.profile); setEditing(true) }}>
             <Ellipsis size={16} />
           </button>
         </div>

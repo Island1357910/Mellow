@@ -185,6 +185,7 @@ export interface ChatMessage {
   reasoning?: string
   roundId?: string
   incomingMoney?: { cents: number; totalCents?: number; claimedAt?: number }
+  workshopReply?: { workId: string; receipt: string }
 }
 
 export interface Group {
@@ -421,9 +422,10 @@ export interface MinimaxSettings {
   ready: boolean
 }
 
-export type PresetMode = 'sms' | 'offline' | 'side' | 'create' | 'table' | 'star' | 'forum'
+export type PresetMode = 'sms' | 'offline' | 'side' | 'jiushi' | 'create' | 'table' | 'star' | 'forum'
 
 export interface AppSettings {
+  phoneFontScale: number
   id: 'global'
   activeIdentityId: string
   themeId: string
@@ -504,7 +506,9 @@ export interface AIRequest {
   presencePenalty?: number
   maxTokens?: number
   timeoutMs?: number
+  signal?: AbortSignal
   antiTruncation?: boolean
+  stream?: boolean
 }
 
 export interface GenerationSettings {
@@ -518,6 +522,7 @@ export interface AIResponse {
   model: string
   provider: AIProvider
   truncated?: boolean
+  interrupted?: boolean
   recovered?: boolean
   /** 从正文标记或接口的思考字段里取出，不发回模型。 */
   reasoning?: string

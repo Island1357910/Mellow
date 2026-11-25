@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -27,6 +28,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         bridge.getWebView().setBackgroundColor(Color.rgb(253, 251, 247));
+        CookieManager.getInstance().setAcceptThirdPartyCookies(bridge.getWebView(), true);
         // User-selected songs resolve their authorized URL asynchronously.
         bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
         Window window = getWindow();

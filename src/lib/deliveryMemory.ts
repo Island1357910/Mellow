@@ -1,14 +1,46 @@
 import { storage } from '../storage/StorageService.ts'
 import type { Delivery } from './delivery.ts'
+import type { ChatMessage } from '../types/index.ts'
 
 export async function readDeliveries(namespace: string): Promise<Delivery[]> {
   return (await storage.getBag<Delivery[]>(namespace, 'deliveries')) ?? []
 }
 
+/** Reconcile real conversation before composing another arrival notification. */
+export async function syncDeliveryConversation(namespace: string, order: Delivery): Promise<Delivery> {
+  const chats = (await storage.listChats(namespace)).filter(chat => chat.kind === 'dm' && chat.memberIds.includes(order.recipient))
+  const history = (await Promise.all(chats.map(chat => storage.listMessages(namespace, chat.id)))).flat()
+    .filter(message => !message.hidden && message.createdAt >= order.createdAt && (message.kind === 'text' || message.kind === 'voice'))
+    .sort((a, b) => a.createdAt - b.createdAt)
+  const names = order.items.map(item => item.name.trim()).filter(Boolean)
+  const namesItem = (message: ChatMessage) => names.some(name => message.content.includes(name))
+  const playerConfirmed = history.some((message, index) => message.role === 'user'
+    && /(?:我|给你|帮你|替你).{0,12}(?:买|点|订|送)|(?:买|点|订|送).{0,12}(?:给你|的是我)|是我(?:买|点|订|送)?的/.test(message.content)
+    && (namesItem(message) || history.slice(Math.max(0, index - 2), index).some(namesItem)))
+  const discussed = history.some((message, index) => message.role === 'assistant' && message.charId === order.recipient
+    && message.createdAt >= order.arrivesAt
+    && (/收到了?|送到了?|拿到了?|谢谢|喜欢|好吃|好喝|吃了|喝了|尝了|用上|拆开/.test(message.content)
+      || (/^(?:嗯|是的|对|好)[，。！!\s]*$/.test(message.content.trim())
+        && history.slice(Math.max(0, index - 2), index).some(previous => previous.role === 'user' && namesItem(previous) && /收到|送到|到了/.test(previous.content))))
+    && (namesItem(message) || history.slice(Math.max(0, index - 2), index).some(previous => previous.role === 'user' && namesItem(previous))))
+  if (!playerConfirmed && !discussed) return order
+  let current = order
+  await storage.changeAppBags(namespace, ['deliveries'], bags => {
+    const orders = (bags.deliveries as Delivery[] | null) ?? []
+    return { deliveries: orders.map(saved => {
+      if (saved.id !== order.id) return saved
+      current = { ...saved, told: saved.told || playerConfirmed, reacted: saved.reacted || discussed }
+      return current
+    }) }
+  })
+  return current
+}
+
 export async function purchaseMemory(namespace: string, characterIds: string[], includeSelf = false, now = Date.now()): Promise<string> {
   const recipients = new Set(includeSelf ? [...characterIds, 'self'] : characterIds)
   if (!recipients.size) return ''
-  const orders = await readDeliveries(namespace)
+  const orders = await Promise.all((await readDeliveries(namespace)).map(order =>
+    recipients.has(order.recipient) && order.recipient !== 'self' ? syncDeliveryConversation(namespace, order) : order))
   const rows = [...recipients].flatMap((id) => orders
     .filter((order) => order.recipient === id && (id === 'self' || order.told || order.arrivesAt <= now))
     .sort((a, b) => b.createdAt - a.createdAt)

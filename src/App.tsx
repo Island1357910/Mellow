@@ -1,10 +1,11 @@
 import { Component, type ReactNode } from 'react'
 import { PhoneShell } from './components/os/PhoneShell.tsx'
+import { AccountGate } from './components/os/AccountGate.tsx'
 
 export default function App() {
   return (
     <AppErrorBoundary>
-      <PhoneShell />
+      <AccountGate><PhoneShell /></AccountGate>
     </AppErrorBoundary>
   )
 }

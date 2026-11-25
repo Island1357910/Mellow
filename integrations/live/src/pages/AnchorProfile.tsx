@@ -10,6 +10,7 @@ import { useGameTimeStore } from '../stores/useGameTimeStore';
 import { isAnchorLive, tryEnterLiveRoom } from '../utils/liveRoomEntry';
 import { host } from '../utils/mellowHost';
 import { useToastStore } from '../stores/useToastStore';
+import { useState } from 'react';
 
 export default function AnchorProfile({ anchorId }: { anchorId: string }) {
   const back = useNavStore((s) => s.back);
@@ -23,6 +24,7 @@ export default function AnchorProfile({ anchorId }: { anchorId: string }) {
   const hasReminder = scheduleReminders.includes(anchorId);
   const clock = useGameTimeStore.getState().getClock();
   const isOnline = isAnchorLive(anchorId);
+  const [addingFriend, setAddingFriend] = useState(false);
 
   if (!anchor) {
     return <div className="flex h-full items-center justify-center bg-white text-[#536471]">主播不存在</div>;
@@ -49,11 +51,14 @@ export default function AnchorProfile({ anchorId }: { anchorId: string }) {
         }
       />
       <div className="flex shrink-0 gap-2 border-b border-slate-100 px-4 py-2">
-        {(['sms', 'offline'] as const).map(mode => (
-          <button key={mode} type="button" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-[#1d9bf0]" onClick={() => {
-            void host()?.connect(anchor, mode).catch(error => useToastStore.getState().show(error instanceof Error ? error.message : '打开失败'));
-          }}>{mode === 'sms' ? '加入半糖短信' : '约线下见面'}</button>
-        ))}
+        <button type="button" disabled={addingFriend} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-[#1d9bf0] disabled:opacity-50" onClick={() => {
+          const bridge = host();
+          if (!bridge) { useToastStore.getState().show('请从半糖 Mellow 打开直播间'); return; }
+          setAddingFriend(true);
+          void bridge.connect(anchor, 'sms')
+            .catch(error => useToastStore.getState().show(error instanceof Error ? error.message : '添加好友失败，请重试'))
+            .finally(() => setAddingFriend(false));
+        }}>{addingFriend ? '正在添加…' : '添加短信好友'}</button>
       </div>
 
       <div className="no-scrollbar flex-1 overflow-y-auto pb-8">

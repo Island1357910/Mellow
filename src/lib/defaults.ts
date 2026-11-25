@@ -13,6 +13,7 @@ export const MODE_PRESET_DEFAULTS: Record<PresetMode, string> = {
   sms: 'preset_sms_alive',
   offline: 'preset_offline_scene',
   side: 'preset_side',
+  jiushi: 'preset_side',
   create: 'preset_create_standard',
   table: 'preset_table_host',
   star: 'preset_star_life',
@@ -20,7 +21,8 @@ export const MODE_PRESET_DEFAULTS: Record<PresetMode, string> = {
 }
 
 export function modePresetId(settings: AppSettings, mode: PresetMode): string {
-  return settings.modePresets?.[mode] || MODE_PRESET_DEFAULTS[mode]
+  const choice = settings.modePresets?.[mode] ?? (mode === 'jiushi' ? settings.modePresets?.side : undefined)
+  return choice === '' ? settings.activePresetId || MODE_PRESET_DEFAULTS[mode] : choice ?? MODE_PRESET_DEFAULTS[mode]
 }
 
 export const DEFAULT_DECORS: DecorCard[] = [
@@ -46,6 +48,7 @@ export function defaultHome(): HomeLayout {
 
 export function defaultSettings(activeIdentityId = ''): AppSettings {
   return {
+    phoneFontScale: 100,
     id: 'global',
     activeIdentityId,
     themeId: 'theme_macaron',
@@ -134,13 +137,16 @@ export function normalizeSettings(raw: Partial<AppSettings> | undefined): AppSet
     ...raw,
     id: 'global',
     activeIdentityId: raw?.activeIdentityId || base.activeIdentityId,
+    phoneFontScale: typeof raw?.phoneFontScale === 'number' && Number.isFinite(raw.phoneFontScale)
+      ? Math.min(130, Math.max(90, Math.round(raw.phoneFontScale)))
+      : base.phoneFontScale,
     apiModuleBindings: normalizeApiBindings(raw?.apiModuleBindings),
     generation: {
       antiTruncation: raw?.generation?.antiTruncation !== false,
       maxOutputTokens: Math.max(1024, Math.min(32768, Math.round(Number(raw?.generation?.maxOutputTokens) || 8192))),
       timeoutSeconds: Math.max(30, Math.min(600, Math.round(Number(raw?.generation?.timeoutSeconds) || 180))),
     },
-    modePresets: { ...MODE_PRESET_DEFAULTS, ...raw?.modePresets },
+    modePresets: { ...MODE_PRESET_DEFAULTS, jiushi: raw?.modePresets?.side ?? MODE_PRESET_DEFAULTS.jiushi, ...raw?.modePresets },
     installedApps: raw?.installedApps ?? [],
     appIcons: raw?.appIcons ?? {},
     iconSets: Array.isArray(raw?.iconSets) ? raw.iconSets : [],

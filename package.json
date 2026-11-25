@@ -1,7 +1,7 @@
 {
   "name": "mellow",
   "private": true,
-  "version": "2.0.4",
+  "version": "3.0.7",
   "description": "半糖 · Mellow，一台纯前端的 AI 角色小手机",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "check:earnings": "node --import ./scripts/check-env.mjs scripts/check-earnings.ts",
     "check:release": "node --import ./scripts/check-env.mjs scripts/check-release.ts",
     "check:sms": "node --import ./scripts/check-env.mjs scripts/check-sms.ts",
+    "check:workshop-phone": "node --import ./scripts/check-env.mjs scripts/check-workshop-phone.ts",
     "check:stage": "node --import ./scripts/check-env.mjs scripts/check-stage.ts",
     "check:together": "node --import ./scripts/check-env.mjs scripts/check-together.ts",
     "check:mcp": "node --import ./scripts/check-env.mjs scripts/check-mcp.ts",
@@ -35,6 +36,7 @@
     "check:table-history": "node --import ./scripts/check-env.mjs --import ./scripts/check-transaction-scope.mjs scripts/check-table-history.ts",
     "check:petal": "node scripts/check-petal.ts",
     "check:generation": "node --import ./scripts/check-env.mjs scripts/check-generation.ts",
+    "check:ai-directives": "node --import ./scripts/check-env.mjs scripts/check-ai-directives.ts",
     "check:chat-memory": "node --import ./scripts/check-env.mjs --import ./scripts/check-transaction-scope.mjs scripts/check-chat-memory.ts",
     "check:channel-delivery": "node --import ./scripts/check-env.mjs --import ./scripts/check-transaction-scope.mjs scripts/check-channel-delivery.ts",
     "check:story-continuity": "node --import ./scripts/check-env.mjs --import ./scripts/check-transaction-scope.mjs scripts/check-story-continuity.ts"
@@ -52,7 +54,7 @@
     "framer-motion": "^12.23.22",
     "jsbi": "^4.3.2",
     "lucide-react": "^0.545.0",
-    "qrcode-generator": "^2.0.4",
+    "qrcode-generator": "^2.0.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "resize-observer-polyfill": "^1.5.1",

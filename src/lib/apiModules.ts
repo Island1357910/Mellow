@@ -3,6 +3,7 @@ export const MAX_API_PROFILES = 7
 /** 每个调用入口归属一个模块；映射以模块为键，不能重复绑定。 */
 export const API_MODULES = [
   { id: 'messages', name: '短信（含通话与主动消息）' },
+  { id: 'live', name: '直播间' },
   { id: 'offline', name: '线下' },
   { id: 'side', name: '番外' },
   { id: 'romance', name: '人机恋' },

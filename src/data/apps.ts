@@ -25,6 +25,7 @@ export const PHONE_APPS: PhoneApp[] = [
   { id: 'map', name: '地图', blurb: '地点和人', tint: '#9ED9C4', dock: false, fixed: true, home: true },
   { id: 'settings', name: '设置', blurb: '接口与外观', tint: '#A9CDE8', dock: true, fixed: true, home: true },
   { id: 'tips', name: '玩机技巧', blurb: '小教程和玩法灵感', tint: '#EBD38D', dock: false, fixed: true, home: true },
+  { id: 'workshop', name: '创意工坊', blurb: '角色卡、DLC 与创作工具', tint: '#D8BCEB', dock: false, fixed: true, home: true },
   { id: 'search', name: '搜索', blurb: '地址栏', tint: '#E7E0D8', dock: false, fixed: true, home: false },
   { id: 'diary', name: '日记', blurb: '自己的一页', tint: '#E8D4B0', dock: false, fixed: false, home: true },
   { id: 'star', name: '星博', blurb: '大家的生活', tint: '#F0B7A8', dock: false, fixed: false, home: true },

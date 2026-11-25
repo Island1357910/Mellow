@@ -21,7 +21,7 @@ export async function characterFromDraft(
   namespace: string,
   draft: CardDraft,
   avatar = '',
-  options?: { skipChat?: boolean; allowProactive?: boolean },
+  options?: { skipChat?: boolean; allowProactive?: boolean; worldNamespace?: string },
 ): Promise<Character> {
   const now = Date.now()
   const character: Character = {
@@ -48,7 +48,7 @@ export async function characterFromDraft(
     updatedAt: now,
   }
   await storage.putCharacter(namespace, character)
-  await importCharacterWorld(namespace, character)
+  await importCharacterWorld(options?.worldNamespace ?? namespace, character)
   await importCharacterRegex(namespace, character)
   if (!options?.skipChat) await ensureDirectChat(namespace, character, { allowProactive: options?.allowProactive })
   return character

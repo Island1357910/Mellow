@@ -1,3 +1,4 @@
+import { isImageAvatar } from '../../lib/avatar.ts'
 import { useState } from 'react'
 import { ensureDirectChat, postUserText, replyInChat } from '../../domain/messaging.ts'
 import { modePresetId } from '../../lib/defaults.ts'
@@ -115,6 +116,6 @@ export function TavernPane(props: { identity: Identity; namespace: string; title
 }
 
 function Face(props: { avatar: string; name: string }) {
-  if (props.avatar.startsWith('data:')) return <img src={props.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+  if (isImageAvatar(props.avatar)) return <img src={props.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
   return <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs">{props.avatar || initialOf(props.name)}</span>
 }

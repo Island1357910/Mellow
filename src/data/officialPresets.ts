@@ -1,5 +1,5 @@
 import { uid } from '../lib/id.ts'
-import type { Preset, PresetData, PromptBlock } from '../types/index.ts'
+import type { Preset, PresetData, PresetMode, PromptBlock } from '../types/index.ts'
 
 /** 官方预设共用，并附在短信、通话、叙事请求末尾。只承接虚构场景，不放宽年龄与同意边界。 */
 export const SCENE_HOLD =
@@ -293,10 +293,11 @@ export const OFFICIAL_PRESETS: Preset[] = [
   }),
 ]
 
-export const PRESET_GROUPS: Array<{ id: 'sms' | 'offline' | 'side' | 'create' | 'table' | 'star' | 'forum'; label: string; hint: string; ids: string[] }> = [
+export const PRESET_GROUPS: Array<{ id: PresetMode; label: string; hint: string; ids: string[] }> = [
   { id: 'sms', label: '短信', hint: '聊天回复的口气', ids: ['preset_sms_alive', 'preset_sms_short', 'preset_sms_warm', 'preset_sms_cold', 'preset_sms_night'] },
   { id: 'offline', label: '线下', hint: '面对面时怎么往下写', ids: ['preset_offline_scene', 'preset_offline_quiet', 'preset_offline_move'] },
   { id: 'side', label: '番外', hint: '另一条世界线', ids: ['preset_side', 'preset_side_soft', 'preset_side_sharp'] },
+  { id: 'jiushi', label: '旧世', hint: '入幕与传书的写法', ids: ['preset_side', 'preset_side_soft', 'preset_side_sharp'] },
   { id: 'create', label: '创作', hint: '一键出卡写多细', ids: ['preset_create_novice', 'preset_create_standard', 'preset_create_deep'] },
   { id: 'table', label: '桌游', hint: '主持人和同桌的口气', ids: ['preset_table_host', 'preset_table_soft', 'preset_table_strict'] },
   { id: 'star', label: '星博', hint: '评论区怎么接话', ids: ['preset_star_life', 'preset_star_loud'] },

@@ -557,7 +557,6 @@ export function HomeScreen() {
                     key={cell.id}
                     cell={cell}
                     index={index}
-                    compact={pageIndex > 0}
                     badge={cell.kind === 'app' && cell.id === 'messages' ? unread : 0}
                     merging={ghost?.merge === true && ghost.over === index}
                     onOpen={() => openCell(cell)}
@@ -616,6 +615,7 @@ export function HomeScreen() {
           identity={phone}
           onSearch={runSearch}
           onClose={() => setBrowser(null)}
+          onOpenSettings={() => { setBrowser(null); openApp('settings') }}
           onSent={(chatId) => {
             touchData()
             setBrowser(null)
@@ -793,7 +793,6 @@ function Page2Fill(props: { namespace: string; decors: DecorCard[]; onDecor: (id
 }
 
 function HomeSlot(props: {
-  compact: boolean
   cell: HomeCell
   index: number
   badge: number
@@ -836,7 +835,7 @@ function HomeSlot(props: {
             })}
           </span>
         ) : (
-          <AppGlyph id={cell.id} tint={tint} size={props.compact ? 40 : 52} />
+          <AppGlyph id={cell.id} tint={tint} size={56} />
         )}
         {props.badge > 0 ? (
           <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] text-white" style={{ background: 'var(--m-accent)', height: 16 }}>

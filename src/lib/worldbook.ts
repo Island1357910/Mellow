@@ -1,6 +1,8 @@
 import { loreEntries } from './sillytavern.ts'
 import { uid } from './id.ts'
 import { storage } from '../storage/StorageService.ts'
+import { jiushiWorldNs } from './jiushiPhone.ts'
+import { fillCharacterPrompt } from './presetPrompt.ts'
 import type { Character } from '../types/index.ts'
 
 export interface WorldEntry {
@@ -10,6 +12,7 @@ export interface WorldEntry {
   content: string
   enabled: boolean
   updatedAt: number
+  constant?: boolean
   /** 绑定角色；有值时仅该角色对话/剧情会注入 */
   charId?: string
   /** 来自角色卡一键导入；再次导入同角色时会替换这批 */
@@ -44,19 +47,24 @@ export async function updateWorld(namespace: string, change: (rows: WorldEntry[]
   return next.worldbook as WorldEntry[]
 }
 
-export function saveCharacterProfile(namespace: string, charId: string, profile: CharacterProfile) {
-  return storage.changeCharacterWithBag<WorldEntry[]>(namespace, charId, 'worldbook', (character, rows) => {
-    const updatedAt = Date.now()
-    const next = { ...character, ...profile, updatedAt }
-    const value = (rows ?? []).flatMap((row) => {
+export async function saveCharacterProfile(namespace: string, charId: string, profile: CharacterProfile, worldNamespace = namespace) {
+  const updatedAt = Date.now()
+  const syncRows = (rows: WorldEntry[], character: Character) =>
+    rows.flatMap((row) => {
       if (row.charId !== charId || !row.cardImport || row.keys !== character.name) return [row]
       const field = CHARACTER_PROFILE_FIELDS.find(([key, title]) => row.title === title && row.content === character[key].trim())
-      if (!field || next[field[0]] === character[field[0]]) return [row]
-      const content = next[field[0]].trim()
+      if (!field || profile[field[0]] === character[field[0]]) return [row]
+      const content = profile[field[0]].trim()
       return content ? [{ ...row, content, updatedAt }] : []
     })
-    return { character: next, value }
+  let previous: Character | undefined
+  const saved = await storage.changeCharacterWithBag<WorldEntry[]>(namespace, charId, 'worldbook', (character, rows) => {
+    previous = character
+    return { character: { ...character, ...profile, updatedAt }, value: syncRows(rows ?? [], character) }
   })
+  if (worldNamespace === namespace || !previous) return saved
+  const original = previous
+  return { character: saved.character, value: await updateWorld(worldNamespace, rows => syncRows(rows, original)) }
 }
 
 export function filterWorldForSms(rows: WorldEntry[], charId: string, smsWorldOff: string[] = []): WorldEntry[] {
@@ -68,28 +76,56 @@ export function filterWorldForSms(rows: WorldEntry[], charId: string, smsWorldOf
   })
 }
 
-export async function enabledWorldText(namespace: string, charId?: string | string[], smsWorldOff: string[] = []): Promise<string> {
-  const ids = new Set(typeof charId === 'string' ? [charId] : charId)
-  const off = new Set(smsWorldOff)
-  const on = (await readWorld(namespace)).filter((item) => {
-    if (!item.enabled || !item.content.trim()) return false
-    if (off.has(item.id)) return false
-    return !item.charId || ids.has(item.charId)
+/** 早期旧世导卡曾把绑定条目写入现代世界书。只补入还未迁移的旧世角色。 */
+export async function migrateJiushiCardWorld(phoneNamespace: string, charIds: string[]): Promise<void> {
+  if (!charIds.length) return
+  const namespace = jiushiWorldNs(phoneNamespace)
+  const migrationKey = 'jiushi_card_world_migrated'
+  const done = await storage.getBag<string[]>(namespace, migrationKey) ?? []
+  const pending = new Set(charIds.filter(id => !done.includes(id)))
+  if (!pending.size) return
+  const legacy = (await readWorld(phoneNamespace)).filter(entry => entry.cardImport && entry.charId && pending.has(entry.charId))
+  await storage.changeAppBags(namespace, ['worldbook', migrationKey], bags => {
+    const current = (bags.worldbook as WorldEntry[] | null) ?? []
+    const migrated = new Set((bags[migrationKey] as string[] | null) ?? [])
+    const synced = new Set(current.filter(entry => entry.cardImport).map(entry => entry.charId))
+    const additions = legacy.filter(entry => !migrated.has(entry.charId!) && !synced.has(entry.charId))
+    return {
+      worldbook: [...current, ...additions],
+      [migrationKey]: [...new Set([...migrated, ...pending])],
+    }
   })
-  if (!on.length) return ''
-  const body = on.map((item) => `【${item.title.trim() || '未命名'}】${item.content.trim()}`).join('\n')
-  return `这个身份启用的世界书，用到才写，不要逐条复述：\n${body.slice(0, 1800)}`
 }
 
-/** Offline retrieval follows both ownership and configured keywords, rather than sending every entry. */
-export async function storyWorldText(namespace: string, people: Character[], recent: string): Promise<string> {
-  const ids = new Set(people.map(person => person.id))
+export async function storyWorldText(namespace: string, people: Character[], recent: string, options: {
+  off?: string[]
+  userName?: string
+} = {}): Promise<string> {
+  const owners = new Map(people.map(person => [person.id, person]))
+  const off = new Set(options.off)
   const context = `${recent}\n${people.map(person => `${person.name} ${person.nickname ?? ''}`).join('\n')}`.toLowerCase()
-  return (await readWorld(namespace)).filter(entry => {
-    if (!entry.enabled || !entry.content.trim() || (entry.charId && !ids.has(entry.charId))) return false
+  const stored = await readWorld(namespace)
+  const imported = new Set(stored.filter(entry => entry.cardImport).map(entry => entry.charId))
+  const originalLore = people.flatMap(person => loreEntries(person.characterBook).map(entry => ({
+    charId: person.id,
+    title: entryTitle(entry),
+    content: entry.content,
+    keys: keysToString(entry.keys),
+    enabled: entryEnabled(entry),
+    constant: entry.constant === true,
+  })))
+  const always = new Set(originalLore.filter(entry => entry.constant).map(entry => JSON.stringify([entry.charId, entry.title, entry.keys])))
+  return [...stored, ...originalLore.filter(entry => !imported.has(entry.charId))].filter(entry => {
+    if (!entry.enabled || !entry.content.trim() || (entry.charId && !owners.has(entry.charId))) return false
+    if ('id' in entry && off.has(entry.id)) return false
     const keys = (entry.keys ?? '').split(/[,，、;；|\n]+/).map(key => key.trim().toLowerCase()).filter(Boolean)
-    return !keys.length || keys.some(key => context.includes(key))
-  }).map(entry => `【${entry.charId ? people.find(person => person.id === entry.charId)?.name ?? entry.charId : '公共世界'} · ${entry.title || '设定'}】${entry.content.trim()}`).join('\n')
+    return (entry.constant ?? ('cardImport' in entry && entry.cardImport && always.has(JSON.stringify([entry.charId, entry.title, entry.keys]))))
+      || !keys.length || keys.some(key => context.includes(key))
+  }).map(entry => {
+    const owner = entry.charId ? owners.get(entry.charId) : undefined
+    const body = options.userName ? fillCharacterPrompt(entry.content.trim(), options.userName, owner ?? people[0]) : entry.content.trim()
+    return `【${owner?.name ?? '公共世界'} · ${entry.title || '设定'}】${body}`
+  }).join('\n')
 }
 
 export function blankEntry(charId = ''): WorldEntry {
@@ -134,7 +170,7 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
   for (const entry of loreEntries(book)) {
     if (!entry.content.trim()) continue
     const title = entryTitle(entry)
-    rows.push(stamp(title, entry.content, keysToString(entry.keys), entryEnabled(entry)))
+    rows.push({ ...stamp(title, entry.content, keysToString(entry.keys), entryEnabled(entry)), constant: entry.constant === true })
   }
   for (const [key, title] of CHARACTER_PROFILE_FIELDS) {
     if (character[key].trim()) rows.push(stamp(title, character[key], character.name))
@@ -158,7 +194,6 @@ export function worldEntriesFromCharacter(character: Character): WorldEntry[] {
 /** 导入角色时，把卡内世界书与提示词写入身份世界书（绑定该角色）。 */
 export async function importCharacterWorld(namespace: string, character: Character): Promise<number> {
   const incoming = worldEntriesFromCharacter(character)
-  if (incoming.length === 0) return 0
   await updateWorld(namespace, (rows) => [...incoming, ...rows.filter((item) => !(item.charId === character.id && item.cardImport))])
   return incoming.length
 }

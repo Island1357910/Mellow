@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { storage } from '../src/storage/StorageService.ts'
 import { writeCharacter } from '../src/domain/importing.ts'
 import { AIAdapter } from '../src/engine/AIAdapter.ts'
-import { postPaidGiftMessage, postUserText } from '../src/domain/messaging.ts'
+import { createGroupChat, postPaidGiftMessage, postUserText } from '../src/domain/messaging.ts'
 import { useMellow } from '../src/store/useMellow.ts'
 import { isAiJobRunning, jobKey } from '../src/engine/aiJobs.ts'
 import {
@@ -172,6 +172,10 @@ try {
   assert.ok(!(await storage.listMessages(ns,chat.id)).some(m=>m.id==='failed_paid_gift'))
   assert.ok(!(await readSharedLife(ns)).gifts.some(g=>g.id.startsWith('failed_paid_gift')))
   assert.equal(await readCoins(ns),870)
+  const giftGroup = await createGroupChat(ns, '线上送礼测试', [person.id, other.id], identity.id)
+  await postPaidGiftMessage({ ...paid, chat: giftGroup, recipient: other.id, text: '[礼物] 🌹｜玫瑰 ×1｜送给 顾禾｜', cost: 2, requestId: 'recipient_gift' })
+  assert.equal(await readCoins(ns), 868)
+  assert.deepEqual((await readSharedLife(ns)).gifts.filter(g => g.id.startsWith('recipient_gift:')).map(g => [g.charId, g.status]), [[other.id, 'received']])
   const beforeOff = calls
   await tickSharedLife({ identity, settings, presets: snapshot.presets }, now + 4 * DAY)
   assert.equal(calls, beforeOff, 'disabled proactive messaging does not call AI')

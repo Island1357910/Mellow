@@ -1,3 +1,4 @@
+import { phoneFontSize } from '../../lib/phoneFont.ts'
 import { NumericInput } from '../ui/NumericInput.tsx'
 import { ColorField } from './AppearanceEditor.tsx'
 import { importChatBackground } from '../../lib/wallpaper.ts'
@@ -32,7 +33,7 @@ import { PillNote } from '../ui/primitives.tsx'
 type Tab = 'read' | 'saves' | 'memory' | 'regex' | 'persona'
 
 const dim = { color: 'var(--m-text-secondary)' }
-const small = { fontSize: 12, padding: '4px 12px' }
+const small = { fontSize: phoneFontSize(12), padding: '4px 12px' }
 
 function SwitchRow(props: { label: string; hint?: string; on: boolean; onClick: () => void }) {
   return (
@@ -170,7 +171,7 @@ function ReadTab(props: { mode: StoryMode; reading: ReadingStyle; onChange: (rea
     <>
       <Block title="预览">
         <div data-custom-backdrop className="rounded-2xl p-3" style={{ background: r.backgroundImage ? `center / cover url("${r.backgroundImage}")` : r.background || '#FBF7F4' }}>
-          <p className="rounded-[18px] px-3.5 py-2.5" style={{ background: r.paper, fontFamily: FONT_STACK[r.font], fontSize: r.fontSize, lineHeight: r.lineHeight }}>
+          <p className="rounded-[18px] px-3.5 py-2.5" style={{ background: r.paper, fontFamily: FONT_STACK[r.font], fontSize: phoneFontSize(r.fontSize), lineHeight: r.lineHeight }}>
             雨停了，街角的灯一盏一盏亮起来。他把伞收好，回头看你：<span style={{ color: `var(--m-quote-ink, ${r.quoteColor})` }}>“走吧，我知道一家还开着的店。”</span>
           </p>
         </div>
@@ -255,7 +256,7 @@ function SavesTab(props: TabProps) {
         <p className="mt-2 text-[11px]" style={dim}>共 {props.save.lines.length} 段 · {props.save.summaries.length} 条摘要</p>
         <button type="button" className="chip chip-danger mt-3 w-full py-2" onClick={props.onClear}>清空聊天记录</button>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" className="chip chip-lilac py-2" onClick={() => void props.onNew({ ...newSave(`${props.save.name} 副本`), ...structuredClone({ lines: props.save.lines, summaries: props.save.summaries, charId: props.save.charId, charIds: props.save.charIds, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books }) })}>复制一份</button>
+          <button type="button" className="chip chip-lilac py-2" onClick={() => void props.onNew({ ...newSave(`${props.save.name} 副本`), ...structuredClone({ lines: props.save.lines, summaries: props.save.summaries, charId: props.save.charId, charIds: props.save.charIds, persona: props.save.persona, bookCharIds: props.save.bookCharIds, books: props.save.books, workshopWorkId: props.save.workshopWorkId }) })}>复制一份</button>
           <button type="button" className="chip chip-sky py-2" onClick={() => downloadJson(`${props.save.name}.json`, { kind: 'mellow-story', save: props.save })}><Download size={13} />导出</button>
         </div>
       </Block>
@@ -270,7 +271,7 @@ function SavesTab(props: TabProps) {
                   <span className="block truncate text-sm">{row.name}</span>
                   <span className="block truncate text-[11px]" style={dim}>{row.count} 段 · {new Date(row.updatedAt).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </span>
-                {current ? <span className="chip chip-mint" style={{ fontSize: 11, padding: '3px 10px' }}>正在读</span> : <button type="button" className="chip" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => props.onSwitch(row.id)}>读取</button>}
+                {current ? <span className="chip chip-mint" style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }}>正在读</span> : <button type="button" className="chip" style={{ fontSize: phoneFontSize(11), padding: '3px 10px' }} onClick={() => props.onSwitch(row.id)}>读取</button>}
                 <button type="button" aria-label="删除存档" className="grid h-7 w-7 place-items-center rounded-full bg-[#FBE3E3] text-[#b0505c]" onClick={() => {
                   if (window.confirm(`删除「${row.name}」？删除后不能恢复。`)) void props.onDelete(row.id)
                 }}><Trash2 size={12} /></button>
@@ -313,7 +314,7 @@ function MemoryTab(props: TabProps) {
   return (
     <>
       <Block title="上下文">
-        {props.mode === 'offline' && <SwitchRow label="发送角色卡附加内容" hint="额外发送背景开场、示例对白、卡内系统指令和后置指令。默认关闭；人物描述和性格始终保留。" on={config.includeCardExtras} onClick={() => props.onConfig({ includeCardExtras: !config.includeCardExtras })} />}
+        {props.mode === 'offline' && <SwitchRow label="发送角色卡附加内容" hint="额外发送示例对白、卡内系统指令和后置指令。人物描述、性格和情境始终保留。" on={config.includeCardExtras} onClick={() => props.onConfig({ includeCardExtras: !config.includeCardExtras })} />}
         <div className="grid grid-cols-2 gap-2">
           <Num label="最近几轮保留原文" value={config.keepRounds} min={1} max={100} onChange={(keepRounds) => props.onConfig({ keepRounds })} />
         </div>

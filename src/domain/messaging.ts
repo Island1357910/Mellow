@@ -1,4 +1,5 @@
 import { moduleAdapter, readJson } from '../lib/ask.ts'
+import { playInWorkshopPhone, workshopWorkOf } from '../lib/workshopPhone.ts'
 import { canGenerateAppImages, characterLookSummary, compactPortrait, generateAppImage, portraitLockOf, SMS_IMAGE_RULE, smsImageDirection, takeSmsImage, usesSenderLook } from '../lib/appImages.ts'
 import { SMS_MONEY_RULE, takeSmsMoney } from './chatMoney.ts'
 import { takePaymentDecision, takeWalletActivity, WALLET_ACTIVITY_RULE } from './characterWallet.ts'
@@ -12,7 +13,7 @@ import { purchaseMemory } from '../lib/deliveryMemory.ts'
 import { momentMemory } from '../lib/socialAi.ts'
 import { AIError } from '../engine/AIAdapter.ts'
 import { eventBus } from '../engine/EventBus.ts'
-import { searchNoteFor } from './glance.ts'
+import { markGlanceSeen, pendingGlance, takeGlanceMark } from './glance.ts'
 import { glanceExplainNote, userAskedHowYouKnow } from '../lib/glanceExplain.ts'
 import { maybeEnrichNearby } from '../lib/nearbyEnrich.ts'
 import { nearbyLifeNote } from '../lib/nearbyContact.ts'
@@ -20,7 +21,7 @@ import { buildSmsMessages, describeMessage, pickPreset } from '../engine/prompt.
 import { noteRemoteChat } from '../engine/space.ts'
 import { uid } from '../lib/id.ts'
 import { messagePreview } from '../lib/messagePreview.ts'
-import { enabledWorldText } from '../lib/worldbook.ts'
+import { storyWorldText } from '../lib/worldbook.ts'
 import { buildSmsReplySegments, isPageBanner, SMS_SPLIT, stripVoicePrefix } from '../lib/smsReply.ts'
 import { stripThinkingFromSms } from '../lib/smsSanitize.ts'
 import { deliverReplyParts } from './replyDelivery.ts'
@@ -32,10 +33,28 @@ import { directivePrompt } from '../lib/directives.ts'
 import { mergeThought, takeReasoning } from '../lib/reasoning.ts'
 import { loadStickerLibrary, visibleStickers } from '../lib/stickerLibrary.ts'
 import { maybeWriteStage } from '../lib/stage.ts'
+import { modePresetId } from '../lib/defaults.ts'
 
 const replyLocks = new Set<string>()
 import { storage } from '../storage/StorageService.ts'
 import type { Character, Chat, ChatMessage, Identity, Preset } from '../types/index.ts'
+
+async function currentSmsContext<T extends {
+  namespace: string; chat: Chat; character: Character; identity: Identity
+  presets: Preset[]; activePresetId: string; fourthWall: boolean
+}>(input: T): Promise<T> {
+  const [chat, character, settings, presets, identities] = await Promise.all([
+    storage.getChat(input.namespace, input.chat.id),
+    storage.getCharacter(input.namespace, input.character.id),
+    storage.getSettings(),
+    storage.listPresets(),
+    storage.listIdentities(),
+  ])
+  return { ...input, chat: chat ?? input.chat, character: character ?? input.character,
+    identity: identities.find(identity => identity.id === input.identity.id && identity.namespace === input.namespace) ?? input.identity,
+    presets: presets.length ? presets : input.presets, activePresetId: modePresetId(settings, 'sms'), fourthWall: settings.fourthWall,
+  }
+}
 
 function textMessage(input: {
   chatId: string
@@ -156,18 +175,20 @@ export async function postUserText(input: {
   return userMessage
 }
 
-export async function postPaidGiftMessage(input: { namespace: string; identity: Identity; chat: Chat; text: string; cost: number; requestId: string }): Promise<void> {
+export async function postPaidGiftMessage(input: { namespace: string; identity: Identity; chat: Chat; text: string; cost: number; requestId: string; recipient?: string }): Promise<void> {
   const people = await storage.listModernCharacters(input.namespace)
   const parts = input.text.replace(/^\[[^\]]+\]\s*/, '').split('｜')
   const name = parts[1]?.trim()
   if (!name) throw Error('请选择一份礼物')
   const recipients = input.chat.memberIds.filter(id => {
     const p = people.find(p => p.id === id)
-    return p && !p.blocked && (input.chat.kind === 'dm' || /全体|所有/.test(parts[2] ?? '') || parts[2]?.includes(p.nickname || p.name))
+    if (!p || p.blocked) return false
+    if (input.recipient !== undefined) return input.recipient === id || (input.recipient === 'all' && input.chat.kind === 'group')
+    return input.chat.kind === 'dm' || /全体|所有/.test(parts[2] ?? '') || parts[2]?.includes(p.nickname || p.name)
   })
   if (!recipients.length) throw Error('没有可以接收礼物的人')
   const message = { ...textMessage({ chatId: input.chat.id, role: 'user', kind: 'gift', content: input.text.trim(), charId: null }), id: input.requestId }
-  await walletTask(input.namespace,()=>storage.commitPaidChatMessage(input.namespace, input.chat.id, message, input.cost, SHARED_LIFE_KEY, saved => {
+  const committed = await walletTask(input.namespace,()=>storage.commitPaidChatMessage(input.namespace, input.chat.id, message, input.cost, SHARED_LIFE_KEY, saved => {
     let s = normalizeSharedLife(saved as SharedLife | null)
     for (const charId of recipients) {
       const id = message.id + ':' + charId
@@ -175,6 +196,7 @@ export async function postPaidGiftMessage(input: { namespace: string; identity: 
     }
     return s
   }))
+  if (!committed) return
   eventBus.emit({ type: 'send_message', app: 'messages', identityId: input.identity.id, meta: { chatId: input.chat.id } })
   useMellow.getState().touchData()
 }
@@ -368,6 +390,19 @@ export async function chooseGroupSpeakers(input: {
   throw new Error('未能安排这轮群聊的多人接话，请重试。')
 }
 
+async function replyWithWorkshop(input: { namespace: string; chat: Chat; character: Character }, workId: string, history: ChatMessage[], action?: string) {
+  const messages = history.map(item => item.role === 'user' && item.kind !== 'text'
+    ? { ...item, content: describeMessage(item) }
+    : item)
+  const result = await playInWorkshopPhone({ namespace: input.namespace, workId, channel: 'sms', history: messages, action })
+  const reply = { ...textMessage({
+    chatId: input.chat.id, charId: input.character.id, role: 'assistant', content: result.text,
+  }), workshopReply: result.workshopReply }
+  await storage.putMessage(input.namespace, reply)
+  await touchChat(input.namespace, input.chat, reply.content, 1, reply.kind)
+  return reply
+}
+
 export async function replyInChat(input: {
   namespace: string
   identity: Identity
@@ -380,30 +415,34 @@ export async function replyInChat(input: {
   proactive?: boolean
   triggerNote?: string
 }): Promise<ChatMessage> {
-  if (replyLocks.has(input.chat.id)) {
+  const lock = jobKey(input.namespace, 'sms-reply', input.chat.id)
+  if (replyLocks.has(lock)) {
     throw new AIError('BUSY', 'api')
   }
-  if (input.chat.blocked || input.character.blocked) {
-    const system = textMessage({
-      chatId: input.chat.id,
-      role: 'system',
-      kind: 'system',
-      content: '已经拉黑，对方不会回。',
-      charId: null,
-    })
-    await storage.putMessage(input.namespace, system)
-    return system
-  }
-  replyLocks.add(input.chat.id)
+  replyLocks.add(lock)
   try {
+    input = await currentSmsContext(input)
+    if (input.chat.blocked || input.character.blocked) {
+      const system = textMessage({
+        chatId: input.chat.id, role: 'system', kind: 'system', content: '已经拉黑，对方不会回。', charId: null,
+      })
+      await storage.putMessage(input.namespace, system)
+      return system
+    }
     const all = await storage.listMessages(input.namespace, input.chat.id)
-    const history = all.filter((item) => item.kind !== 'system').slice(-(input.chat.contextLimit ?? 30))
+    const history = smsSeenHistory(all, input.chat.kind === 'dm' ? input.character.id : undefined).slice(-(input.chat.contextLimit ?? 30))
+    const workId = workshopWorkOf(input.character)
+    if (workId) return await replyWithWorkshop(input, workId, history, input.triggerNote)
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
-    const glance = await searchNoteFor(input.namespace, input.character.id)
+    const glance = input.chat.kind === 'dm' && !input.proactive
+      ? await pendingGlance(input.namespace, input.character.id) : null
     const explain =
-      userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
+      input.chat.kind === 'dm' && !glance && userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
-    const world = await enabledWorldText(input.namespace, input.character.id, input.chat.smsWorldOff ?? [])
+    const world = await storyWorldText(input.namespace, [input.character], history.slice(-6).map(item => item.content).join('\n'), {
+      off: input.chat.smsWorldOff,
+      userName: input.identity.name,
+    })
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const sharedContent = await togetherNoteFor(input.namespace, input.character.id)
     const stickers = visibleStickers(await loadStickerLibrary())
@@ -416,6 +455,7 @@ export async function replyInChat(input: {
       identity: input.identity,
       preset,
       history,
+      world,
       groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
@@ -439,10 +479,9 @@ export async function replyInChat(input: {
         await sharedLifeNote(input.namespace, input.character.id, Date.now(), input.chat.kind === 'dm'),
         input.triggerNote ?? '',
         input.proactive && !input.triggerNote ? '玩家有一会儿没回了，可以自然地主动发一条，不要提时间或「怎么不回」。' : '',
-        input.triggerNote ? '' : glance,
+        glance?.note,
         explain,
         life,
-        world,
       ].filter(Boolean).join('\n'),
     })
     const adapter = await moduleAdapter('messages')
@@ -456,14 +495,20 @@ export async function replyInChat(input: {
       presencePenalty: built.presencePenalty,
       maxTokens: Math.min(1600, 220 * max),
     })
-    const { body, prompt: imagePrompt } = takeSmsImage(stripThinkingFromSms(response.content))
+    const glanceReply = takeGlanceMark(stripThinkingFromSms(response.content))
+    const { body, prompt: imagePrompt } = takeSmsImage(glanceReply.body)
     const authorization = takePaymentDecision(body)
     const { body: moneyBody, payment } = takeSmsMoney(authorization.body, input.identity.name, input.chat.kind === 'group' ? input.chat.memberIds.length : 0)
     const { body: replyBody, activity } = takeWalletActivity(moneyBody)
     const { text, change } = takeProfileChange(replyBody)
     const thought = replyThought(response.content, response.reasoning)
     const roundId = uid('round')
-    const parts: Parameters<typeof deliverReplyParts>[0]['parts'] = text || !payment ? buildSmsReplySegments(text || '……', range, stickers) : []
+    const parts: Parameters<typeof deliverReplyParts>[0]['parts'] = text || (!payment && !glance) ? buildSmsReplySegments(text || '……', range, stickers) : []
+    if (glance) {
+      const firstText = parts.find(part => part.kind === 'text')
+      if (!firstText) parts.unshift({ kind: 'text', content: glance.fallback })
+      else if (!glanceReply.mentioned) firstText.content += `\n${glance.fallback}`
+    }
     if (payment) parts.push(payment)
     const delivery: Parameters<typeof deliverReplyParts>[0] = {
       namespace: input.namespace,
@@ -480,6 +525,9 @@ export async function replyInChat(input: {
       }),
     }
     const replies = await deliverReplyParts(delivery)
+    if (glance && replies.some(reply => reply.kind === 'text' || reply.kind === 'voice')) {
+      await markGlanceSeen(input.namespace, input.character.id, glance).catch(() => undefined)
+    }
     if (activity && replies.some(reply => (reply.kind === 'text' || reply.kind === 'voice') && reply.content.includes(activity.evidence))) {
       const event = `${new Date().toDateString()}:${activity.evidence.replace(/\s/g, '')}`
       await storage.updateCharacterWallet(input.namespace, input.character.id, current => {
@@ -533,10 +581,16 @@ export async function replyInChat(input: {
     }
     const last = replies[replies.length - 1] ?? textMessage({ chatId: input.chat.id, role: 'assistant', content: text, charId: input.character.id })
     const ownImage = [...replies].reverse().find((item) => item.kind === 'image' && item.content.startsWith('data:'))?.content
-    await applyProfileChange(input.namespace, input.character, input.chat.id, all, change, ownImage)
+    await applyProfileChange(input.namespace, input.character, input.chat.id, history, change, ownImage)
     if (replies.length) scheduleChatMemory(input.namespace, input.chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...all, ...replies])
-    if(!input.proactive&&input.chat.kind==='dm')runAiJob(jobKey(input.namespace,'shared-life-observe',last.id),async()=>{try{await observeSharedLifeTurn(input.namespace,input.character,[...all,...replies],last.id)}catch{/* 后台观察失败不影响已经送达的短信 */}})
+    const playerTurn = history.findLast(item => item.role === 'user')
+    if (!input.proactive && input.chat.kind === 'dm' && replies.length && playerTurn) {
+      runAiJob(jobKey(input.namespace, 'shared-life-observe', playerTurn.id), async () => {
+        try { await observeSharedLifeTurn(input.namespace, input.character, [...history, ...replies], last.id) }
+        catch { /* 后台观察失败不影响已经送达的短信 */ }
+      })
+    }
     if (!input.proactive && input.chat.kind === 'dm' && replies.length) {
       const playerLine = [...history].reverse().find((item) => item.role === 'user')?.content ?? ''
       maybeWriteStage({ namespace: input.namespace, character: input.character, playerLine, reply: text })
@@ -561,7 +615,7 @@ export async function replyInChat(input: {
     await storage.putMessage(input.namespace, system)
     return system
   } finally {
-    replyLocks.delete(input.chat.id)
+    replyLocks.delete(lock)
   }
 }
 
@@ -593,11 +647,22 @@ export async function deliverSms(input: {
   })
 
   try {
+    input = await currentSmsContext({ ...input, chat })
     const history = await storage.listMessages(input.namespace, input.chat.id)
+    const workId = workshopWorkOf(input.character)
+    if (workId) {
+      if (input.chat.blocked || input.character.blocked) throw new Error('已经拉黑，对方不会回。')
+      return await replyWithWorkshop(input, workId, smsSeenHistory(history, input.chat.kind === 'dm' ? input.character.id : undefined))
+    }
+    const recent = smsSeenHistory(history, input.chat.kind === 'dm' ? input.character.id : undefined).slice(-6)
+    const world = await storyWorldText(input.namespace, [input.character], recent.map(item => item.content).join('\n'), {
+      off: input.chat.smsWorldOff,
+      userName: input.identity.name,
+    })
     const preset = pickPreset(input.presets, input.activePresetId, input.character.presetId, input.chat.presetId)
-    const glance = await searchNoteFor(input.namespace, input.character.id)
+    const glance = input.chat.kind === 'dm' ? await pendingGlance(input.namespace, input.character.id) : null
     const explain =
-      userAskedHowYouKnow(history) ? await glanceExplainNote(input.namespace, input.character.id) : ''
+      input.chat.kind === 'dm' && !glance && userAskedHowYouKnow(recent) ? await glanceExplainNote(input.namespace, input.character.id) : ''
     const life = await nearbyLifeNote(input.namespace, input.character)
     const storyBridge = input.chat.kind === 'group' ? '' : await storyBridgeForSms(input.namespace, input.character)
     const stickers = visibleStickers(await loadStickerLibrary())
@@ -607,6 +672,7 @@ export async function deliverSms(input: {
       identity: input.identity,
       preset,
       history,
+      world,
       groupMembers: input.chat.kind === 'group' ? (await storage.listModernCharacters(input.namespace)).filter(person => input.chat.memberIds.includes(person.id)).map(person => ({ id: person.id, name: person.nickname || person.name })) : undefined,
       fourthWall: input.fourthWall,
       priority: storyBridge,
@@ -620,7 +686,7 @@ export async function deliverSms(input: {
         input.chat.kind === 'dm' ? await purchaseMemory(input.namespace, [input.character.id]) : '',
         await sharedLifeNote(input.namespace, input.character.id),
         await mapMemoryNote(input.namespace, input.character.id),
-        glance, explain, life,
+        glance?.note, explain, life,
         await togetherNoteFor(input.namespace, input.character.id),
       ].filter(Boolean).join('\n'),
     })
@@ -633,15 +699,18 @@ export async function deliverSms(input: {
       presencePenalty: built.presencePenalty,
       maxTokens: 800,
     })
+    const glanceReply = takeGlanceMark(stripThinkingFromSms(response.content))
+    const text = stripVoicePrefix(glanceReply.body)
     const reply = textMessage({
       chatId: input.chat.id,
       role: 'assistant',
-      content: stripVoicePrefix(stripThinkingFromSms(response.content)) || '……',
+      content: (glance && (!text || !glanceReply.mentioned) ? [text, glance.fallback].filter(Boolean).join('\n') : text) || '……',
       charId: input.character.id,
       reasoning: replyThought(response.content, response.reasoning),
       roundId: uid('round'),
     })
     await storage.putMessage(input.namespace, reply)
+    if (glance) await markGlanceSeen(input.namespace, input.character.id, glance).catch(() => undefined)
     await touchChat(input.namespace, chat, reply.content, 1, reply.kind)
     scheduleChatMemory(input.namespace, chat.id)
     if (input.chat.kind === 'dm') void maybeEnrichNearby(input.namespace, input.character, [...history, userMessage, reply])

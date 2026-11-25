@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!server.mjs
+!content.mjs
+!upstream.mjs
+!play-privacy.mjs
+!schema.sql

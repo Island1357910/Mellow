@@ -85,6 +85,14 @@ button {
   padding-right: max(12px, env(safe-area-inset-right, 0px));
 }
 .conversation-composer { flex-shrink: 0; }
+/* Keep the on-screen keyboard from triggering focus zoom in iOS Safari. */
+@media (pointer: coarse) {
+  .conversation-composer :is(input, textarea) {
+    font-size: calc(16px);
+    font-size: max(16px, calc(16px * var(--m-font-scale, 1)));
+  }
+}
+
 .conversation-shell > .scroll {
   padding-left: 16px;
   padding-right: 16px;
@@ -132,10 +140,13 @@ button {
     var(--m-background);
   color: var(--m-text);
   font-family: var(--m-font);
+  font-size: 1rem;
   user-select: none;
   -webkit-user-select: none;
   transition: background-color 0.45s ease, color 0.45s ease;
 }
+
+.modal-portal { font-size: 1rem; }
 
 .device input,
 .device textarea,
@@ -280,24 +291,40 @@ button {
   gap: 2px;
 }
 
-.full-page-board .app-folder {
-  width: 40px;
-  height: 40px;
-  padding: 3px;
-  gap: 1px;
+.launcher-board .app-folder {
+  width: 56px;
+  height: 56px;
 }
 
-@media (max-height: 620px) {
+@media (max-height: 700px) {
   .launcher-apps.launcher-full-page { padding-bottom: 214px; }
-  .full-page-board > .app-launch > span:first-child > .app-glyph,
-  .full-page-board .app-folder {
-    width: 30px !important;
-    height: 30px !important;
+  .launcher-board > .app-launch > span:first-child > .app-glyph,
+  .launcher-board .app-folder {
+    width: 52px !important;
+    height: 52px !important;
   }
-  .full-page-board .app-folder-slot .app-glyph {
-    width: 12px !important;
-    height: 12px !important;
+}
+
+@media (max-height: 650px) {
+  .launcher-board > .app-launch > span:first-child > .app-glyph,
+  .launcher-board .app-folder {
+    width: 44px !important;
+    height: 44px !important;
   }
+  .launcher-board .app-folder-slot .app-glyph {
+    width: 14px !important;
+    height: 14px !important;
+  }
+}
+
+@media (max-height: 570px) {
+  .launcher-board > .app-launch > span:first-child > .app-glyph,
+  .launcher-board .app-folder {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  .launcher-board .app-folder { padding: 3px; gap: 2px; }
+  .launcher-board .app-folder-slot .app-glyph { width: 12px !important; height: 12px !important; }
 }
 
 @media (max-height: 620px) {

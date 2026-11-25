@@ -75,7 +75,7 @@ export function DirectiveLibrary(props: { namespace: string; chars: Character[];
           try { setDraft(await draftDirective(wish.trim())); setNote('请预览或编辑指令。') }
           catch (error) { setNote(error instanceof Error ? error.message : '撰写失败') }
           finally { setWorking(false) }
-        }}>撰写</button>
+        }}>{working ? '处理中…' : '撰写'}</button>
         {draft ? <>
           <input className="soft-input mt-2" aria-label="指令标题" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
           <textarea className="soft-input mt-2" rows={6} aria-label="指令正文" value={draft.text} onChange={event => setDraft({ ...draft, text: event.target.value })} />

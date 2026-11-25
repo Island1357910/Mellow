@@ -12,6 +12,19 @@ function keepLonger(parts: string[]): string {
 
 /** 抽出明确的推理标记。正文规则与 stripReasoning 相同，不按语气猜测。 */
 export function takeReasoning(text: string): { content: string; reasoning: string } {
+  // A generated instruction may describe reasoning tags literally inside JSON strings.
+  // Protect validated structured output while still filtering any surrounding reasoning.
+  const structured = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/)?.[0]
+  let payload: string | undefined
+  let marker = '\uE000structured-output\uE001'
+  while (text.includes(marker)) marker += '\uE001'
+  if (structured) {
+    try {
+      JSON.parse(structured)
+      payload = structured
+      text = text.replace(structured, () => marker)
+    } catch { /* Ordinary prose or incomplete JSON still uses the normal filters. */ }
+  }
   const bits: string[] = []
   const fence = /^[ \t]*(`{3,}|~{3,})[ \t]*(?:think(?:ing)?|thought|reasoning|analysis|思维链|思考过程|推理过程)[^\n]*\r?\n[\s\S]*?(?:^[ \t]*\1[ \t]*(?:\r?\n|$)|(?![\s\S]))/gim
   let out = text.replace(fence, (full) => {
@@ -62,8 +75,8 @@ export function takeReasoning(text: string): { content: string; reasoning: strin
     } else lines.push(line)
   }
   return {
-    content: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
-    reasoning: keepLonger(bits),
+    content: lines.join('\n').replace(/\n{3,}/g, '\n\n').trim().replace(marker, () => payload ?? marker),
+    reasoning: keepLonger(bits).replace(marker, () => payload ?? marker),
   }
 }
 

@@ -41,9 +41,9 @@ assert.ok(prompt[0]?.content.includes('阿墨的独特设定'))
 assert.ok(OFFICIAL_PRESETS.every(p=>p.version==='2.2.0'&&p.data.prompts.some(b=>b.content.includes('不围着玩家转'))&&p.data.prompts.some(b=>b.identifier==='scene_hold'&&b.content.includes('场景接续'))))
 const bulky={...OFFICIAL_PRESETS[0]!,data:{...OFFICIAL_PRESETS[0]!.data,prompts:[{identifier:'main',name:'主提示',role:'system' as const,enabled:true,content:'铺垫'.repeat(2000)},...OFFICIAL_PRESETS[0]!.data.prompts.filter(b=>b.identifier==='living_people_v2'||b.identifier==='scene_hold')]}}
 const held=buildStoryPrompt({mode:'offline',save:newSave('接续'),config:DEFAULT_CONFIG,chars:[a] as never,identity:phone,preset:bulky})
-assert.ok(held[0]?.content.includes('不围着玩家转'),'叙事截断不能裁掉人物质感')
-assert.ok(held[0]?.content.includes('场景接续'),'叙事截断不能裁掉场景接续')
-assert.ok(!held[0]?.content.includes('铺垫'.repeat(2000)))
+assert.ok(held[0]?.content.includes('不围着玩家转'),'长预设仍应保留人物质感')
+assert.ok(held[0]?.content.includes('场景接续'),'长预设仍应保留场景接续')
+assert.ok(held[0]?.content.includes('铺垫'.repeat(2000)),'启用的预设正文应完整发送')
 
 const ns='regression_wallet'
 await storage.setBag(ns,'coins',20)

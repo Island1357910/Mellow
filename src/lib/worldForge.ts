@@ -3,6 +3,7 @@ import { ensureDirectChat } from '../domain/messaging.ts'
 import { importCharacterRegex } from '../engine/story.ts'
 import { moduleAi } from './ask.ts'
 import { creationIdentityContext, type CreationIdentity } from './creationContext.ts'
+import { jiushiWorldNs } from './jiushiPhone.ts'
 import { FORGE_JSON_RULES, requestForgeOutput } from './worldForgeFormat.ts'
 import { loreEntries, parseCharacterCard, type CardDraft } from './sillytavern.ts'
 import { importCharacterWorld, updateWorld, type WorldEntry } from './worldbook.ts'
@@ -477,7 +478,7 @@ export async function applyForgeResult(
   result: ForgeResult,
   options: ForgeApplyOptions = {},
 ): Promise<{ world: WorldEntry[]; characters: Character[]; created: number; updated: number }> {
-  const worldNs = options.worldNamespace ?? identity.namespace
+  const worldNs = options.worldNamespace ?? (options.jiushi ? jiushiWorldNs(identity.namespace) : identity.namespace)
   const stamped = Date.now()
   const imported = buildWorldEntries(result, stamped)
   const worldRows = await updateWorld(worldNs, prev => [...imported, ...prev.filter(item => item.worldForge !== result.worldTitle)])
@@ -546,10 +547,11 @@ export async function applyForgeResult(
       : await characterFromDraft(identity.namespace, draft, draft.avatar, {
           skipChat,
           allowProactive: jiushi ? false : options.allowProactive ?? false,
+          worldNamespace: worldNs,
         })
     if (match) {
       await storage.putCharacter(identity.namespace, character)
-      await importCharacterWorld(identity.namespace, character)
+      await importCharacterWorld(worldNs, character)
       await importCharacterRegex(identity.namespace, character)
       if (!skipChat) await ensureDirectChat(identity.namespace, character)
       updated += 1

@@ -14,7 +14,30 @@ const buildId = process.env.BUILD_ID || `${pkg.version}.${Date.now()}`
 
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
+  // The workspace also contains archived builds with their own dependency trees.
+  cacheDir: process.env.MELLOW_VITE_CACHE_DIR || 'node_modules/.vite',
+  optimizeDeps: { entries: ['index.html'] },
+  resolve: { dedupe: ['react', 'react-dom'] },
   build: { cssTarget: 'chrome60', cssCodeSplit: false },
+  css: {
+    postcss: {
+      plugins: [{
+        postcssPlugin: 'mellow-phone-font-size',
+        Declaration: {
+          'font-size': declaration => {
+            const size = declaration.value
+            if (!/^(?:[\d.]+(?:px|rem)|var\(--(?:text-|js-reader-size)|clamp\()/.test(size) || size.includes('--m-font-scale')) return
+            declaration.value = `calc(${size} * var(--m-font-scale, 1))`
+          },
+          'line-height': declaration => {
+            const height = declaration.value
+            if (!/^(?:[\d.]+(?:px|rem)$|calc\(var\(--spacing\) \*)/.test(height)) return
+            if (!height.includes('--m-font-scale')) declaration.value = `calc(${height} * var(--m-font-scale, 1))`
+          },
+        },
+      }],
+    },
+  },
   define: {
     __MELLOW_BUILD_ID__: JSON.stringify(buildId),
     __MELLOW_APP_VERSION__: JSON.stringify(pkg.version),

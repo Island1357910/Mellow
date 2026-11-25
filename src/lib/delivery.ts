@@ -6,6 +6,7 @@ import { uid } from './id.ts'
 import { walletTask } from './wallet.ts'
 import { storage } from '../storage/StorageService.ts'
 import { readDeliveries } from './deliveryMemory.ts'
+import { syncDeliveryConversation } from './deliveryMemory.ts'
 import type { Character, ChatMessage } from '../types/index.ts'
 
 export { readDeliveries } from './deliveryMemory.ts'
@@ -237,15 +238,19 @@ async function processDeliveries(namespace: string, chars: Character[]): Promise
   const orders = await readDeliveries(namespace)
   const now = Date.now()
   let changed = false
+  const completed = new Set<string>()
   const extra: Array<{ id: string; charId: string; author: string; text: string; at: number }> = []
-  for (const order of orders) {
+  for (let order of orders) {
     if (order.reacted || order.recipient === 'self' || now < order.arrivesAt || pending.has(order.id)) continue
     const person = chars.find((item) => item.id === order.recipient)
     if (!person) {
       order.reacted = true
+      completed.add(order.id)
       changed = true
       continue
     }
+    order = await syncDeliveryConversation(namespace, order)
+    if (order.reacted) { changed = true; continue }
     pending.add(order.id)
     const names = order.items.map((item) => item.name).join('、')
     const fallback = order.told
@@ -264,6 +269,10 @@ async function processDeliveries(namespace: string, chars: Character[]): Promise
       text = fallback
     }
     try {
+      const current = await syncDeliveryConversation(namespace, order)
+      if (current.reacted) { changed = true; continue }
+      if (current.told && !order.told) text = `${names}已经收到了，跟你说一声。`
+      order = current
       for(const [index,item] of order.items.entries())await rememberGift(namespace,{id:order.id+':'+index,charId:person.id,name:item.name+(item.qty>1?' ×'+item.qty:'')})
       await say(namespace, person, text)
       extra.push({
@@ -274,13 +283,14 @@ async function processDeliveries(namespace: string, chars: Character[]): Promise
         at: Date.now(),
       })
       order.reacted = true
+      completed.add(order.id)
       changed = true
     } finally {
       pending.delete(order.id)
     }
   }
   if (changed) await storage.changeAppBags(namespace, ['deliveries', 'moments'], bags => {
-    const reacted = new Set(orders.filter(order => order.reacted).map(order => order.id))
+    const reacted = completed
     const current = (bags.deliveries as Delivery[] | null) ?? []
     const moments = (bags.moments as typeof extra | null) ?? []
     return { ...bags, deliveries: current.map(order => reacted.has(order.id) ? { ...order, reacted: true } : order), moments: [...extra, ...moments] }

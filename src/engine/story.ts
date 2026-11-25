@@ -4,6 +4,8 @@ import { uid } from '../lib/id.ts'
 import { storage } from '../storage/StorageService.ts'
 import type { AIMessage, Character, Identity, Lorebook, LorebookEntry, Preset } from '../types/index.ts'
 import { moduleAdapter } from '../lib/ask.ts'
+import { fillCharacterPrompt, renderPresetPrompt } from '../lib/presetPrompt.ts'
+import { checkAbort } from '../lib/abort.ts'
 import { mergeThought, stripReasoning, takeReasoning } from '../lib/reasoning.ts'
 
 export type StoryMode = 'offline' | 'side' | 'jiushi'
@@ -17,6 +19,7 @@ export interface StoryLine {
   participantIds?: string[]
   /** 这一段的思维链，只在线下和番外里给玩家看。 */
   reasoning?: string
+  workshopReply?: { workId: string; receipt: string }
 }
 
 export interface StorySummary {
@@ -40,6 +43,7 @@ export interface StorySave {
   updatedAt: number
   lines: StoryLine[]
   summaries: StorySummary[]
+  workshopWorkId?: string
   /** 番外：这一档的主角 */
   charId?: string
   charIds?: string[]
@@ -387,6 +391,18 @@ export function line(role: StoryLine['role'], content: string): StoryLine {
   return { id: uid('line'), role, content, createdAt: Date.now() }
 }
 
+export function editStoryLine(save: StorySave, id: string, content: string): StorySave {
+  if (!content.trim()) throw new Error('消息内容不能为空。')
+  const index = save.lines.findIndex(item => item.id === id)
+  if (index < 0) throw new Error('这条消息已不在当前存档中。')
+  const original = save.lines[index]!
+  if (original.content === content) return save
+  const lines = [...save.lines]
+  lines[index] = { ...original, content, reasoning: undefined, workshopReply: undefined }
+  // 摘要记录的是编辑前的剧情，保留仅覆盖更早消息的摘要。
+  return { ...save, lines, summaries: save.summaries.filter(item => item.upTo <= index) }
+}
+
 /** 支持 `/pattern/flags` 和单独填 flags 两种写法。 */
 function compile(rule: RegexRule): RegExp | null {
   try {
@@ -413,6 +429,41 @@ export function applyRegex(text: string, rules: RegexRule[], where: 'display' | 
     out = out.replace(pattern, rule.replace.replaceAll('{{match}}', '$&'))
   }
   return out
+}
+
+type StoryDisplayPart = { text: string; card: boolean }
+
+function splitStoryCards(text: string): StoryDisplayPart[] {
+  const parts: StoryDisplayPart[] = []
+  const blocks = /^[ \t]*(`{3,}|~{3,})[ \t]*(?:html?[ \t]*)?\r?\n([\s\S]*?)(?:^[ \t]*\1[ \t]*(?=\r?$)|(?![\s\S]))|(?:<!doctype\s+html\s*>\s*)?<html(?=\s|>)[\s\S]*?<\/html\s*>/gim
+  let cursor = 0
+  for (const block of text.matchAll(blocks)) {
+    const card = block[2]?.trim() ?? block[0]
+    if (!card.startsWith('<') || !hasHtml(card)) continue
+    const prose = text.slice(cursor, block.index).replace(/(?:^|\r?\n)[ \t]*---[ \t]*\s*$/, '')
+    if (prose.trim()) parts.push({ text: prose.trim(), card: false })
+    parts.push({ text: card, card: true })
+    cursor = block.index + block[0].length
+  }
+  const prose = text.slice(cursor)
+  if (prose.trim()) parts.push({ text: prose, card: false })
+  return parts
+}
+
+/** 美化规则依次处理正文，已生成的独立卡片保留各自的样式和脚本。 */
+export function storyDisplayParts(text: string, rules: RegexRule[], role: StoryLine['role']): StoryDisplayPart[] {
+  let parts = splitStoryCards(text).map(part => role === 'assistant' && !part.card ? { ...part, text: stripReasoning(part.text) } : part)
+  for (const rule of rules) {
+    const template = rule.replace.trim()
+    let displayRule = rule
+    if (/^(?:`{3,}|~{3,})[ \t]*(?:html?[ \t]*)?\r?\n/i.test(template)) {
+      displayRule = { ...rule, replace: `\n${template}\n` }
+    } else if (/^<style\b/i.test(template) && hasHtml(template.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')) && !/\$(?:&|`|')|\{\{match\}\}/.test(template)) {
+      displayRule = { ...rule, replace: `\n\`\`\`html\n${template}\n\`\`\`\n` }
+    }
+    parts = parts.flatMap(part => part.card ? [part] : splitStoryCards(applyRegex(part.text, [displayRule], 'display', role)))
+  }
+  return parts
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -508,16 +559,15 @@ export function lorebookFromUnknown(raw: unknown, fallbackName: string): Loreboo
   return { name: typeof source.name === 'string' && source.name ? source.name : fallbackName, entries: out }
 }
 
-function loreText(books: Lorebook[], recent: string, limit: number): string {
+function loreText(books: Lorebook[], recent: string): string {
   const haystack = recent.toLowerCase()
   return books
     .flatMap((book) => loreEntries(book))
-    .filter((entry) => entry.enabled !== false && entry.content.trim())
-    .filter((entry) => entry.constant || (entry.keys ?? []).some((key) => key && haystack.includes(key.toLowerCase())))
+    .filter((entry) => entry.enabled !== false && !entry.disable && entry.content.trim())
+    .filter((entry) => entry.constant || !entry.keys?.length || entry.keys.some((key) => key && haystack.includes(key.toLowerCase())))
     .sort((a, b) => (a.insertion_order ?? 0) - (b.insertion_order ?? 0))
     .map((entry) => entry.content.trim())
     .join('\n')
-    .slice(0, limit)
 }
 
 function clip(text: string, max: number): string {
@@ -545,17 +595,17 @@ function promptLine(text: string, limit = 0): string {
   return `${plain.slice(0, head)}\n（中段省略，以下为本段结尾）\n${plain.slice(-(limit - head))}`
 }
 
-function card(character: Character, extras = true): string {
+function card(character: Character, userName: string, extras = true): string {
   const parts = [`【${character.name} · 角色ID：${character.id}】${character.nickname ? `（昵称 ${character.nickname}，与 ${character.name} 是同一人）` : ''}`]
   if (character.description.trim()) parts.push(character.description.trim())
   if (character.personality.trim()) parts.push(`性格：${character.personality.trim()}`)
-  if (extras && character.scenario.trim()) parts.push(`背景情境（不是每轮必须重演的开场）：${character.scenario.trim()}`)
+  if (character.scenario.trim()) parts.push(`背景情境：${character.scenario.trim()}`)
   if (extras && character.mesExample.trim()) parts.push(`说话的样子（仅供参考，不是本次已经发生的对话，不照抄）：\n${character.mesExample.trim()}`)
-  return parts.join('\n')
+  return fill(parts.join('\n'), character.name, userName)
 }
 
 function fill(text: string, charName: string, userName: string): string {
-  return text.replaceAll('{{char}}', charName).replaceAll('{{user}}', userName)
+  return text.replace(/\{\{(char|user)\}\}/g, (_, token: string) => token === 'char' ? charName : userName)
 }
 
 const VERSION_TAIL = /(?:[\s_\-]*[（(]?\s*(?:v|ver|version)?\s*\d+(?:\.\d+)?\s*[)）]?)+$/i
@@ -711,6 +761,7 @@ export function buildStoryPrompt(input: {
   /** 本次额外的指令，比如“继续” */
   nudge?: string
   world?: string
+  worldResolved?: boolean
   /** 手机短信互通上下文 */
   smsBridge?: string
   purchaseMemory?: string
@@ -723,30 +774,22 @@ export function buildStoryPrompt(input: {
   castIds?: string[]
 }): AIMessage[] {
   const { mode, save, config, chars, identity } = input
-  const lead = sideLike(mode) ? chars.find((item) => item.id === save.charId) : undefined
   const castIds = save.charIds?.length ? save.charIds : [save.charId]
   const cast = sideLike(mode) ? chars.filter(person => castIds.includes(person.id)) : []
+  const focus = mode === 'offline'
+    ? (input.castIds
+      ? input.castIds.flatMap(id => chars.filter(person => person.id === id))
+      : focusChars(chars, save, input.nudge))
+    : []
+  const lead = cast.find(person => person.id === save.charId) ?? cast[0] ?? focus[0]
   const userName = sideLike(mode) ? save.persona?.name || identity.name : identity.name
   const userPersona = sideLike(mode) ? save.persona?.persona ?? identity.persona : identity.persona
   const charName = lead?.name ?? '角色们'
   const recent = save.lines.slice(-6).map((item) => item.content).join('\n')
   const systems: string[] = []
-  const blocks = (input.preset?.data.prompts ?? []).filter((item) => item.enabled && item.content.trim())
-  const renderBlocks = (items: typeof blocks) =>
-    items
-      .map((item) =>
-        fill(item.content, lead?.name ?? charName, userName)
-          .replaceAll('{{description}}', clip(lead?.description || '（没有写）', 800))
-          .replaceAll('{{personality}}', clip(lead?.personality || '（没有写）', 400))
-          .replaceAll('{{scenario}}', clip(lead?.scenario || '（没有写）', 400)),
-      )
-      .join('\n\n')
-  const keptWhole = new Set(['living_people_v2', 'scene_hold'])
-  const style = blocks.filter((item) => keptWhole.has(item.identifier))
-  const voice = blocks.filter((item) => !keptWhole.has(item.identifier))
-  if (voice.length) systems.push(clip(renderBlocks(voice), 1500))
-  if (style.length) systems.push(renderBlocks(style))
-  if (input.world?.trim()) systems.push(mode === 'offline' ? input.world.trim() : clip(input.world, 800))
+  const presetText = renderPresetPrompt(input.preset, userName, lead)
+  if (presetText) systems.push(presetText)
+  if (input.world?.trim()) systems.push(input.world.trim())
   if (input.smsBridge?.trim() && mode !== 'offline') systems.push(clipTail(input.smsBridge, 1200))
   if (input.jiushiBlock?.trim()) systems.push(input.jiushiBlock.trim())
   systems.push(
@@ -767,50 +810,41 @@ export function buildStoryPrompt(input: {
   systems.push('正文按自然段书写，段与段之间空一行，对白单独成段。不要把整篇挤在同一行。')
   if (sideLike(mode)) {
     for (const person of cast) {
-      systems.push(card(person))
-      if (person.systemPrompt.trim()) systems.push(fill(person.systemPrompt, person.name, userName))
+      systems.push(card(person, userName))
+      if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令】\n${fillCharacterPrompt(person.systemPrompt, userName, person)}`)
     }
     systems.push('参与角色各有独立视角、目的和表达，不必每轮全部发言；不共享未亲眼看见或未获知的信息。')
   }
   systems.push(userPersona.trim() ? `玩家扮演 ${userName}。关于 ${userName}：${clip(userPersona, 400)}` : `玩家扮演 ${userName}。`)
-  const focus = mode === 'offline'
-    ? (input.castIds
-      ? input.castIds.flatMap((id) => {
-          const person = chars.find((item) => item.id === id)
-          return person ? [person] : []
-        })
-      : focusChars(chars, save, input.nudge))
-    : []
   let books: Lorebook[] = []
   if (mode === 'offline') {
     const roster = chars.map((item) => `${item.name}${item.nickname ? `（昵称 ${item.nickname}）` : ''} · ID：${item.id}`)
     if (roster.length) systems.push(`可供玩家寻找的人物名录（不代表已经在场，不要自动加入现场）：\n${roster.join('\n')}`)
-    if (focus.length) systems.push(`此刻相关的人的完整人物描述与性格：\n\n${focus.map(person => card(person, config.includeCardExtras)).join('\n\n')}`)
+    if (focus.length) systems.push(`此刻相关的人的完整人物描述与性格：\n\n${focus.map(person => card(person, userName, config.includeCardExtras)).join('\n\n')}`)
     if (focus.length) systems.push(`【本幕人物对应】\n${focus.map(person => `${person.id} = ${person.name}${person.nickname ? ` = ${person.nickname}` : ''}`).join('\n')}\n上述设定各归本人，不把一个人的习惯、关系或秘密挪给另一个人。未明确入场的人不自动出现。`)
-    if (config.includeCardExtras) for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fill(person.systemPrompt, person.name, userName)}`)
-    books = focus.map((item) => item.characterBook).filter((item): item is Lorebook => Boolean(item))
+    if (config.includeCardExtras) for (const person of focus) if (person.systemPrompt.trim()) systems.push(`【${person.name} 的角色指令，仅适用于本人】\n${fillCharacterPrompt(person.systemPrompt, userName, person)}`)
+    if (!input.worldResolved) books = focus.map((item) => item.characterBook).filter((item): item is Lorebook => Boolean(item))
   } else {
-    const picked = chars.filter((item) => (save.bookCharIds ?? []).includes(item.id)).map((item) => item.characterBook)
+    const picked = chars.filter(item => cast.includes(item)
+      ? !input.worldResolved
+      : (save.bookCharIds ?? []).includes(item.id)).map(item => item.characterBook)
     books = [...picked.filter((item): item is Lorebook => Boolean(item)), ...(save.books ?? [])]
   }
-  const lore = loreText(books, recent, mode === 'offline' ? Number.MAX_SAFE_INTEGER : 800)
+  const lore = loreText(books, recent)
   if (lore) systems.push(`世界书（用到才写，不要逐条复述）：\n${lore}`)
   const memory = memoryBlock(save)
   if (memory.text) systems.push(mode === 'offline' ? memory.text : clip(memory.text, 800))
-  if (lead?.postHistoryInstructions.trim()) systems.push(fill(lead.postHistoryInstructions, lead.name, userName))
-  if (mode === 'offline' && config.includeCardExtras) for (const person of focus) {
-    if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fill(person.postHistoryInstructions, person.name, userName)}`)
+  systems.push('每个角色的身份、外貌、能力、性格和说话习惯分别以当前角色卡为准。历史、摘要和世界书用于接续事件与关系；描述中未说明的个人设定保留不确定性，不把经历和称谓错安到其他角色身上。')
+  for (const person of config.includeCardExtras && mode === 'offline' ? focus : cast) {
+    if (person.postHistoryInstructions.trim()) systems.push(`【${person.name} 的后置设定，仅适用于本人】\n${fillCharacterPrompt(person.postHistoryInstructions, userName, person)}`)
   }
   if (mode === 'offline' && input.smsBridge?.trim()) systems.push(input.smsBridge.trim())
   if (mode === 'offline' && input.purchaseMemory) systems.push(input.purchaseMemory)
   if (mode === 'offline' && input.momentMemory) systems.push(input.momentMemory)
-  if (input.directives?.trim()) systems.push(input.directives.trim())
+  if (input.directives?.trim()) systems.push(fillCharacterPrompt(input.directives.trim(), userName, lead))
   if (mode !== 'jiushi') systems.push('纯文本正文按自然段书写，每两个段落之间固定空一行。')
-  if (mode !== 'jiushi') {
-    systems.push(input.cot?.trim()
-      ? input.cot.trim()
-      : '不要输出思维链、思考过程或思考标签。只写玩家看得到的正文。')
-  }
+  if (input.cot?.trim()) systems.push(input.cot.trim())
+  else if (mode !== 'jiushi') systems.push('不要输出思维链、思考过程或思考标签。只写玩家看得到的正文。')
   systems.push(SCENE_HOLD)
   const cardStatus = config.useCardRegex
     ? [...cast, ...focus].flatMap(person => {
@@ -819,11 +853,15 @@ export function buildStoryPrompt(input: {
       })
     : []
   if (sideLike(mode) && config.statusPrompt.trim()) {
-    systems.push(fill(config.statusPrompt.trim(), charName, userName))
+    systems.push(fillCharacterPrompt(config.statusPrompt.trim(), userName, lead))
   } else if (cardStatus.length) {
     systems.push(`写完叙事正文后，为本轮相关角色各输出一次下列状态栏。原样保留标签、字段顺序和换行，以便角色卡正则渲染。\n${cardStatus.join('\n\n')}`)
   } else if (mode === 'offline') {
     systems.push('不要输出状态栏，不要写 <status> 标签，不要 HTML 卡片式状态信息。')
+  }
+
+  if ((sideLike(mode) && config.statusPrompt.trim()) || cardStatus.length) {
+    systems.push('正文和状态栏必须在本次同一条回复中一次完整输出：先写正文，再在末尾输出状态栏。不要把状态栏留到下一轮，不要只输出状态栏。字数目标仅约束叙事正文，状态栏另计；在输出额度内完成两部分。')
   }
 
   const scoped = config.regex.filter(rule => !rule.charId || (sideLike(mode) ? castIds.includes(rule.charId) : focus.some(person => person.id === rule.charId)))
@@ -857,7 +895,7 @@ export function displayRules(mode: StoryMode, config: StoryConfig, chars: Charac
   return [...scoped, ...extra]
 }
 
-export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepRounds: number, mode: StoryMode = 'offline'): Promise<StorySave> {
+export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepRounds: number, mode: StoryMode = 'offline', signal?: AbortSignal): Promise<StorySave> {
   void keepRounds
   const adapter = await moduleAdapter(mode)
   const start = memoryBlock(save).covered
@@ -872,6 +910,7 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
       ],
       temperature: 0.3,
       maxTokens: 1600,
+      signal,
     })
     const summary = stripReasoning(response.content)
     if (!summary) throw new Error('总结返回为空，将在下轮重试')
@@ -886,6 +925,7 @@ export async function writeSummary(save: StorySave, kind: 'small' | 'big', keepR
     ],
     temperature: 0.3,
     maxTokens: 3200,
+    signal,
   })
   const upTo = Math.max(...save.summaries.map((item) => item.upTo))
   const summary = stripReasoning(response.content)
@@ -923,16 +963,23 @@ export function mergeStoryContinuation(previous: string, next: string): string {
   return fresh ? `${previous.trimEnd()}\n${fresh}` : previous
 }
 
-export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline', sink?: { reasoning: string }): Promise<string> {
+export async function generate(messages: AIMessage[], preset: Preset | null, maxTokens?: number, mode: StoryMode = 'offline', sink?: { reasoning: string; interrupted?: boolean }, signal?: AbortSignal): Promise<string> {
+  checkAbort(signal)
   const adapter = await moduleAdapter(mode)
   const response = await adapter.complete({
     messages: fitStoryMessages(messages),
     temperature: storyTemperature(preset),
     maxTokens: maxTokens ?? 1024,
+    stream: true,
+    signal,
   })
+  checkAbort(signal)
   const split = takeReasoning(response.content)
   const content = ensureStoryBreaks(split.content)
-  if (sink) sink.reasoning = mergeThought(response.reasoning, split.reasoning)
+  if (sink) {
+    sink.reasoning = mergeThought(response.reasoning, split.reasoning)
+    sink.interrupted = response.interrupted
+  }
   if (!content) throw new Error('模型只返回了思考内容，没有剧情正文，请重试或增加输出长度')
   return content
 }
@@ -954,43 +1001,18 @@ export async function generateStoryReply(input: {
   preset: Preset | null
   charsMin: number
   charsMax: number
-}): Promise<{ content: string; reasoning: string }> {
+  signal?: AbortSignal
+}): Promise<{ content: string; reasoning: string; interrupted: boolean }> {
   const range = storyCharRange(input.charsMin, input.charsMax)
-  const budget = Math.min(16384, Math.max(2048, Math.ceil(range.max * 2) + 512))
-  const sink = { reasoning: '' }
-  let content = await generate(input.messages, input.preset, budget, input.mode, sink)
-  let reasoning = sink.reasoning
-  let len = plainStoryLength(content)
-
-  const roundsCap = Math.min(8, Math.max(3, Math.ceil(range.min / 2500)))
-  let rounds = 0
-  while (len < range.lo && rounds < roundsCap) {
-    rounds += 1
-    const need = Math.max(120, range.min - len)
-    const more = { reasoning: '' }
-    const tail = await generate(
-      [
-        ...input.messages,
-        { role: 'assistant', content },
-        {
-          role: 'user',
-          content: `请紧接上一段末尾自然续写，不要重复已写内容，不要重写。再写约 ${need} 字，让整体接近 ${range.min}～${range.max} 字（可上下浮动 10%）。`,
-        },
-      ],
-      input.preset,
-      budget,
-      input.mode,
-      more,
-    )
-    if (!reasoning && more.reasoning) reasoning = more.reasoning
-    const merged = mergeStoryContinuation(content, tail)
-    if (merged === content) break
-    content = merged
-    len = plainStoryLength(content)
-  }
+  const budget = Math.min(16384, Math.max(2048, Math.ceil(range.max * 2) + 2048))
+  const sink: { reasoning: string; interrupted?: boolean } = { reasoning: '' }
+  // Length is a prompt target, not a reason to make another paid generation.
+  // Keep narrative and status markup from the same response together.
+  const content = await generate(input.messages, input.preset, budget, input.mode, sink, input.signal)
+  const reasoning = sink.reasoning
 
   const formatted = input.mode === 'offline' || input.mode === 'side' ? normalizeStoryParagraphs(content) : content
-  return { content: formatted, reasoning }
+  return { content: formatted, reasoning, interrupted: Boolean(sink.interrupted) }
 }
 
 /** 剥离 AI 回复里常见的 Markdown HTML 代码围栏 */
@@ -1003,28 +1025,51 @@ export function unwrapHtmlFence(text: string): string {
 
 export function hasHtml(text: string): boolean {
   const body = unwrapHtmlFence(text)
-  return /<\/?(div|span|p|style|table|details|summary|img|b|i|br|ul|ol|li|h\d|section|font|center|small|strong|em)\b[^>]*>/i.test(body)
+  return /<\/?(?:html|body|div|span|p|style|table|details|summary|img|b|i|br|ul|ol|li|h[1-6]|section|article|main|header|footer|blockquote|pre|code|a|button|svg|figure|hr|font|center|small|strong|em)\b[^>]*>/i.test(body)
 }
 
-/** 把夹在标签之间的换行变成 <br>，style / script 里的原样保留。 */
+/** 只保留正文中的手动换行，HTML 缩进及脚本、样式和预格式化文本原样交给浏览器。 */
 export function htmlBody(text: string): string {
-  const kept: string[] = []
-  const guarded = unwrapHtmlFence(text).replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, (block) => {
-    kept.push(block)
-    return `@@MELLOW${kept.length - 1}@@`
-  })
-  const body = guarded
-    .split(/(<[^>]+>)/)
-    .map((part) => {
-      if (part.startsWith('<')) return part
-      const breaks = part.match(/\n/g)?.length ?? 0
-      if (part.trim() === '') return breaks ? '<br>'.repeat(Math.min(breaks, 2)) : part
-      return part.replace(/\n/g, '<br>')
-    })
-    .join('')
-  return body.replace(/@@MELLOW(\d+)@@/g, (_, index: string) => kept[Number(index)] ?? '')
+  const markup = /<(style|script|pre|textarea)\b[^>]*>[\s\S]*?<\/\1\s*>|<!--[\s\S]*?-->|<\/?[a-z](?:[^<>"']|"[^"]*"|'[^']*')*>/gi
+  const lineBreaks = (part: string) => part.trim()
+    ? part.replace(/^\s*\r?\n|\r?\n\s*$/g, '').replace(/\r?\n/g, '<br>')
+    : part
+  let result = ''
+  let cursor = 0
+  for (const tag of text.matchAll(markup)) {
+    result += lineBreaks(text.slice(cursor, tag.index)) + tag[0]
+    cursor = tag.index + tag[0].length
+  }
+  return result + lineBreaks(text.slice(cursor))
 }
 
 export function frameDoc(id: string, html: string, reading: ReadingStyle, color: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important}body{font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};word-break:break-word}body>*:first-child{margin-top:0!important;padding-top:0!important}body>*:last-child{margin-bottom:0!important;padding-bottom:0!important}body>*{max-width:100%;vertical-align:top}br{display:block;margin:0.45em 0}img{max-width:100%;height:auto;display:block;vertical-align:top}</style></head><body>${htmlBody(html)}<script>(function(){var id=${JSON.stringify(id)};function strip(){['html','body'].forEach(function(tag){var el=document.getElementsByTagName(tag)[0];if(!el)return;el.style.margin='0';el.style.padding='0';el.style.minHeight='auto';el.style.height='auto';});document.querySelectorAll('body *').forEach(function(el){if(!el.style)return;var mh=el.style.minHeight||'';var h=el.style.height||'';var pt=el.style.paddingTop||'';var pb=el.style.paddingBottom||'';if(/100vh|100%/.test(mh))el.style.minHeight='auto';if(/100vh|100%/.test(h))el.style.height='auto';if(/\\d+vh/.test(pt))el.style.paddingTop='0';if(/\\d+vh/.test(pb))el.style.paddingBottom='0';if(el.style.position==='fixed'||el.style.position==='absolute'){el.style.position='relative';el.style.inset='auto';}});}function measure(){strip();var kids=Array.from(document.body.children);if(!kids.length)return Math.ceil(document.body.scrollHeight||24);var top=kids[0].getBoundingClientRect().top;var bottom=top;kids.forEach(function(el){var r=el.getBoundingClientRect();if(r.height>0){top=Math.min(top,r.top);bottom=Math.max(bottom,r.bottom);}});return Math.max(24,Math.ceil(bottom-top));}function m(){parent.postMessage({mellowFrame:id,h:measure()},'*');}new ResizeObserver(function(){requestAnimationFrame(m);}).observe(document.body);window.addEventListener('load',m);m();})()</script></body></html>`
+  const document = /^\s*(?:<!doctype\s+html\s*>\s*)?(<html\b[^>]*>)\s*(?:<head\b[^>]*>([\s\S]*?)<\/head>\s*)?(<body\b[^>]*>)([\s\S]*?)<\/body\s*>\s*<\/html\s*>\s*$/i.exec(html)
+  const [, htmlTag = '<html>', head = '', bodyTag = '<body>', content = html] = document ?? []
+  return `<!doctype html>${htmlTag}<head><meta charset="utf-8">
+<style>
+  html,body{margin:0!important;padding:0!important;background:transparent!important;overflow:hidden!important;min-height:0!important;height:auto!important}
+  body{display:flow-root;font-family:${FONT_STACK[reading.font]};font-size:${reading.fontSize}px;line-height:${reading.lineHeight};color:${color};overflow-wrap:break-word}
+  body>*{box-sizing:border-box;max-width:100%;vertical-align:top}
+  img,video{max-width:100%;height:auto;vertical-align:top}
+</style>
+${head}</head>${bodyTag}${htmlBody(content)}
+<script>
+  (function () {
+    var frameId = ${JSON.stringify(id)};
+    var lastHeight;
+    function measure() {
+      var body = document.body;
+      var height = Math.max(24, Math.ceil(Math.max(body.getBoundingClientRect().bottom, body.scrollHeight)));
+      if (height === lastHeight) return;
+      lastHeight = height;
+      parent.postMessage({ mellowFrame: frameId, h: height }, '*');
+    }
+    if (typeof ResizeObserver === 'function') new ResizeObserver(measure).observe(document.body);
+    document.addEventListener('load', measure, true);
+    document.addEventListener('toggle', measure, true);
+    window.addEventListener('load', measure);
+    measure();
+  })();
+</script></body></html>`
 }

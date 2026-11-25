@@ -99,19 +99,19 @@ try {
     requests.push(request)
     return { content: requests.length === 1 ? '{"name":"席淮","description":"未写完' : JSON.stringify({ name: '席淮', description: longDescription }) }
   } }) as unknown as AIAdapter
-  const made = await makeCard({
-    wish: '精修席淮人设，不少于4000字', depth: '标准', world: [], identity,
-    source: { name: '席淮', description: '已有设定：替江澜保管旧书店钥匙' } as Character,
-  })
+  const cardInput = { wish: '精修席淮人设，不少于4000字', depth: '标准', world: [], identity,
+    source: { name: '席淮', description: '已有设定：替江澜保管旧书店钥匙' } as Character }
+  await assert.rejects(makeCard(cardInput), /原草稿仍在/)
+  assert.equal(requests.length, 1, 'invalid card output must not trigger automatic regeneration')
+  const made = await makeCard(cardInput)
   assert.equal(made.description, longDescription)
-  assert.equal(requests.length, 2)
+  assert.equal(requests.length, 2, 'only a manual call requests another card')
   for (const request of requests) {
     const prompt = request.messages.at(-1)!.content
     assert.match(prompt, /曾在雨城开过一家旧书店/)
     assert.match(prompt, /替江澜保管旧书店钥匙/)
     assert.match(prompt, /不少于4000字/)
   }
-  assert.match(requests[1]!.messages.at(-1)!.content, /上次结果不是完整的角色卡 JSON/)
 
   const draft = {
     avatar: '', mesExample: '', creatorNotes: '', systemPrompt: '不要替玩家发言', postHistoryInstructions: '',

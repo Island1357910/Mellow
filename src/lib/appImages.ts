@@ -7,6 +7,7 @@ export const APP_IMAGE_LABELS = {
   star: '星博',
   duotao: '多淘',
   flash: '闪送',
+  huizhen: '回针相册',
 }
 
 export type AppImageChannel = keyof typeof APP_IMAGE_LABELS
@@ -14,7 +15,10 @@ export type AppImageChannel = keyof typeof APP_IMAGE_LABELS
 const key = (app: AppImageChannel) => `mellow_app_images_${app}`
 
 export function appImagesEnabled(app: AppImageChannel): boolean {
-  try { return localStorage.getItem(key(app)) === '1' } catch { return false }
+  try {
+    const saved = localStorage.getItem(key(app))
+    return saved === '1' || (app === 'huizhen' && saved === null)
+  } catch { return false }
 }
 
 export function setAppImagesEnabled(app: AppImageChannel, enabled: boolean): void {
@@ -38,7 +42,7 @@ export function appImageDirection(app: AppImageChannel, value: unknown): { promp
   const separator = text.indexOf('|')
   const tag = separator < 0 ? '' : text.slice(0, separator).trim()
   const matched = Object.keys(IMAGE_STYLES).find(style => style.toLowerCase() === tag.toLowerCase()) as ImageStyle | undefined
-  const photoDefault = app === 'duotao' || app === 'flash' || app === 'moments'
+  const photoDefault = app === 'duotao' || app === 'flash' || app === 'moments' || app === 'huizhen'
   return {
     prompt: (matched ? text.slice(separator + 1).trim() : text).slice(0, 400),
     style: matched ?? (photoDefault ? 'realistic' : 'free'),

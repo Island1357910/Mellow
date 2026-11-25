@@ -33,7 +33,14 @@ for (const file of ['public/bakery/compat.css', 'public/live-simulator/compat.cs
 }
 for (const file of ['public/bakery/index.html', 'public/live-simulator/index.html']) {
   const html = fs.readFileSync(file, 'utf8')
-  if (!html.includes('nomodule') || !html.includes('compat.css')) throw new Error(`${file} missing fallback`)
+  if (/<script\b[^>]*(?:type="module"|\bnomodule\b)|<link\b[^>]*rel="modulepreload"/.test(html)) {
+    throw new Error(`${file} depends on JavaScript module support to start`)
+  }
+  const polyfill = html.indexOf('id="vite-legacy-polyfill"')
+  const entry = html.indexOf('System.import(')
+  if (polyfill < 0 || entry <= polyfill || !html.includes('compat.css')) {
+    throw new Error(`${file} is missing the classic startup scripts or compatible CSS`)
+  }
   if (/<script[^>]*crossorigin[^>]*src="\.\//.test(html)) throw new Error(`${file} local script still uses crossorigin`)
   console.log('html ok', file)
 }

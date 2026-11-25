@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AIError } from '../../engine/AIAdapter.ts'
 import { isAiJobRunning, jobKey, runAiJob } from '../../engine/aiJobs.ts'
 import { postUserText } from '../../domain/messaging.ts'
 import { loadSearchArticle, loadSearchHits, runSearchArticle, runSearchHits, type SearchHit } from '../../lib/browserAi.ts'
@@ -14,11 +15,17 @@ interface Article {
   body: string
 }
 
+interface SearchError {
+  message: string
+  configuration: boolean
+}
+
 export function SimBrowser(props: {
   query: string
   identity?: Identity
   onClose: () => void
   onSearch?: (query: string) => void
+  onOpenSettings: () => void
   onSent: (chatId: string) => void
 }) {
   const dataRevision = useMellow((state) => state.dataRevision)
@@ -26,7 +33,9 @@ export function SimBrowser(props: {
   const [query, setQuery] = useState(props.query)
   const [draft, setDraft] = useState(props.query)
   const [hits, setHits] = useState<SearchHit[]>([])
-  const [error, setError] = useState('')
+  const [error, setError] = useState<SearchError | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [searchPending, setSearchPending] = useState(true)
   const [article, setArticle] = useState<Article | null>(null)
   const [picking, setPicking] = useState(false)
   const [chats, setChats] = useState<Chat[]>([])
@@ -34,42 +43,48 @@ export function SimBrowser(props: {
   const [forwardError, setForwardError] = useState('')
   const wantForward = useRef(false)
   const [detailHit, setDetailHit] = useState<SearchHit | null>(null)
+  const searchJob = jobKey(namespace, 'browser', `search-${query}`)
+  const searchErrorKey = `browser_search_error_${query}`
 
   useEffect(() => {
     if (!query.trim()) return
     let alive = true
+    setSearchPending(true)
+    setHits([])
+    setError(null)
     void (async () => {
       const cached = await loadSearchHits(namespace, query)
       if (!alive) return
-      if (cached) {
-        setHits(cached)
-        setError('')
-        return
-      }
-      setHits([])
-      setError('')
-      runAiJob(jobKey(namespace, 'browser', `search-${query}`), async () => {
+      if (!cached) runAiJob(searchJob, async () => {
         try {
           await runSearchHits(namespace, query)
         } catch (reason) {
-          await storage.setBag(namespace, `browser_error_${query.slice(0, 24)}`, reason instanceof Error ? reason.message : '搜索没有写成')
+          const failure: SearchError = {
+            message: reason instanceof Error ? reason.message : '搜索没有写成',
+            configuration: reason instanceof AIError && reason.code === 'config',
+          }
+          await storage.setBag(namespace, searchErrorKey, failure)
         }
       })
+      setSearchPending(false)
     })()
     return () => {
       alive = false
     }
-  }, [query, namespace, dataRevision])
+  }, [query, namespace, searchJob, searchErrorKey, attempt])
 
   useEffect(() => {
-    if (!query.trim()) return
-    void storage.getBag<string>(namespace, `browser_error_${query.slice(0, 24)}`).then((message) => {
-      if (message) {
-        setError(message)
-        void storage.setBag(namespace, `browser_error_${query.slice(0, 24)}`, '')
-      }
-    })
-  }, [query, namespace, dataRevision])
+    if (searchPending || isAiJobRunning(searchJob) || !query.trim()) return
+    let alive = true
+    void (async () => {
+      const cached = await loadSearchHits(namespace, query)
+      const failure = cached ? null : await storage.getBag<SearchError>(namespace, searchErrorKey)
+      if (!alive) return
+      setHits(cached ?? [])
+      setError(failure ?? null)
+    })()
+    return () => { alive = false }
+  }, [query, namespace, searchJob, searchErrorKey, searchPending, dataRevision, attempt])
 
   useEffect(() => {
     if (!detailHit) return
@@ -113,7 +128,7 @@ export function SimBrowser(props: {
     })
   }, [detailHit, query, namespace, dataRevision])
 
-  const busy = isAiJobRunning(jobKey(namespace, 'browser', `search-${query}`))
+  const busy = searchPending || isAiJobRunning(searchJob)
   const articleBusy = detailHit ? isAiJobRunning(jobKey(namespace, 'browser', `detail-${query}-${detailHit.title}`)) : false
 
   const openDetail = (hit: SearchHit, forward = false) => {
@@ -210,10 +225,14 @@ export function SimBrowser(props: {
             <p className="mb-2 w-fit rounded-full bg-[#F8E6C0] px-3 py-1 text-xs">搜索「{query}」</p>
             <PillNote tone="sky" compact>这一页由当前接口写成，不会打开外面的网站</PillNote>
             {busy ? <PillNote tone="lilac">正在写搜索结果</PillNote> : null}
-            {error ? (
+            {!busy && error ? (
               <div className="mt-3 rounded-[22px] bg-[#FFF6F8] p-4">
-                <p className="text-sm leading-6">{error}</p>
-                <button type="button" className="chip chip-pink mt-3" onClick={() => setQuery(`${query} `)}>再试一次</button>
+                <p className="text-sm leading-6" role="status">{error.configuration ? '搜索需要可用的 API。请在设置 → 连接 → 接口与模型中配置接口，或给「搜索」绑定一张可用的卡片。' : error.message}</p>
+                {error.configuration ? (
+                  <button type="button" className="chip chip-pink mt-3" onClick={props.onOpenSettings}>打开设置</button>
+                ) : (
+                  <button type="button" className="chip chip-pink mt-3" onClick={() => setAttempt(value => value + 1)}>再试一次</button>
+                )}
               </div>
             ) : null}
             {hits.map((hit, index) => (
