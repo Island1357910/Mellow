@@ -71,7 +71,7 @@ jobs:
         env:
           BASE_PATH: /
           VITE_WORKSHOP_API: https://workshop-api.mymellow.top
-          BUILD_ID: android-3.0.9-${{ github.run_number }}
+          BUILD_ID: android-3.0.10-${{ github.run_number }}
       - name: Build unsigned APK for local signing
         run: |
           set -euo pipefail
@@ -81,15 +81,15 @@ jobs:
       - name: Inspect APK and collect official signing tool
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/Mellow-3.0.9-unsigned.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/Mellow-3.0.10-unsigned.apk
           cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" release/apksigner.jar
-          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 release/Mellow-3.0.9-unsigned.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release/Mellow-3.0.9-unsigned.apk > release/package-info.txt
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 release/Mellow-3.0.10-unsigned.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging release/Mellow-3.0.10-unsigned.apk > release/package-info.txt
           cat release/package-info.txt
-          unzip -l release/Mellow-3.0.9-unsigned.apk | grep 'assets/public/index.html'
+          unzip -l release/Mellow-3.0.10-unsigned.apk | grep 'assets/public/index.html'
           cd release
-          sha256sum Mellow-3.0.9-unsigned.apk apksigner.jar > SHA256SUMS.txt
+          sha256sum Mellow-3.0.10-unsigned.apk apksigner.jar > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Mellow-3.0.9-unsigned
+          name: Mellow-3.0.10-unsigned
           path: release/

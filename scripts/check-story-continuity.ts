@@ -12,7 +12,7 @@ import { storage } from '../src/storage/StorageService.ts'
 import { AIAdapter, AIError } from '../src/engine/AIAdapter.ts'
 import { buildStoryPrompt, cardRegex, DEFAULT_CONFIG, DEFAULT_READING, editStoryLine, ensureStoryBreaks, focusChars, frameDoc, generate, generateStoryReply, htmlBody, loadSave, mergeStoryContinuation, newSave, normalizeStoryParagraphs, putSave, saveConfig, STATUS_EXAMPLE, storyDisplayParts, writeSummary } from '../src/engine/story.ts'
 import { runStoryGeneration } from '../src/domain/storyRunner.ts'
-import { castIdsFromModel, castTranscript } from '../src/lib/offlineCast.ts'
+import { castIdsFromModel, castTranscript, readSceneReply } from '../src/lib/offlineCast.ts'
 import { readWorld, storyWorldText, writeWorld } from '../src/lib/worldbook.ts'
 import type { AIMessage, Character } from '../src/types/index.ts'
 
@@ -155,16 +155,13 @@ const original = AIAdapter.fromStored
 let requests: Array<{ messages: AIMessage[]; maxTokens?: number }> = []
 let answer = '三人走到门外，阿墨撑开伞，阿白在旁等候。'.repeat(5)
 let continuationFailure: 'empty' | 'timeout' | undefined
-let holdCastAfterReply: Promise<void> | undefined
 let holdStoryReply: ((signal?: AbortSignal) => Promise<void>) | undefined
 let interruptedReply = false
 AIAdapter.fromStored = async () => ({ complete: async (request: { messages: AIMessage[]; maxTokens?: number; signal?: AbortSignal }) => {
   requests.push(request)
   const system = request.messages[0]?.content ?? ''
   if (system.includes('谁此刻在现场')) {
-    await holdCastAfterReply
-    const asked = request.messages.map((item) => item.content).join('\n')
-    return { content: asked.includes('阿墨2.0') ? '{"ids":["ver"]}' : '{"ids":["b","c"]}' }
+    throw new Error('Scene recognition must not create an extra model request')
   }
   if (request.messages.at(-1)?.content.startsWith('请紧接上一段末尾自然续写')) {
     if (continuationFailure === 'timeout') throw new Error('补写超时')
@@ -218,24 +215,38 @@ try {
     { id: 'other', shop: 'duotao', items: [{ name: '阿青的杯子', qty: 1, price: 8 }], recipient: 'a', recipientName: '阿青', told: true, createdAt: 1, arrivesAt: 2, note: '' },
   ])
   requests = []
-  let releaseCast!: () => void
-  const slowCast = new Promise<void>(resolve => { releaseCast = resolve })
   let replySaved = false
   const job = runStoryGeneration({ namespace: ns, saveId: save.id, mode: 'offline', identity, presetId: customPreset.id, presets: [customPreset], onReplySaved: () => {
     replySaved = true
-    holdCastAfterReply = slowCast
   } })
   try {
     for (let i = 0; i < 100 && !replySaved; i++) await new Promise(resolve => setTimeout(resolve, 10))
     const storedReply = (await loadSave(ns, save.id))?.lines.at(-1)
-    assert(replySaved, 'the UI is notified before the post-reply cast request can finish')
+    assert(replySaved, 'the reply is saved without waiting for another model request')
     assert.equal(storedReply?.role, 'assistant')
     assert.equal(storedReply?.content, reply.content)
   } finally {
-    releaseCast()
     await job
-    holdCastAfterReply = undefined
   }
+  assert.equal(requests.length, 1, 'the full offline flow must use one request, including scene membership and status')
+  const mainRequests = requests
+  const joined = '他放下茶杯。\n<status>午后|茶室|阿白|平静</status>'
+  assert.deepEqual(readSceneReply(joined + '<mellow-scene>{"ids":["c"]}</mellow-scene>', chars), { content: joined, ids: ['c'] })
+  assert.deepEqual(readSceneReply(joined + '<mellow-scene>{"ids":', chars), { content: joined, ids: null })
+  for (const marker of ['<mellow-scene>{"ids":["c"]}</mellow-scene>', '<mellow-scene>{"ids":[]}</mellow-scene>', '<mellow-scene>invalid</mellow-scene>']) {
+    answer = joined + marker
+    requests = []
+    const combinedSave = await putSave(ns, newSave('同轮状态栏测试', { lines: [{ id: 'bc-joined', role: 'user', content: '继续', createdAt: 1, participantIds: ['b', 'c'] }] }))
+    await runStoryGeneration({ namespace: ns, saveId: combinedSave.id, mode: 'offline', identity, presetId: '', presets: [] })
+    assert.equal(requests.length, 1)
+    const stored = (await loadSave(ns, combinedSave.id))!.lines.at(-1)!
+    assert.equal(stored.content, normalizeStoryParagraphs(joined))
+    assert.doesNotMatch(stored.content, /mellow-scene/)
+    if (marker.includes('"c"')) assert.deepEqual(stored.participantIds, ['c'])
+    if (marker.includes('[]')) assert.deepEqual(stored.participantIds, [])
+  }
+  answer = fullAnswer
+  requests = mainRequests
   const storyCall = requests.find((item) => item.messages[0]?.content.includes('阿墨专属世界书'))
   assert(storyCall, 'the story request follows the cast recognition')
   assert(storyCall!.messages[0]!.content.includes('阿白专属世界书'))

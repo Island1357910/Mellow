@@ -6,7 +6,7 @@ import { jiushiLetterBridgeForStory } from '../lib/jiushiBridge.ts'
 import { isJiushiCharacter, jiushiPromptBlock, loadJiushiConfig } from '../lib/jiushi.ts'
 import { jiushiWorldNs } from '../lib/jiushiPhone.ts'
 import { directivePrompt } from '../lib/directives.ts'
-import { offlineFocus } from '../lib/offlineCast.ts'
+import { readSceneReply, sceneCastInstruction } from '../lib/offlineCast.ts'
 import { migrateJiushiCardWorld, storyWorldText } from '../lib/worldbook.ts'
 import { checkAbort } from '../lib/abort.ts'
 import { playInWorkshopPhone, workshopWorkOf } from '../lib/workshopPhone.ts'
@@ -97,7 +97,7 @@ export async function runStoryGeneration(input: {
   )
   const worldNs = input.mode === 'jiushi' ? jiushiWorldNs(phoneNs) : phoneNs
   checkAbort(signal)
-  const focus = input.mode === 'offline' ? await offlineFocus(chars, save, input.nudge, signal) : []
+  const focus = input.mode === 'offline' ? focusChars(chars, save, input.nudge) : []
   checkAbort(signal)
   const active = input.mode === 'offline' ? focus : chars.filter(person => sideIds.includes(person.id))
   const jiushiConfig = input.mode === 'jiushi' ? await loadJiushiConfig(phoneNs) : null
@@ -134,6 +134,7 @@ export async function runStoryGeneration(input: {
     cot: writing.cot,
     castIds: input.mode === 'offline' ? focus.map((person) => person.id) : undefined,
   })
+  if (input.mode === 'offline') messages[0]!.content += '\n\n' + sceneCastInstruction(chars)
   const reply = await generateStoryReply({
     mode: input.mode,
     messages,
@@ -143,21 +144,13 @@ export async function runStoryGeneration(input: {
     signal,
   })
   const participantIds = focus.map(person => person.id)
-  const replyLine = { ...line('assistant', reply.content), reasoning: reply.reasoning }
-  const immediateIds = input.mode === 'offline' ? focusChars(chars, { ...save, lines: [...save.lines, replyLine] }).map(person => person.id) : undefined
-  const { draft, lines, next: saved } = await saveReply(replyLine, participantIds, immediateIds)
-  let next = saved
+  const scene = input.mode === 'offline' ? readSceneReply(reply.content, chars) : { content: reply.content, ids: null }
+  if (!scene.content) throw new Error('模型未返回剧情正文，请重试。')
+  const replyLine = { ...line('assistant', scene.content), reasoning: reply.reasoning }
+  const immediateIds = input.mode === 'offline' ? scene.ids ?? focusChars(chars, { ...save, lines: [...save.lines, replyLine] }).map(person => person.id) : undefined
+  const { next } = await saveReply(replyLine, participantIds, immediateIds)
   input.onReplySaved?.(reply.interrupted)
   if (signal?.aborted || reply.interrupted) return
-  if (input.mode === 'offline') {
-    const settled = (await offlineFocus(chars, draft, '', signal)).map(person => person.id)
-    if (signal?.aborted) return
-    if (settled.join() !== immediateIds?.join()) {
-      const latest = await loadSave(input.namespace, input.saveId)
-      if (signal?.aborted || latest?.updatedAt !== next.updatedAt) return
-      next = await putSave(input.namespace, { ...latest, lines: [...lines, { ...replyLine, participantIds: settled }] })
-    }
-  }
   if (needsSummary(next, config)) {
     try {
       const summarized = await writeSummary(next, 'small', config.keepRounds, input.mode, signal)

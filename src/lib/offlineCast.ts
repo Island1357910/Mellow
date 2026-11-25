@@ -1,8 +1,20 @@
-import { focusChars, spokenName, type StorySave } from '../engine/story.ts'
-import { moduleAi, readJson } from './ask.ts'
+import { spokenName, type StorySave } from '../engine/story.ts'
+import { readJson } from './ask.ts'
 import type { Character } from '../types/index.ts'
 
-const MARK = '谁此刻在现场'
+export function sceneCastInstruction(chars: Character[]): string {
+  return `正文与状态栏完成后，在本次回复末尾额外写一条应用标记：<mellow-scene>{"ids":["角色ID"]}</mellow-scene>。这条标记只用于记录本轮结束时谁在现场，不属于状态栏。只填正在与玩家同场说话、行动或相处的人；被想起、提起或在短信电话中的人不算。离场的人移出，没有人物在场时 ids 为空数组。不要另起一次回复。可选角色：\n${chars.map(rosterLine).join('\n')}`
+}
+
+export function readSceneReply(content: string, chars: Character[]): { content: string; ids: string[] | null } {
+  const marker = /<mellow-scene>\s*([\s\S]*?)\s*<\/mellow-scene>/g
+  let ids: string[] | null = null
+  const text = content.replace(marker, (_match, json: string) => {
+    ids = castIdsFromModel(json, chars)
+    return ''
+  }).replace(/<mellow-scene>[\s\S]*$/, '').trim()
+  return { content: text, ids }
+}
 
 function resolveToken(token: string, chars: Character[]): string | null {
   const exactId = chars.find((person) => person.id === token)
@@ -39,12 +51,6 @@ export function castIdsFromModel(raw: string, chars: Character[]): string[] | nu
   }
 }
 
-function priorSave(save: StorySave): StorySave {
-  const last = save.lines[save.lines.length - 1]
-  if (last?.role === 'user' && last.participantIds === undefined) return { ...save, lines: save.lines.slice(0, -1) }
-  return save
-}
-
 function clipScene(text: string, limit: number): string {
   const plain = text
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -75,41 +81,4 @@ function rosterLine(person: Character): string {
   if (spoken && spoken !== person.name.trim()) bits.push(`口头叫 ${spoken}`)
   if (nick) bits.push(`昵称 ${nick}`)
   return bits.join(' | ')
-}
-
-function peopleByIds(chars: Character[], ids: string[]): Character[] {
-  return ids.flatMap((id) => {
-    const person = chars.find((item) => item.id === id)
-    return person ? [person] : []
-  })
-}
-
-/** 在场人物以这一次 AI 确认为准。只有接口失败或没返回能用的名单时，才退回姓名判断。 */
-export async function offlineFocus(chars: Character[], save: StorySave, extra = '', signal?: AbortSignal): Promise<Character[]> {
-  const fallback = () => focusChars(chars, save, extra)
-  if (!chars.length) return []
-  const prior = focusChars(chars, priorSave(save))
-  const recent = castTranscript(save, extra)
-  const roster = chars.map(rosterLine).join('\n')
-  try {
-    const raw = await moduleAi('offline').askJson(
-      [
-        `你只判断这场线下${MARK}。只输出 JSON：{"ids":["角色ID"]}`,
-        '卡名末尾的 2.0、v2、（2）、版本号是角色卡版本，不是口头称呼。正文写「林夏」时，名单里的「林夏2.0」就是这个人。几个卡的口头名字相同时，优先已经在场的那张；正文写了版本号就用带版本号的那张。',
-        '按最近这一幕的场面判断，要灵敏：这个人正在说话、做事、和玩家待在一起、被玩家看见或被当面叫到，就算在场。伸手、坐下、回头、把东西递过来、推门、跟着走，都算，不必出现「去找」「见面」「进来」。',
-        '只是被提起、被想起、被聊天讨论、出现在短信、电话或回忆里，不算在场。',
-        '玩家这一句已经转到另一个人身边，或写了只剩某人，场面就换成现在身边的人。上一场的人，这一幕没有离开、也没有被换掉，就还在。明确走了、离开、回去了，才移出。继续、续写不换人。',
-        'ids 用角色ID，也可以写角色名。不要编名单以外的人。拿得准的都写上，不要因为犹豫把在场的人漏掉。',
-      ].join('\n'),
-      `上一场在场：${prior.map((person) => person.id).join('、') || '没有'}\n可选角色：\n${roster}\n最近场面（结尾才是现在）：\n${recent || '还没有正文'}`,
-      360,
-      undefined,
-      signal,
-    )
-    const ids = castIdsFromModel(raw, chars)
-    if (!ids) return fallback()
-    return peopleByIds(chars, ids)
-  } catch {
-    return fallback()
-  }
 }
