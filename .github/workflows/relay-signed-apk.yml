@@ -1,8 +1,8 @@
-name: Relay signed Mellow 3.0.9 APK
+name: Relay signed Mellow 3.0.10 APK
 
 on:
   push:
-    branches: [codex/android-asset-relay-3.0.9]
+    branches: [codex/android-asset-relay-3.0.10]
 
 permissions:
   contents: write
@@ -18,15 +18,15 @@ jobs:
       - name: Restore and verify the signed APK
         run: |
           set -euo pipefail
-          gh release download android-v3.0.8 --repo "$GITHUB_REPOSITORY" --pattern Mellow-3.0.8.apk --dir "$RUNNER_TEMP"
-          node apk-relay/restore.mjs "$RUNNER_TEMP/Mellow-3.0.8.apk" "$RUNNER_TEMP/Mellow-3.0.9.apk" apk-relay/manifest.json apk-relay/changes.bin
-          printf '%s  %s\n' 'e3acdb1a9c4c70cbcc5f405fcd8dbed0932ce7116584603f88f7964409d1afc3' 'Mellow-3.0.9.apk' > "$RUNNER_TEMP/Mellow-3.0.9.sha256.txt"
-          (cd "$RUNNER_TEMP" && sha256sum -c Mellow-3.0.9.sha256.txt)
+          gh release download android-v3.0.9 --repo "$GITHUB_REPOSITORY" --pattern Mellow-3.0.9.apk --dir "$RUNNER_TEMP"
+          node apk-relay/restore.mjs "$RUNNER_TEMP/Mellow-3.0.9.apk" "$RUNNER_TEMP/Mellow-3.0.10.apk" apk-relay/manifest.json apk-relay/changes.bin
+          printf '%s  %s\n' '2a8866a8a75ca80cb8dff2bf5ccbe0b3dc4470ab29ed6f4fe218bd97f33590de' 'Mellow-3.0.10.apk' > "$RUNNER_TEMP/Mellow-3.0.10.sha256.txt"
+          (cd "$RUNNER_TEMP" && sha256sum -c Mellow-3.0.10.sha256.txt)
       - name: Attach verified files to the release
         run: |
           set -euo pipefail
-          tag=android-v3.0.9
-          for asset in Mellow-3.0.9.apk Mellow-3.0.9.sha256.txt; do
+          tag=android-v3.0.10
+          for asset in Mellow-3.0.10.apk Mellow-3.0.10.sha256.txt; do
             digest=$(sha256sum "$RUNNER_TEMP/$asset" | cut -d ' ' -f 1)
             existing_digest() {
               gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq ".assets[] | select(.name == \"$asset\" and .state == \"uploaded\") | .digest"
