@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, rmSync } from 'node:fs'
+import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import legacy from '@vitejs/plugin-legacy'
@@ -11,6 +12,7 @@ import { defineConfig } from 'vite'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 const buildId = process.env.BUILD_ID || `${pkg.version}.${Date.now()}`
+let thisOutput = ''
 
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
@@ -43,6 +45,16 @@ export default defineConfig({
     __MELLOW_APP_VERSION__: JSON.stringify(pkg.version),
   },
   plugins: [
+    {
+      name: 'mellow-exclude-archived-apks',
+      apply: 'build',
+      configResolved(config) { thisOutput = resolve(config.root, config.build.outDir, 'downloads') },
+      closeBundle() {
+        for (const entry of readdirSync(thisOutput, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.apk')) rmSync(resolve(thisOutput, entry.name))
+        }
+      },
+    },
     react(),
     tailwindcss(),
     legacy({ targets: ['Chrome >= 60'], modernPolyfills: true }),
